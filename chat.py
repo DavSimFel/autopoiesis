@@ -38,6 +38,14 @@ except ModuleNotFoundError as exc:
         "Missing backend dependency. Run `uv sync` so `pydantic-ai-backend==0.1.6` is installed."
     ) from exc
 
+from history_store import (
+    cleanup_stale_checkpoints,
+    clear_checkpoint,
+    init_history_store,
+    load_checkpoint,
+    resolve_history_db_path,
+    save_checkpoint,
+)
 from models import (
     AgentDeps,
     WorkItem,
@@ -68,14 +76,16 @@ class _Runtime:
 
     agent: Agent[AgentDeps, str]
     backend: LocalBackend
+    history_db_path: str
 
 
 _runtime: _Runtime | None = None
+_active_checkpoint: dict[str, str] | None = None
 
 
-def _set_runtime(agent: Agent[AgentDeps, str], backend: LocalBackend) -> None:
+def _set_runtime(agent: Agent[AgentDeps, str], backend: LocalBackend, history_db_path: str) -> None:
     global _runtime
-    _runtime = _Runtime(agent=agent, backend=backend)
+    _runtime = _Runtime(agent=agent, backend=backend, history_db_path=history_db_path)
 
 
 def _get_runtime() -> _Runtime:
@@ -237,6 +247,7 @@ def build_agent(
             deps_type=AgentDeps,
             toolsets=toolsets,
             instructions=all_instructions,
+            history_processors=[_checkpoint_history_processor],
             name=agent_name,
         )
     if provider == "openrouter":
@@ -252,6 +263,7 @@ def build_agent(
             deps_type=AgentDeps,
             toolsets=toolsets,
             instructions=all_instructions,
+            history_processors=[_checkpoint_history_processor],
             name=agent_name,
         )
     raise SystemExit("Unsupported AI_PROVIDER. Use 'openrouter' or 'anthropic'.")
@@ -312,6 +324,28 @@ def _serialize_history(messages: list[ModelMessage]) -> str:
     return ModelMessagesTypeAdapter.dump_json(messages).decode()
 
 
+def _count_history_rounds(messages: list[ModelMessage]) -> int:
+    """Count completed model rounds from serialized message history."""
+    model_responses = sum(
+        1 for message in messages if message.__class__.__name__ == "ModelResponse"
+    )
+    return model_responses if model_responses > 0 else len(messages)
+
+
+def _checkpoint_history_processor(messages: list[ModelMessage]) -> list[ModelMessage]:
+    """Persist an in-flight checkpoint whenever the active work item updates history."""
+    checkpoint = _active_checkpoint
+    if checkpoint is None:
+        return messages
+    save_checkpoint(
+        db_path=checkpoint["db_path"],
+        work_item_id=checkpoint["work_item_id"],
+        history_json=_serialize_history(messages),
+        round_count=_count_history_rounds(messages),
+    )
+    return messages
+
+
 @DBOS.step()
 def run_agent_step(work_item_dict: dict[str, Any]) -> dict[str, Any]:
     """Checkpoint-able agent execution step.
@@ -326,7 +360,9 @@ def run_agent_step(work_item_dict: dict[str, Any]) -> dict[str, Any]:
     """
     rt = _get_runtime()
     item = WorkItem.model_validate(work_item_dict)
-    history = _deserialize_history(item.input.message_history_json)
+    recovered = load_checkpoint(rt.history_db_path, item.id)
+    history_json = recovered[0] if recovered is not None else item.input.message_history_json
+    history = _deserialize_history(history_json)
     deps = AgentDeps(backend=rt.backend)
 
     # Reconstruct deferred tool results if this is a resumption
@@ -340,62 +376,68 @@ def run_agent_step(work_item_dict: dict[str, Any]) -> dict[str, Any]:
 
     stream_handle = take_stream(item.id)
     output_type: list[type[AgentOutput]] = [str, DeferredToolRequests]
+    global _active_checkpoint
+    _active_checkpoint = {"db_path": rt.history_db_path, "work_item_id": item.id}
 
-    if stream_handle is not None:
-        # Streaming path — real-time output to the handle.
-        # TODO: replace asyncio.run() with async-native step when moving beyond CLI.
-        # asyncio.run() creates a new event loop; breaks if called from an existing one
-        # (e.g., inside an async web framework).
+    try:
+        if stream_handle is not None:
+            # Streaming path — real-time output to the handle.
+            # TODO: replace asyncio.run() with async-native step when moving beyond CLI.
+            # asyncio.run() creates a new event loop; breaks if called from an existing one
+            # (e.g., inside an async web framework).
 
-        async def _stream() -> WorkItemOutput:
-            async with rt.agent.run_stream(
+            async def _stream() -> WorkItemOutput:
+                async with rt.agent.run_stream(
+                    prompt,
+                    deps=deps,
+                    message_history=history,
+                    output_type=output_type,
+                    deferred_tool_results=deferred_results,
+                ) as stream:
+                    async for chunk in stream.stream_text(delta=True):
+                        stream_handle.write(chunk)
+                    stream_handle.close()
+                    result_output: AgentOutput = await stream.get_output()
+                    all_msgs = stream.all_messages()
+
+                if isinstance(result_output, DeferredToolRequests):
+                    return WorkItemOutput(
+                        deferred_tool_requests_json=_serialize_deferred_requests(result_output),
+                        message_history_json=_serialize_history(all_msgs),
+                    )
+                return WorkItemOutput(
+                    text=result_output,
+                    message_history_json=_serialize_history(all_msgs),
+                )
+
+            try:
+                output = asyncio.run(_stream())
+            except Exception:
+                stream_handle.close()
+                raise
+        else:
+            # Non-streaming path — background work
+            result = rt.agent.run_sync(
                 prompt,
                 deps=deps,
                 message_history=history,
                 output_type=output_type,
                 deferred_tool_results=deferred_results,
-            ) as stream:
-                async for chunk in stream.stream_text(delta=True):
-                    stream_handle.write(chunk)
-                stream_handle.close()
-                result_output: AgentOutput = await stream.get_output()
-                all_msgs = stream.all_messages()
-
-            if isinstance(result_output, DeferredToolRequests):
-                return WorkItemOutput(
-                    deferred_tool_requests_json=_serialize_deferred_requests(result_output),
-                    message_history_json=_serialize_history(all_msgs),
+            )
+            if isinstance(result.output, DeferredToolRequests):
+                output = WorkItemOutput(
+                    deferred_tool_requests_json=_serialize_deferred_requests(result.output),
+                    message_history_json=_serialize_history(result.all_messages()),
                 )
-            return WorkItemOutput(
-                text=result_output,
-                message_history_json=_serialize_history(all_msgs),
-            )
+            else:
+                output = WorkItemOutput(
+                    text=result.output,
+                    message_history_json=_serialize_history(result.all_messages()),
+                )
+    finally:
+        _active_checkpoint = None
 
-        try:
-            output = asyncio.run(_stream())
-        except Exception:
-            stream_handle.close()
-            raise
-    else:
-        # Non-streaming path — background work
-        result = rt.agent.run_sync(
-            prompt,
-            deps=deps,
-            message_history=history,
-            output_type=output_type,
-            deferred_tool_results=deferred_results,
-        )
-        if isinstance(result.output, DeferredToolRequests):
-            output = WorkItemOutput(
-                deferred_tool_requests_json=_serialize_deferred_requests(result.output),
-                message_history_json=_serialize_history(result.all_messages()),
-            )
-        else:
-            output = WorkItemOutput(
-                text=result.output,
-                message_history_json=_serialize_history(result.all_messages()),
-            )
-
+    clear_checkpoint(rt.history_db_path, item.id)
     return output.model_dump()
 
 
@@ -609,15 +651,19 @@ def main() -> None:
     backend = build_backend()
     toolsets, instructions = build_toolsets()
     agent = build_agent(provider, agent_name, toolsets, instructions)
-    _set_runtime(agent, backend)
+    system_database_url = os.getenv(
+        "DBOS_SYSTEM_DATABASE_URL",
+        "sqlite:///dbostest.sqlite",
+    )
 
     dbos_config: DBOSConfig = {
         "name": os.getenv("DBOS_APP_NAME", "pydantic_dbos_agent"),
-        "system_database_url": os.getenv(
-            "DBOS_SYSTEM_DATABASE_URL",
-            "sqlite:///dbostest.sqlite",
-        ),
+        "system_database_url": system_database_url,
     }
+    history_db_path = resolve_history_db_path(system_database_url)
+    init_history_store(history_db_path)
+    cleanup_stale_checkpoints(history_db_path)
+    _set_runtime(agent, backend, history_db_path)
     DBOS(config=dbos_config)
 
     DBOS.launch()
