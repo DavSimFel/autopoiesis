@@ -166,34 +166,48 @@ def _resolve_skills_dir() -> Path:
     return path
 
 
-def build_toolsets() -> list[AbstractToolset[AgentDeps]]:
-    """Build console + skills toolsets.
+def build_toolsets() -> tuple[list[AbstractToolset[AgentDeps]], list[str]]:
+    """Build all toolsets and collect their system prompt instructions.
 
-    Console toolset has execute disabled and write approval enabled.
-    Skills toolset provides ``list_skills``, ``load_skill``, and
-    ``read_skill_resource`` tools with progressive disclosure.
+    Returns ``(toolsets, instructions)`` — each module contributes both a
+    toolset and an optional instructions string. Empty instructions are
+    filtered out so they don't bloat the system prompt.
     """
     validate_console_deps_contract()
     console = create_console_toolset(include_execute=False, require_write_approval=True)
-    skills = create_skills_toolset([SkillDirectory(path=_resolve_skills_dir())])
-    return [console, skills]
+    skills_toolset, skills_instr = create_skills_toolset(
+        [SkillDirectory(path=_resolve_skills_dir())]
+    )
+
+    toolsets: list[AbstractToolset[AgentDeps]] = [console, skills_toolset]
+    instructions = [i for i in [skills_instr] if i]
+    return toolsets, instructions
 
 
 def build_agent(
-    provider: str, agent_name: str, toolsets: list[AbstractToolset[AgentDeps]]
+    provider: str,
+    agent_name: str,
+    toolsets: list[AbstractToolset[AgentDeps]],
+    instructions: list[str],
 ) -> Agent[AgentDeps, str]:
-    """Create the configured agent from explicit provider/name/toolset inputs.
+    """Create the configured agent from explicit provider/name/toolset/instructions.
 
-    Provider selection is passed in by ``main()`` rather than read here,
-    keeping this function a focused factory for ``anthropic`` and
-    ``openrouter`` variants.
+    Each module contributes toolsets and instructions. The ``instructions``
+    list is passed directly to PydanticAI's ``instructions`` parameter —
+    PydanticAI composes them into the system prompt and re-sends them on
+    every turn (even with ``message_history``).
     """
+    all_instructions: list[str] = [
+        "You are a helpful coding assistant with filesystem and skill tools.",
+        *instructions,
+    ]
     if provider == "anthropic":
         required_env("ANTHROPIC_API_KEY")
         return Agent(
             os.getenv("ANTHROPIC_MODEL", "anthropic:claude-3-5-sonnet-latest"),
             deps_type=AgentDeps,
             toolsets=toolsets,
+            instructions=all_instructions,
             name=agent_name,
         )
     if provider == "openrouter":
@@ -204,7 +218,13 @@ def build_agent(
                 api_key=required_env("OPENROUTER_API_KEY"),
             ),
         )
-        return Agent(model, deps_type=AgentDeps, toolsets=toolsets, name=agent_name)
+        return Agent(
+            model,
+            deps_type=AgentDeps,
+            toolsets=toolsets,
+            instructions=all_instructions,
+            name=agent_name,
+        )
     raise SystemExit("Unsupported AI_PROVIDER. Use 'openrouter' or 'anthropic'.")
 
 
@@ -558,8 +578,8 @@ def main() -> None:
     agent_name = os.getenv("DBOS_AGENT_NAME", "chat")
 
     backend = build_backend()
-    toolsets = build_toolsets()
-    agent = build_agent(provider, agent_name, toolsets)
+    toolsets, instructions = build_toolsets()
+    agent = build_agent(provider, agent_name, toolsets, instructions)
     _set_runtime(agent, backend)
 
     dbos_config: DBOSConfig = {

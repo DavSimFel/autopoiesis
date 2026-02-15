@@ -73,9 +73,16 @@ Detailed instructions the agent follows when this skill is loaded...
   Missing dirs → empty list. Individual parse failures logged as warnings,
   never raised.
 
+### Instructions
+
+- `skills_instructions(cache)` — generate a system prompt fragment listing
+  discovered skill names. Returns empty string if no skills found.
+
 ### Toolset
 
-- `create_skills_toolset(directories)` → `FunctionToolset[AgentDeps]` with:
+- `create_skills_toolset(directories)` → `(FunctionToolset[AgentDeps], str)`.
+  Returns the toolset and an instructions string for the system prompt.
+  Tools:
   - `list_skills` — formatted list of skills with name, description, version, tags
   - `load_skill(skill_name)` — load full instructions (progressive disclosure).
     Cached after first load.
@@ -102,4 +109,5 @@ Detailed instructions the agent follows when this skill is loaded...
 
 ## Change Log
 
-- 2026-02-15: Initial skill system with progressive disclosure. (Issue #9)
+- 2026-02-15: Initial skill system with progressive disclosure. Instructions
+  callable for system prompt integration via PydanticAI `instructions`. (Issue #9)

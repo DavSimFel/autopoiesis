@@ -182,10 +182,29 @@ def _read_resource(cache: dict[str, Skill], skill_name: str, resource_name: str)
     return resource_path.read_text()
 
 
+def skills_instructions(cache: dict[str, Skill]) -> str:
+    """Generate a system prompt fragment listing available skills.
+
+    Returns an empty string when no skills are discovered, so it contributes
+    nothing to the system prompt.
+    """
+    if not cache:
+        return ""
+    names = ", ".join(sorted(cache.keys()))
+    return (
+        f"You have skills available: {names}. "
+        "Use list_skills to see details, load_skill to get full instructions."
+    )
+
+
 def create_skills_toolset(
     directories: list[SkillDirectory],
-) -> FunctionToolset[AgentDeps]:
-    """Create a PydanticAI toolset for skill discovery and loading.
+) -> tuple[FunctionToolset[AgentDeps], str]:
+    """Create a PydanticAI toolset and instructions for skill discovery and loading.
+
+    Returns a ``(toolset, instructions_text)`` tuple. The instructions text is
+    a system prompt fragment listing discovered skill names — pass it to the
+    agent's ``instructions`` parameter alongside other instruction sources.
 
     Tools:
     - ``list_skills`` — show available skills (name, description, tags)
@@ -220,4 +239,4 @@ def create_skills_toolset(
     # Ensure pyright recognizes decorator-registered functions as used
     _ = (list_skills, load_skill, read_skill_resource)
 
-    return toolset
+    return toolset, skills_instructions(cache)

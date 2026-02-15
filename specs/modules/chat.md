@@ -45,8 +45,11 @@ that execute work items from the queue.
 - `_resolve_skills_dir()` — resolve skills directory (default: `skills/`)
 - `build_backend()` — `LocalBackend` with execute disabled
 - `validate_console_deps_contract()` — structural typing guard
-- `build_toolsets()` — console toolset (write approval) + skills toolset
-- `build_agent(provider, name, toolsets)` — Anthropic or OpenRouter factory
+- `build_toolsets()` — returns `(toolsets, instructions)`. Console toolset
+  (write approval) + skills toolset. Each module contributes instructions.
+- `build_agent(provider, name, toolsets, instructions)` — Anthropic or
+  OpenRouter factory. Passes instructions to PydanticAI's `instructions`
+  parameter for automatic system prompt composition.
 
 ### Runtime State
 
@@ -129,7 +132,9 @@ that execute work items from the queue.
 ## Change Log
 
 - 2026-02-15: Skill system integration. `AgentDeps` moved to `models.py`.
-  `build_toolsets()` now includes skills toolset. `SKILLS_DIR` env var. (Issue #9)
+  `build_toolsets()` returns `(toolsets, instructions)`. `build_agent()`
+  accepts instructions list, passes to PydanticAI `instructions` param.
+  `SKILLS_DIR` env var. (Issue #9)
 - 2026-02-15: Deferred tool approval flow. Agent calls with
   `output_type=[str, DeferredToolRequests]`. CLI gathers human approval
   and re-enqueues. `WorkItemInput` gains `deferred_tool_results_json`,

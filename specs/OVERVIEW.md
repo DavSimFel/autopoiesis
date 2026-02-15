@@ -13,6 +13,7 @@ The runtime combines model-facing agent logic with durable execution so conversa
 - **Provider abstraction** selects Anthropic or OpenRouter at startup.
 - **Backend tool integration** uses `LocalBackend` and the console toolset for scoped file operations.
 - **Skill system** provides extensible capabilities via filesystem-based skills with progressive disclosure (frontmatter scan, load on demand).
+- **Modular instructions** — each module (skills, future: git, memory, etc.) contributes both a toolset and a system prompt fragment via PydanticAI's `instructions` parameter.
 
 ## Key Concepts
 
