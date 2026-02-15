@@ -14,7 +14,7 @@ import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, cast, get_type_hints
 
 from dotenv import load_dotenv
 from pydantic_ai import AbstractToolset, Agent, DeferredToolRequests
@@ -38,7 +38,15 @@ except ModuleNotFoundError as exc:
         "Missing backend dependency. Run `uv sync` so `pydantic-ai-backend==0.1.6` is installed."
     ) from exc
 
-from models import WorkItem, WorkItemInput, WorkItemOutput, WorkItemPriority, WorkItemType
+from models import (
+    AgentDeps,
+    WorkItem,
+    WorkItemInput,
+    WorkItemOutput,
+    WorkItemPriority,
+    WorkItemType,
+)
+from skills import SkillDirectory, create_skills_toolset
 from streaming import PrintStreamHandle, register_stream, take_stream
 from work_queue import work_queue
 
@@ -48,22 +56,6 @@ AgentOutput = str | DeferredToolRequests
 
 # Maximum characters to display for a tool argument value in the approval UI.
 _APPROVAL_ARG_DISPLAY_MAX = 200
-
-# ---------------------------------------------------------------------------
-# Agent deps
-# ---------------------------------------------------------------------------
-
-
-@dataclass
-class AgentDeps:
-    """Runtime dependencies injected into agent turns.
-
-    ``backend`` is an explicit field so ``AgentDeps`` structurally matches the
-    console toolset dependency protocol used by ``pydantic-ai-backend``.
-    """
-
-    backend: LocalBackend
-
 
 # ---------------------------------------------------------------------------
 # Runtime state — set once in main(), read by queue workers
@@ -140,7 +132,12 @@ def validate_console_deps_contract() -> None:
     checking both the ``backend`` annotation and required ``LocalBackend``
     methods at startup, before any agent turns execute.
     """
-    backend_annotation = AgentDeps.__annotations__.get("backend")
+    try:
+        backend_annotation = get_type_hints(AgentDeps).get("backend")
+    except (NameError, TypeError) as exc:
+        raise SystemExit(
+            "Failed to resolve AgentDeps type annotations for console toolset validation."
+        ) from exc
     if backend_annotation is not LocalBackend:
         raise SystemExit(
             "AgentDeps.backend must be typed as LocalBackend to satisfy "
@@ -165,33 +162,81 @@ def validate_console_deps_contract() -> None:
         )
 
 
-def build_toolsets() -> list[AbstractToolset[AgentDeps]]:
-    """Build console toolsets with execute disabled and write approval enabled.
+def _resolve_shipped_skills_dir() -> Path:
+    """Resolve shipped skills, defaulting to ``skills/`` beside ``chat.py``."""
+    raw = os.getenv("SKILLS_DIR", "skills")
+    path = Path(raw)
+    if not path.is_absolute():
+        path = Path(__file__).resolve().parent / path
+    return path
 
-    ``create_console_toolset`` is typed for a protocol dependency type; the
-    cast is intentional because ``AgentDeps`` satisfies that protocol
-    structurally via ``backend: LocalBackend``.
+
+def _resolve_custom_skills_dir() -> Path:
+    """Resolve custom skills, defaulting to ``skills/`` inside the workspace."""
+    raw = os.getenv("CUSTOM_SKILLS_DIR", "skills")
+    path = Path(raw)
+    if not path.is_absolute():
+        path = resolve_workspace_root() / path
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _build_skill_directories() -> list[SkillDirectory]:
+    """Build skill directories in precedence order: shipped, then custom."""
+    shipped_dir = _resolve_shipped_skills_dir()
+    custom_dir = _resolve_custom_skills_dir()
+    if shipped_dir.resolve() == custom_dir.resolve():
+        return [SkillDirectory(path=shipped_dir)]
+    return [SkillDirectory(path=shipped_dir), SkillDirectory(path=custom_dir)]
+
+
+_CONSOLE_INSTRUCTIONS = (
+    "You have filesystem tools for reading, writing, and editing files "
+    "in the workspace. Write and edit operations require user approval. "
+    "Shell execution is disabled."
+)
+
+
+def build_toolsets() -> tuple[list[AbstractToolset[AgentDeps]], list[str]]:
+    """Build all toolsets and collect their system prompt instructions.
+
+    Returns ``(toolsets, instructions)`` — each module contributes both a
+    toolset and an optional instructions string. Empty instructions are
+    filtered out so they don't bloat the system prompt.
     """
     validate_console_deps_contract()
-    toolset = create_console_toolset(include_execute=False, require_write_approval=True)
-    return [toolset]
+    console = create_console_toolset(include_execute=False, require_write_approval=True)
+    skills_toolset, skills_instr = create_skills_toolset(_build_skill_directories())
+
+    toolsets: list[AbstractToolset[AgentDeps]] = [console, skills_toolset]
+    instructions = [i for i in [_CONSOLE_INSTRUCTIONS, skills_instr] if i]
+    return toolsets, instructions
 
 
 def build_agent(
-    provider: str, agent_name: str, toolsets: list[AbstractToolset[AgentDeps]]
+    provider: str,
+    agent_name: str,
+    toolsets: list[AbstractToolset[AgentDeps]],
+    instructions: list[str],
 ) -> Agent[AgentDeps, str]:
-    """Create the configured agent from explicit provider/name/toolset inputs.
+    """Create the configured agent from explicit provider/name/toolset/instructions.
 
-    Provider selection is passed in by ``main()`` rather than read here,
-    keeping this function a focused factory for ``anthropic`` and
-    ``openrouter`` variants.
+    Each module contributes toolsets and instructions. The ``instructions``
+    list is passed directly to PydanticAI's ``instructions`` parameter —
+    PydanticAI composes them into the system prompt and re-sends them on
+    every turn (even with ``message_history``).
     """
+    all_instructions: list[str] = [
+        "You are a helpful coding assistant with filesystem and skill tools.",
+        *instructions,
+    ]
     if provider == "anthropic":
         required_env("ANTHROPIC_API_KEY")
         return Agent(
             os.getenv("ANTHROPIC_MODEL", "anthropic:claude-3-5-sonnet-latest"),
             deps_type=AgentDeps,
             toolsets=toolsets,
+            instructions=all_instructions,
             name=agent_name,
         )
     if provider == "openrouter":
@@ -202,7 +247,13 @@ def build_agent(
                 api_key=required_env("OPENROUTER_API_KEY"),
             ),
         )
-        return Agent(model, deps_type=AgentDeps, toolsets=toolsets, name=agent_name)
+        return Agent(
+            model,
+            deps_type=AgentDeps,
+            toolsets=toolsets,
+            instructions=all_instructions,
+            name=agent_name,
+        )
     raise SystemExit("Unsupported AI_PROVIDER. Use 'openrouter' or 'anthropic'.")
 
 
@@ -556,8 +607,8 @@ def main() -> None:
     agent_name = os.getenv("DBOS_AGENT_NAME", "chat")
 
     backend = build_backend()
-    toolsets = build_toolsets()
-    agent = build_agent(provider, agent_name, toolsets)
+    toolsets, instructions = build_toolsets()
+    agent = build_agent(provider, agent_name, toolsets, instructions)
     _set_runtime(agent, backend)
 
     dbos_config: DBOSConfig = {

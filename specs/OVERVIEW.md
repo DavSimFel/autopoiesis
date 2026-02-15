@@ -12,6 +12,9 @@ The runtime combines model-facing agent logic with durable execution so conversa
 - **Stream handles** — optional in-process handles for real-time token streaming. Convenience only; durability comes from the final output.
 - **Provider abstraction** selects Anthropic or OpenRouter at startup.
 - **Backend tool integration** uses `LocalBackend` and the console toolset for scoped file operations.
+- **Skill system** provides extensible capabilities via filesystem-based skills with progressive disclosure (frontmatter scan, load on demand) from shipped and workspace-custom directories.
+- **Skill quality tooling** adds lint/validation checks for `SKILL.md` authoring.
+- **Modular instructions** — each module (skills, future: git, memory, etc.) contributes both a toolset and a system prompt fragment via PydanticAI's `instructions` parameter.
 
 ## Key Concepts
 
@@ -50,4 +53,6 @@ For workflow rationale, see `specs/decisions/001-trunk-based-workflow.md`.
 ## Module Index
 
 - `chat.py`: `specs/modules/chat.md`
+- `skills.py`: `specs/modules/skills.md`
+- `skillmaker_tools.py`: `specs/modules/skillmaker-tools.md`
 - Queue / WorkItem: `specs/modules/queue.md`
