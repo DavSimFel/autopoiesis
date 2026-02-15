@@ -14,7 +14,7 @@ import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from dotenv import load_dotenv
 from pydantic_ai import AbstractToolset, Agent
@@ -389,8 +389,7 @@ def _display_approval_requests(requests_json: str) -> list[dict[str, Any]]:
         args: Any = req["args"]
         print(f"  [{i}] {tool_name}")
         if isinstance(args, dict):
-            typed_args: dict[str, Any] = args
-            for arg_name, arg_value in typed_args.items():
+            for arg_name, arg_value in cast(dict[str, object], args).items():
                 display = str(arg_value)
                 if len(display) > _APPROVAL_ARG_DISPLAY_MAX:
                     display = display[:_APPROVAL_ARG_DISPLAY_MAX] + "..."
