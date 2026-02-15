@@ -74,7 +74,8 @@ Only queue instances are declared here. Workflow/step handlers stay in
   strongest on Postgres (`SKIP LOCKED` dequeue behavior).
 - No preemption inside `work_queue`: one running task occupies the slot.
 - No background multi-turn conversation history: each task is single-turn.
-- Interactive chat remains outside queueing and continues via `to_cli_sync()`.
+- Interactive chat uses `agent.run_stream()` + `message_history` for streaming
+  multi-turn conversations. `to_cli_sync()` is no longer used.
 
 ## Change Log
 

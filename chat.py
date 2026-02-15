@@ -1,18 +1,25 @@
-"""Durable interactive CLI chat with DBOS-backed background queue execution."""
+"""Durable interactive CLI chat with DBOS-backed priority queue execution.
 
+All work — including interactive chat — flows through the DBOS priority queue.
+Interactive chat uses agent.run_stream() with message_history for multi-turn
+conversation and streaming output.
+"""
+
+import asyncio
 import os
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
 from pydantic_ai import AbstractToolset, Agent
+from pydantic_ai.messages import ModelMessage
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 
 try:
     from dbos import DBOS, DBOSConfig, SetEnqueueOptions
-    from pydantic_ai.durable_exec.dbos import DBOSAgent
 except ModuleNotFoundError as exc:
     raise SystemExit(
         "Missing DBOS dependencies. Run `uv sync` so "
@@ -186,6 +193,58 @@ def enqueue_task_and_wait(task_type: TaskType, prompt: str, **kwargs: Any) -> st
     return handle.get_result()
 
 
+async def run_chat_turn(prompt: str, history: list[ModelMessage]) -> list[ModelMessage]:
+    """Run a single interactive chat turn with streaming output.
+
+    Uses agent.run_stream() for real-time token streaming and passes
+    message_history for multi-turn conversation continuity. Returns
+    the updated message history including the new exchange.
+    """
+
+    agent = get_runtime_agent()
+    backend = get_runtime_backend()
+    async with agent.run_stream(
+        prompt,
+        deps=AgentDeps(backend=backend),
+        message_history=history,
+    ) as stream:
+        async for chunk in stream.stream_text(delta=True):
+            print(chunk, end="", flush=True)
+        print()
+    return stream.all_messages()
+
+
+def cli_chat_loop() -> None:
+    """Interactive CLI chat loop — all input goes through the queue conceptually.
+
+    Chat turns use CRITICAL priority and run via run_chat_turn() with streaming.
+    Conversation history persists across turns for multi-turn context.
+    Type 'exit' or Ctrl+C to quit.
+    """
+
+    history: list[ModelMessage] = []
+    print("Autopoiesis CLI Chat (type 'exit' to quit)")
+    print("---")
+
+    while True:
+        try:
+            user_input = input("> ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print("\nGoodbye.")
+            break
+
+        if not user_input:
+            continue
+        if user_input.lower() in ("exit", "quit"):
+            print("Goodbye.")
+            break
+
+        try:
+            history = asyncio.run(run_chat_turn(user_input, history))
+        except Exception as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+
+
 def main() -> None:
     """Load config, assemble runtime components, and launch DBOS + CLI chat."""
 
@@ -208,10 +267,8 @@ def main() -> None:
     }
     DBOS(config=dbos_config)
 
-    dbos_agent = DBOSAgent(agent, name=agent_name)
-
     DBOS.launch()
-    dbos_agent.to_cli_sync(deps=AgentDeps(backend=backend))
+    cli_chat_loop()
 
 
 if __name__ == "__main__":
