@@ -1,20 +1,19 @@
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import cast
 
+from dotenv import load_dotenv
 from pydantic_ai import AbstractToolset, Agent
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
-from dotenv import load_dotenv
-
 
 try:
     from dbos import DBOS, DBOSConfig
     from pydantic_ai.durable_exec.dbos import DBOSAgent
 except ModuleNotFoundError as exc:
     raise SystemExit(
-        "Missing DBOS dependencies. Run `uv sync` so `pydantic-ai-slim[dbos,mcp]` and `dbos` are installed."
+        "Missing DBOS dependencies. Run `uv sync` so "
+        "`pydantic-ai-slim[dbos,mcp]` and `dbos` are installed."
     ) from exc
 
 try:
@@ -54,23 +53,32 @@ def validate_console_deps_contract() -> None:
     backend_annotation = AgentDeps.__annotations__.get("backend")
     if backend_annotation is not LocalBackend:
         raise SystemExit(
-            "AgentDeps.backend must be typed as LocalBackend to satisfy console toolset dependency expectations."
+            "AgentDeps.backend must be typed as LocalBackend to satisfy "
+            "console toolset dependency expectations."
         )
 
-    required_backend_methods = ("ls_info", "read", "write", "edit", "glob_info", "grep_raw")
-    missing = [name for name in required_backend_methods if not callable(getattr(LocalBackend, name, None))]
+    required_backend_methods = (
+        "ls_info",
+        "read",
+        "write",
+        "edit",
+        "glob_info",
+        "grep_raw",
+    )
+    missing = [
+        name for name in required_backend_methods if not callable(getattr(LocalBackend, name, None))
+    ]
     if missing:
         raise SystemExit(
-            "LocalBackend is missing required console backend methods: " + ", ".join(sorted(missing))
+            "LocalBackend is missing required console backend methods: "
+            + ", ".join(sorted(missing))
         )
 
 
 def build_toolsets() -> list[AbstractToolset[AgentDeps]]:
     validate_console_deps_contract()
     toolset = create_console_toolset(include_execute=False, require_write_approval=True)
-    # `create_console_toolset` returns FunctionToolset[ConsoleDeps]. This cast is intentional:
-    # AgentDeps satisfies that protocol structurally via `backend: LocalBackend`.
-    return cast(list[AbstractToolset[AgentDeps]], [toolset])
+    return [toolset]
 
 
 def build_agent(
@@ -108,7 +116,10 @@ def main() -> None:
 
     dbos_config: DBOSConfig = {
         "name": os.getenv("DBOS_APP_NAME", "pydantic_dbos_agent"),
-        "system_database_url": os.getenv("DBOS_SYSTEM_DATABASE_URL", "sqlite:///dbostest.sqlite"),
+        "system_database_url": os.getenv(
+            "DBOS_SYSTEM_DATABASE_URL",
+            "sqlite:///dbostest.sqlite",
+        ),
     }
     DBOS(config=dbos_config)
 
