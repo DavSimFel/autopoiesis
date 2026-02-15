@@ -64,14 +64,14 @@ class WorkItem(BaseModel):
 
     - `input`: what the agent receives (prompt + optional history)
     - `output`: what the agent produced (filled after execution, None before)
-    - `payload`: arbitrary caller metadata (labels, source info, etc.)
+    - `payload`: arbitrary caller metadata (labels, source, etc.). Reserved for
+      future use — not consumed by the worker yet.
     """
 
-    id: str = Field(default_factory=lambda: uuid4().hex[:12])
+    id: str = Field(default_factory=lambda: uuid4().hex)
     type: WorkItemType
     priority: WorkItemPriority = WorkItemPriority.NORMAL
     input: WorkItemInput
     output: WorkItemOutput | None = None
     payload: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    max_tokens: int | None = None

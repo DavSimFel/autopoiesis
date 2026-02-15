@@ -5,6 +5,7 @@ When a stream handle is registered for a work item, the worker streams tokens
 in real time. Durability comes from the final output, not the stream.
 """
 
+import asyncio
 import os
 import sys
 from dataclasses import dataclass
@@ -224,8 +225,10 @@ def run_agent_step(work_item_dict: dict[str, Any]) -> dict[str, Any]:
     stream_handle = take_stream(item.id)
 
     if stream_handle is not None:
-        # Streaming path — real-time output to the handle
-        import asyncio
+        # Streaming path — real-time output to the handle.
+        # TODO: replace asyncio.run() with async-native step when moving beyond CLI.
+        # asyncio.run() creates a new event loop; breaks if called from an existing one
+        # (e.g., inside an async web framework).
 
         async def _stream() -> WorkItemOutput:
             async with rt.agent.run_stream(
@@ -243,7 +246,11 @@ def run_agent_step(work_item_dict: dict[str, Any]) -> dict[str, Any]:
                 message_history_json=_serialize_history(all_msgs),
             )
 
-        output = asyncio.run(_stream())
+        try:
+            output = asyncio.run(_stream())
+        except Exception:
+            stream_handle.close()
+            raise
     else:
         # Non-streaming path — background work
         result = rt.agent.run_sync(item.input.prompt, deps=deps, message_history=history)
