@@ -283,6 +283,10 @@ def run_agent_step(work_item_dict: dict[str, Any]) -> dict[str, Any]:
     if item.input.deferred_tool_results_json:
         deferred_results = _deserialize_deferred_results(item.input.deferred_tool_results_json)
 
+    # For resumptions after tool approval, prompt is None — use empty string
+    # for the API call since the original prompt is already in message_history.
+    prompt = item.input.prompt or ""
+
     stream_handle = take_stream(item.id)
     output_type: list[type[AgentOutput]] = [str, DeferredToolRequests]
 
@@ -294,7 +298,7 @@ def run_agent_step(work_item_dict: dict[str, Any]) -> dict[str, Any]:
 
         async def _stream() -> WorkItemOutput:
             async with rt.agent.run_stream(
-                item.input.prompt,
+                prompt,
                 deps=deps,
                 message_history=history,
                 output_type=output_type,
@@ -324,7 +328,7 @@ def run_agent_step(work_item_dict: dict[str, Any]) -> dict[str, Any]:
     else:
         # Non-streaming path — background work
         result = rt.agent.run_sync(
-            item.input.prompt,
+            prompt,
             deps=deps,
             message_history=history,
             output_type=output_type,
@@ -494,7 +498,7 @@ def cli_chat_loop() -> None:
             break
 
         try:
-            prompt = user_input
+            prompt: str | None = user_input
             deferred_results_json: str | None = None
 
             # Approval loop — keeps re-enqueuing until we get a text response
@@ -519,8 +523,8 @@ def cli_chat_loop() -> None:
                     # Agent wants tool approval — display and gather decisions
                     requests = _display_approval_requests(output.deferred_tool_requests_json)
                     deferred_results_json = _gather_approvals(requests)
-                    # Re-enqueue with same prompt + approvals; history carries context
-                    prompt = ""
+                    # Re-enqueue without prompt — context is in message history
+                    prompt = None
                     continue
 
                 # Normal text response — done with this turn

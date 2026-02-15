@@ -39,13 +39,15 @@ class WorkItemType(StrEnum):
 class WorkItemInput(BaseModel):
     """Structured inputs for agent execution.
 
+    ``prompt`` is the user's message — required for initial turns, None when
+    resuming after deferred tool approval (context is in message history).
     ``message_history_json`` carries serialized PydanticAI message history
     for multi-turn conversation continuity. ``deferred_tool_results_json``
     carries serialized approval decisions from a previous deferred tool
     request, allowing the agent to resume after human-in-the-loop approval.
     """
 
-    prompt: str
+    prompt: str | None = None
     message_history_json: str | None = None
     deferred_tool_results_json: str | None = None
 
