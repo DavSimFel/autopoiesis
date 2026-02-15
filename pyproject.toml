@@ -12,6 +12,8 @@ dependencies = [
 dev = [
   "ruff>=0.9",
   "pyright>=1.1",
+  "pytest>=8.0",
+  "pytest-asyncio>=0.24",
 ]
 
 [tool.ruff]
@@ -46,3 +48,7 @@ include = ["."]
 typeCheckingMode = "strict"
 pythonVersion = "3.12"
 reportMissingTypeStubs = false
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

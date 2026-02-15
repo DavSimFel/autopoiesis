@@ -24,6 +24,15 @@ jobs:
       - name: Pyright
         run: uv run pyright
 
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+      - run: uv sync
+      - name: Run tests
+        run: uv run pytest -v --tb=short || [ $? -eq 5 ]
+
   spec-check:
     runs-on: ubuntu-latest
     steps:
@@ -37,7 +46,7 @@ jobs:
             echo "specs/ directory not found -- skipping check"
             exit 0
           fi
-          SRC_CHANGED=$(git diff --name-only origin/main...HEAD -- '*.py' | wc -l)
+          SRC_CHANGED=$(git diff --name-only origin/main...HEAD -- '*.py' ':!tests/**' | wc -l)
           SPEC_CHANGED=$(git diff --name-only origin/main...HEAD -- 'specs/' | wc -l)
           if [ "$SRC_CHANGED" -gt 0 ] && [ "$SPEC_CHANGED" -eq 0 ]; then
             echo "::error::Python source changed but no spec files were updated. If this PR changes behavior, update the relevant spec."
