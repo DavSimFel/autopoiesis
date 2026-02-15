@@ -45,9 +45,14 @@ to the exact execution context shown to the human.
 An Ed25519 keypair is the root of trust for human identity.
 
 - **Generated once** at setup (`autopoiesis init` or first run)
-- **Private key** encrypted with a user-chosen passphrase, stored at
-  `$APPROVAL_KEY_PATH` (default: `data/keys/approval.key`)
-- **Public key** stored alongside (`approval.pub`)
+- **Key directory** at `$APPROVAL_KEY_DIR` (default: `data/keys`)
+- **Private key** encrypted with a user-chosen passphrase at
+  `$APPROVAL_PRIVATE_KEY_PATH` (default:
+  `$APPROVAL_KEY_DIR/approval.key`)
+- **Public key** at `$APPROVAL_PUBLIC_KEY_PATH` (default:
+  `$APPROVAL_KEY_DIR/approval.pub`)
+- **Keyring** for historical public keys at `$APPROVAL_KEYRING_PATH`
+  (default: `$APPROVAL_KEY_DIR/keyring.json`)
 - **Session unlock:** CLI startup prompts for passphrase, decrypts private
   key, holds it in memory for the process lifetime
 - **Future unlock mechanisms:** WebAuthn/fingerprint in PWA, hardware
@@ -92,12 +97,14 @@ decrypt the private key, and hold it in memory. Failed decryption
 signing key. This is the "proof of human" for Phase 1.
 
 **R1.4** Key rotation: the system MUST support re-keying via
-`autopoiesis rotate-key` (decrypt with old passphrase, re-encrypt
-with new). Outstanding pending envelopes are invalidated on rotation.
+`autopoiesis rotate-key` by generating a NEW keypair, encrypting the
+new private key with the new passphrase, and switching active signing
+to the new `key_id`. Outstanding pending envelopes are invalidated on
+rotation.
 
 **R1.5** Keyring retention: on rotation, the old public key MUST be
-retained in a keyring file (`$APPROVAL_KEY_PATH/keyring.json`) with
-its `key_id`, `created_at`, and `retired_at`. This enables
+retained in `$APPROVAL_KEYRING_PATH` with its `key_id`, `created_at`,
+and `retired_at`. This enables
 verification of historical audit entries and old envelope signatures.
 The old private key is securely discarded.
 
@@ -109,21 +116,26 @@ defines exactly what is authorized:
 | Field | Type | Phase | Description |
 |-------|------|-------|-------------|
 | `work_item_id` | str | 1 | The specific work item |
+| `scope_schema_version` | int | 1 | Versioned scope schema (starts at 1) |
 | `tool_call_ids` | list[str] | 1 | Ordered tool calls authorized |
 | `workspace_root` | str | 1 | Resolved absolute workspace path |
 | `agent_name` | str | 1 | Agent that produced the request |
 | `toolset_mode` | str | 1 | e.g. `require_write_approval` |
 | `allowed_paths` | list[str] \| None | Future | Restrict file ops to these paths |
 | `max_cost_cents` | int \| None | Future | Budget cap per approval |
-| `child_scope` | bool | Future | Allow spawned sub-tasks to inherit |
+| `child_scope` | bool \| None | Future | Allow spawned sub-tasks to inherit |
 | `parent_envelope_id` | str \| None | Future | Chain to parent approval |
 | `session_id` | str \| None | Future | Bind to specific process/session |
-| `scope_tags` | list[str] | Future | Arbitrary policy labels |
+| `scope_tags` | list[str] \| None | Future | Arbitrary policy labels |
 
 **R2.2** Default-deny per field: any field set to `None` means that
 capability is not authorized. Adding a new field to the schema MUST
-NOT grant permissions to existing envelopes (because their scope was
-hashed without that field → hash mismatch on any attempt to use it).
+NOT grant permissions to existing envelopes. To enforce this:
+- The scope schema MUST be versioned via `scope_schema_version`
+- Canonicalization for each schema version MUST materialize every
+  defined field (including explicit `None` defaults)
+- Verification MUST parse scope according to the envelope's schema
+  version, and reject unsupported versions (`scope_schema_unsupported`)
 
 **R2.3** Scope narrowing rule: if a child scope is derived from a
 parent (future: `child_scope=True`), every field in the child MUST be
@@ -144,7 +156,10 @@ the human. Fields:
 | `envelope_id` | UUID4 | Primary key |
 | `nonce` | UUID4 | Single-use token (UNIQUE constraint) |
 | `scope` | ApprovalScope | What this approval authorizes |
+| `tool_calls` | list[ToolCall] | Ordered immutable tool call payload |
 | `plan_hash` | str | SHA-256 of canonical scope + tool args |
+| `key_id` | str | SHA-256 fingerprint (full 64 hex chars) |
+| `signature_hex` | str \| null | Ed25519 signature after approval |
 | `state` | enum | `pending` → `consumed` / `rejected` / `expired` |
 | `issued_at` | datetime(UTC) | Creation time |
 | `expires_at` | datetime(UTC) | `issued_at + APPROVAL_TTL_SECONDS` |
@@ -162,8 +177,8 @@ canonical_payload = {
 }
 ```
 
-**R3.3** The envelope MUST record `key_id` — the SHA-256 fingerprint
-of the public key used for signing. This enables historical
+**R3.3** The envelope MUST record `key_id` — SHA-256 fingerprint of
+the signing public key (full 64 hex chars). This enables historical
 verification after key rotation.
 
 **R3.4** Canonical serialization:
@@ -196,6 +211,7 @@ signed_object = {
 The signed payload is `canonical_json(signed_object)` (same
 serialization as R3.4). The `ctx` field provides domain separation
 and versioning — verifiers MUST reject unknown context strings.
+`signed_object.key_id` MUST exactly match `envelope.key_id`.
 
 **R4.2** The signature MUST be stored on the envelope before submission
 for execution.
@@ -213,11 +229,16 @@ nonce not consumed.
 1. Look up envelope by nonce
    → fail: unknown_nonce
 
-2. Verify signature against public key
+2. Resolve verification key by `envelope.key_id` (active key or
+   historical keyring entry), then verify signature against that key.
+   Also verify `signed_object.key_id == envelope.key_id`.
    → fail: invalid_signature (no state mutation)
+   → fail: unknown_key_id (no state mutation)
 
 3. Recompute plan_hash from LIVE execution context (current
    workspace_root, agent_name, toolset_mode) + stored tool calls.
+   If `scope_schema_version` is unsupported, reject.
+   → fail: scope_schema_unsupported (no state mutation)
    Compare against stored plan_hash.
    → fail: context_drift (no state mutation)
 
@@ -282,11 +303,16 @@ consumption (R6.2). No separate clock check.
 - `nonce`
 - Decision per tool call (`approved` / `denied` + reason)
 - Outcome: `executed` / `rejected:invalid_signature` /
+  `rejected:unknown_key_id` /
   `rejected:context_drift` / `rejected:expired_or_consumed` /
-  `rejected:bijection_mismatch` / `rejected:unknown_nonce`
+  `rejected:bijection_mismatch` / `rejected:unknown_nonce` /
+  `rejected:scope_schema_unsupported` / `rejected:audit_write_failed`
 - Computed plan hash at verification time (for drift detection)
 - `key_id` (public key fingerprint used for signing)
 - Signature (hex)
+
+For `rejected:unknown_nonce`, `envelope_id`, `work_item_id`,
+`plan_hash`, and `key_id` are `null` (nonce still recorded).
 
 **R8.2** Append-only during normal operation. Single-writer policy:
 only the main process writes to the audit log. No concurrent writers.
@@ -299,8 +325,8 @@ needed due to consumed nonce).
 **R8.4** Fail-closed: if the audit append or fsync fails (I/O error,
 disk full, permissions), the system MUST reject tool execution. An
 unauditable approval MUST NOT proceed. The failure is logged to stderr
-and the nonce remains consumed (human must re-approve after fixing
-the audit log).
+with outcome code `rejected:audit_write_failed`, and the nonce remains
+consumed (human must re-approve after fixing the audit log).
 
 **R8.5** Hash-chained: each entry includes SHA-256 of
 `canonical_json(previous_entry)`. Genesis entry uses
