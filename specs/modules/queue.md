@@ -1,83 +1,113 @@
-# Module: queue foundation
+# Module: work queue
 
 ## Purpose
 
-Defines DBOS-backed queue primitives for non-interactive agent work so callers
-can submit durable background tasks without coupling to the CLI loop.
+DBOS-backed priority queue through which ALL agent work flows — interactive
+chat, background research, code generation, reviews. One queue, one path.
 
 ## Status
 
 - **Last updated:** 2026-02-15 (Issue #8)
-- **Source:** `models.py`, `work_queue.py`, `chat.py`
+- **Source:** `models.py`, `work_queue.py`, `streaming.py`, `chat.py`
+
+## Core Concept: WorkItem
+
+A `WorkItem` is the universal unit of work. It has:
+
+- **input** (`WorkItemInput`): prompt + optional message history
+- **output** (`WorkItemOutput`): agent response + updated history (filled after execution)
+- **payload** (`dict[str, Any]`): arbitrary caller metadata
+
+Stream handles can be registered for a WorkItem to receive tokens in real
+time. Handles are in-process only (not serialised, not durable). Durability
+comes from the final `WorkItemOutput` persisted after completion.
 
 ## Components
 
 ### `models.py`
 
-### `TaskPriority(IntEnum)`
+#### `WorkItemPriority(IntEnum)`
 
-- `CRITICAL = 1`
-- `HIGH = 10`
-- `NORMAL = 100`
-- `LOW = 1000`
-- `IDLE = 10000`
+| Level | Value | Use case |
+|-------|-------|----------|
+| CRITICAL | 1 | Interactive chat (user waiting) |
+| HIGH | 10 | PR reviews, blocking work |
+| NORMAL | 100 | Code generation |
+| LOW | 1000 | Research, analysis |
+| IDLE | 10000 | Housekeeping |
 
-Lower numeric values indicate higher dequeue priority.
+#### `WorkItemType(StrEnum)`
 
-### `TaskType(StrEnum)`
+`CHAT`, `RESEARCH`, `CODE`, `REVIEW`, `MERGE`, `CUSTOM`
 
-- `CHAT`
-- `RESEARCH`
-- `CODE`
-- `REVIEW`
-- `MERGE`
-- `CUSTOM`
+#### `WorkItemInput(BaseModel)`
 
-### `TaskPayload(BaseModel)`
+| Field | Type | Notes |
+|-------|------|-------|
+| `prompt` | `str` | Agent input text |
+| `message_history_json` | `str \| None` | Serialised PydanticAI message history |
 
-Fields:
+#### `WorkItemOutput(BaseModel)`
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `text` | `str` | Agent response |
+| `message_history_json` | `str \| None` | Updated history for next turn |
+
+#### `WorkItem(BaseModel)`
 
 | Field | Type | Default | Notes |
-|---|---|---|---|
-| `id` | `str` | `uuid4().hex[:12]` | short task id |
-| `type` | `TaskType` | required | logical task category |
-| `priority` | `TaskPriority` | `TaskPriority.NORMAL` | queue priority |
-| `prompt` | `str` | required | single-turn agent input |
-| `context` | `dict[str, Any]` | `{}` | optional caller metadata |
-| `created_at` | `datetime` | `datetime.now(UTC)` | timezone-aware timestamp |
-| `max_tokens` | `int | None` | `None` | optional token cap hint |
+|-------|------|---------|-------|
+| `id` | `str` | `uuid4().hex[:12]` | Short unique id |
+| `type` | `WorkItemType` | required | Intent category |
+| `priority` | `WorkItemPriority` | `NORMAL` | Queue priority |
+| `input` | `WorkItemInput` | required | Structured inputs |
+| `output` | `WorkItemOutput \| None` | `None` | Filled after execution |
+| `payload` | `dict[str, Any]` | `{}` | Arbitrary metadata |
+| `created_at` | `datetime` | `now(UTC)` | Timezone-aware |
+| `max_tokens` | `int \| None` | `None` | Optional token budget |
 
 ### `work_queue.py`
 
-### `work_queue = Queue(...)`
+Single queue instance — no functions, no imports from `chat.py`:
 
-Configuration:
-
-- queue name: `"agent_work"`
+- Queue name: `"agent_work"`
 - `priority_enabled=True`
 - `concurrency=1`
 - `polling_interval_sec=1.0`
 
-Only queue instances are declared here. Workflow/step handlers stay in
-`chat.py` to avoid circular imports.
+### `streaming.py`
+
+In-process stream handle registry for real-time output.
+
+- `StreamHandle` protocol: `write(chunk)` + `close()`
+- `PrintStreamHandle`: prints chunks to stdout
+- `register_stream(id, handle)`: register before enqueue
+- `take_stream(id)`: worker pops handle, streams to it
+
+**Not durable.** Handles live in-process only. If the process crashes
+mid-stream, DBOS replays the workflow — the handle is gone, so the worker
+falls back to non-streaming `run_sync()`. The durable output is the same
+either way.
 
 ## Queue Contract
 
-- Enqueue via `work_queue.enqueue(execute_task, payload.model_dump())`.
-- Set priority with `SetEnqueueOptions(priority=int(payload.priority))`.
-- Background result retrieval uses DBOS handles (`handle.get_result()`).
-- Payloads remain dict-based across enqueue/dequeue (`model_dump` / `model_validate`).
+1. Build a `WorkItem` with structured `input`
+2. Optionally `register_stream(item.id, handle)` for real-time output
+3. `enqueue(item)` for fire-and-forget, or `enqueue_and_wait(item)` to block
+4. Worker calls `execute_work_item()` → `run_agent_step()`
+5. Worker checks for stream handle: if present → `run_stream()`, else → `run_sync()`
+6. Returns `WorkItemOutput` as durable result
 
 ## Known Limitations (v1)
 
-- SQLite can degrade queue concurrency behavior; DBOS queue semantics are
-  strongest on Postgres (`SKIP LOCKED` dequeue behavior).
-- No preemption inside `work_queue`: one running task occupies the slot.
-- No background multi-turn conversation history: each task is single-turn.
-- Interactive chat uses `agent.run_stream()` + `message_history` for streaming
-  multi-turn conversations. `to_cli_sync()` is no longer used.
+- **SQLite degrades queue concurrency** — `SKIP LOCKED` is Postgres-native.
+  SQLite dev mode may serialise dequeue. Document Postgres for production.
+- **No preemption** — a running work item occupies the slot until done.
+- **Stream handles are single-process** — no cross-process streaming.
+- **`concurrency=1`** — one work item at a time. Chat with CRITICAL priority
+  jumps the queue but still waits for any in-flight item to finish.
 
 ## Change Log
 
-- 2026-02-15: Created queue foundation spec covering task model, queue instance,
-  enqueue contract, and SQLite limitation guidance. (Issue #8)
+- 2026-02-15: Created. WorkItem model, stream handles, unified queue path. (Issue #8)

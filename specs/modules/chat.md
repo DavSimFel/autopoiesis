@@ -1,13 +1,10 @@
-# Module: chat.py
+# Module: chat
 
 ## Purpose
 
-`chat.py` is the runtime entrypoint for durable interactive CLI chat and the host
-module for DBOS background task execution handlers.
-
-Interactive chat behavior remains on `DBOSAgent(...).to_cli_sync(...)`.
-Background work executes through the DBOS `work_queue` by enqueuing
-`execute_task(payload_dict)` payloads.
+`chat.py` is the runtime entrypoint. It builds the agent stack, launches DBOS,
+and enters the CLI chat loop. It also hosts the DBOS workflow/step functions
+that execute work items from the queue.
 
 ## Status
 
@@ -16,100 +13,76 @@ Background work executes through the DBOS `work_queue` by enqueuing
 
 ## File Structure
 
-- `chat.py`: app startup, provider selection, backend/toolset wiring, DBOS launch,
-  interactive CLI start, queue workflow/step handlers, enqueue helpers.
-- `models.py`: queue payload models and enums.
-- `work_queue.py`: queue instance declarations only.
+| File | Responsibility |
+|------|---------------|
+| `chat.py` | Startup, agent wiring, DBOS workflow/step, enqueue helpers, CLI loop |
+| `models.py` | `WorkItem`, `WorkItemInput`, `WorkItemOutput`, priority/type enums |
+| `work_queue.py` | Queue instance only (no functions importing from `chat.py`) |
+| `streaming.py` | `StreamHandle` protocol, `PrintStreamHandle`, registry |
 
-## API Surface
+## Environment Variables
 
-### Environment Variables
+| Var | Required | Default | Used in | Notes |
+|-----|----------|---------|---------|-------|
+| `AI_PROVIDER` | No | `anthropic` | `main()` | Provider selection |
+| `ANTHROPIC_API_KEY` | If anthropic | — | `build_agent()` | API key |
+| `ANTHROPIC_MODEL` | No | `anthropic:claude-3-5-sonnet-latest` | `build_agent()` | Model string |
+| `OPENROUTER_API_KEY` | If openrouter | — | `build_agent()` | API key |
+| `OPENROUTER_MODEL` | No | `openai/gpt-4o-mini` | `build_agent()` | Model id |
+| `AGENT_WORKSPACE_ROOT` | No | `data/agent-workspace` | `resolve_workspace_root()` | Resolves from `chat.py` dir |
+| `DBOS_APP_NAME` | No | `pydantic_dbos_agent` | `main()` | DBOS app name |
+| `DBOS_AGENT_NAME` | No | `chat` | `main()` | Agent name |
+| `DBOS_SYSTEM_DATABASE_URL` | No | `sqlite:///dbostest.sqlite` | `main()` | DBOS database URL |
 
-| Env Var | Required | Default | Source in code | Description |
-|---|---|---|---|---|
-| `AI_PROVIDER` | No | `anthropic` | `main()` | Provider selection (`anthropic` or `openrouter`) |
-| `ANTHROPIC_API_KEY` | If `AI_PROVIDER=anthropic` | - | `build_agent()` via `required_env()` | Anthropic API key |
-| `ANTHROPIC_MODEL` | No | `anthropic:claude-3-5-sonnet-latest` | `build_agent()` | Anthropic model string with required `anthropic:` prefix |
-| `OPENROUTER_API_KEY` | If `AI_PROVIDER=openrouter` | - | `build_agent()` via `required_env()` | OpenRouter API key |
-| `OPENROUTER_MODEL` | No | `openai/gpt-4o-mini` | `build_agent()` | OpenRouter model id |
-| `AGENT_WORKSPACE_ROOT` | No | `data/agent-workspace` | `resolve_workspace_root()` | Agent workspace root (relative values resolve from `chat.py`) |
-| `DBOS_APP_NAME` | No | `pydantic_dbos_agent` | `main()` | DBOS application name |
-| `DBOS_AGENT_NAME` | No | `chat` | `main()` | Durable CLI agent name |
-| `DBOS_SYSTEM_DATABASE_URL` | No | `sqlite:///dbostest.sqlite` | `main()` | DBOS system database connection URL |
+## Functions
 
-### Runtime Setup Functions
+### Startup
 
-### `required_env(name: str) -> str`
+- `required_env(name)` — fail-fast env var read
+- `resolve_workspace_root()` — resolve + create workspace dir
+- `build_backend()` — `LocalBackend` with execute disabled
+- `validate_console_deps_contract()` — structural typing guard
+- `build_toolsets()` — console toolset with write approval
+- `build_agent(provider, name, toolsets)` — Anthropic or OpenRouter factory
 
-- Returns a required env var value.
-- Raises `SystemExit` when missing.
+### Runtime State
 
-### `resolve_workspace_root() -> Path`
+- `_Runtime` dataclass holds agent + backend for the process lifetime
+- `_set_runtime()` / `_get_runtime()` — set in `main()`, read by workers
 
-- Resolves `AGENT_WORKSPACE_ROOT`.
-- Uses `chat.py` directory for relative paths.
-- Creates the directory if missing.
+### Queue Workers
 
-### `build_backend() -> LocalBackend`
+- `run_agent_step(work_item_dict)` — `@DBOS.step()`. Checks for stream
+  handle: if present, uses `agent.run_stream()` for real-time output;
+  otherwise `agent.run_sync()`. Returns `WorkItemOutput` as dict.
+- `execute_work_item(work_item_dict)` — `@DBOS.workflow()`. Delegates to
+  `run_agent_step()`.
 
-- Builds `LocalBackend(root_dir=..., enable_execute=False)`.
+### Enqueue Helpers
 
-### `build_toolsets() -> list[AbstractToolset[AgentDeps]]`
+- `enqueue(item)` — fire-and-forget, returns work item id
+- `enqueue_and_wait(item)` — blocks on `handle.get_result()`, returns `WorkItemOutput`
 
-- Validates backend/toolset contract first.
-- Creates one console toolset with:
-  - `include_execute=False`
-  - `require_write_approval=True`
+### CLI
 
-### `build_agent(...) -> Agent[AgentDeps, str]`
+- `cli_chat_loop()` — interactive loop. Each message → `WorkItem` with
+  CRITICAL priority + `PrintStreamHandle` → `enqueue_and_wait()`.
+  History flows through `WorkItemInput.message_history_json`.
 
-- Creates an Anthropic or OpenRouter-backed agent from explicit provider input.
-- Enforces required provider API keys with `required_env(...)`.
+### Entrypoint
 
-### Queue Execution Functions
+- `main()` — load .env → build stack → set runtime → DBOS launch → chat loop
 
-### `run_agent_step(prompt: str) -> str`
+## Invariants
 
-- DBOS step (`@DBOS.step()`).
-- Executes one agent turn using module-level runtime `agent` + `backend`.
-- Returns text output for checkpoint-able background processing.
-
-### `execute_task(payload_dict: dict[str, Any]) -> str`
-
-- DBOS workflow (`@DBOS.workflow()`).
-- Validates queue payload with `TaskPayload.model_validate(payload_dict)`.
-- Calls `run_agent_step(payload.prompt)`.
-
-### `enqueue_task(task_type: TaskType, prompt: str, **kwargs: Any) -> str`
-
-- Creates a `TaskPayload`.
-- Enqueues to `work_queue` with `SetEnqueueOptions(priority=payload.priority)`.
-- Passes `payload.model_dump()` (dict, not serialized JSON string).
-- Returns generated task id.
-
-### `enqueue_task_and_wait(task_type: TaskType, prompt: str, **kwargs: Any) -> str`
-
-- Enqueues with queue priority and immediately calls `handle.get_result()`.
-- Validates result is `str` and returns it.
-
-### `main() -> None`
-
-Ordered startup sequence:
-
-1. `load_dotenv(dotenv_path=Path(__file__).with_name(".env"))`
-2. Build backend, toolsets, and provider agent
-3. Set module-level runtime state for queue handlers
-4. Configure DBOS (`DBOS(config=dbos_config)`)
-5. Launch DBOS (`DBOS.launch()`)
-6. Start interactive CLI via `dbos_agent.to_cli_sync(deps=AgentDeps(backend=backend))`
-
-## Invariants & Rules
-
-- Interactive CLI chat remains on `to_cli_sync()` (no queue regression in v1).
-- Background tasks must route through `work_queue.enqueue(execute_task, payload_dict)`.
-- `execute_task` and `run_agent_step` remain in `chat.py` to avoid circular imports.
-- Queue payloads are dict-based (`model_dump` / `model_validate`) with no double serialization.
-- Module-level runtime state is initialized in `main()` before `DBOS.launch()`.
+- All work goes through the queue. No direct `agent.run_sync()` outside workers.
+- Required env vars fail with `SystemExit`, not `KeyError`.
+- `.env` loads relative to `chat.py`, not CWD.
+- Workspace root resolves relative to `chat.py` when not absolute.
+- Backend execute always disabled. Write approval always required.
+- Console deps contract validated at startup.
+- Workflow/step functions live in `chat.py` to avoid circular imports.
+- Stream handles are in-process only — not durable, not serialised.
 
 ## Dependencies
 
@@ -119,4 +92,6 @@ Ordered startup sequence:
 
 ## Change Log
 
-- 2026-02-15: Added background queue execution workflow/step wiring while preserving `to_cli_sync()` interactive chat path. Added enqueue helpers and module split references. (Issue #8)
+- 2026-02-15: Unified all work through priority queue. WorkItem model with
+  structured input/output. Stream handles for real-time CLI output. Removed
+  `to_cli_sync()` / `DBOSAgent`. (Issue #8)

@@ -1,8 +1,8 @@
-"""Durable interactive CLI chat with DBOS-backed priority queue execution.
+"""Durable CLI chat with DBOS-backed priority queue execution.
 
 All work — including interactive chat — flows through the DBOS priority queue.
-Interactive chat uses agent.run_stream() with message_history for multi-turn
-conversation and streaming output.
+When a stream handle is registered for a work item, the worker streams tokens
+in real time. Durability comes from the final output, not the stream.
 """
 
 import os
@@ -32,24 +32,64 @@ except ModuleNotFoundError as exc:
         "Missing backend dependency. Run `uv sync` so `pydantic-ai-backend==0.1.6` is installed."
     ) from exc
 
-from models import TaskPayload, TaskPriority, TaskType
+from models import WorkItem, WorkItemInput, WorkItemOutput, WorkItemPriority, WorkItemType
+from streaming import PrintStreamHandle, register_stream, take_stream
 from work_queue import work_queue
+
+# ---------------------------------------------------------------------------
+# Agent deps
+# ---------------------------------------------------------------------------
 
 
 @dataclass
 class AgentDeps:
-    """Runtime dependencies injected into agent turns."""
+    """Runtime dependencies injected into agent turns.
+
+    ``backend`` is an explicit field so ``AgentDeps`` structurally matches the
+    console toolset dependency protocol used by ``pydantic-ai-backend``.
+    """
 
     backend: LocalBackend
 
 
-_runtime_agent: Agent[AgentDeps, str] | None = None
-_runtime_backend: LocalBackend | None = None
+# ---------------------------------------------------------------------------
+# Runtime state — set once in main(), read by queue workers
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class _Runtime:
+    """Holds initialised agent + backend for the lifetime of the process."""
+
+    agent: Agent[AgentDeps, str]
+    backend: LocalBackend
+
+
+_runtime: _Runtime | None = None
+
+
+def _set_runtime(agent: Agent[AgentDeps, str], backend: LocalBackend) -> None:
+    global _runtime
+    _runtime = _Runtime(agent=agent, backend=backend)
+
+
+def _get_runtime() -> _Runtime:
+    if _runtime is None:
+        raise RuntimeError("Runtime not initialised. Start the app via main().")
+    return _runtime
+
+
+# ---------------------------------------------------------------------------
+# Startup helpers
+# ---------------------------------------------------------------------------
 
 
 def required_env(name: str) -> str:
-    """Return env var value or exit with a clear startup error."""
+    """Return env var value or exit with a clear startup error.
 
+    Failing fast with ``SystemExit`` (not ``KeyError``) ensures missing
+    required configuration surfaces before any conversation begins.
+    """
     value = os.getenv(name)
     if value:
         return value
@@ -57,8 +97,12 @@ def required_env(name: str) -> str:
 
 
 def resolve_workspace_root() -> Path:
-    """Resolve and create the agent workspace root directory."""
+    """Resolve and create the agent workspace root directory.
 
+    Relative ``AGENT_WORKSPACE_ROOT`` values are resolved from this file's
+    directory (not CWD) for consistent behaviour across local runs,
+    containers, and process launch contexts.
+    """
     raw_root = os.getenv("AGENT_WORKSPACE_ROOT", "data/agent-workspace")
     path = Path(raw_root)
     if not path.is_absolute():
@@ -68,14 +112,21 @@ def resolve_workspace_root() -> Path:
 
 
 def build_backend() -> LocalBackend:
-    """Create the local filesystem backend with shell execution disabled."""
+    """Create the local filesystem backend with shell execution disabled.
 
+    The backend always uses the resolved workspace root and ``enable_execute``
+    stays ``False`` to keep tool access scoped to file operations only.
+    """
     return LocalBackend(root_dir=resolve_workspace_root(), enable_execute=False)
 
 
 def validate_console_deps_contract() -> None:
-    """Fail fast if console toolset structural assumptions stop holding."""
+    """Fail fast if console toolset structural assumptions stop holding.
 
+    This guard protects the ``AgentDeps`` → console toolset contract by
+    checking both the ``backend`` annotation and required ``LocalBackend``
+    methods at startup, before any agent turns execute.
+    """
     backend_annotation = AgentDeps.__annotations__.get("backend")
     if backend_annotation is not LocalBackend:
         raise SystemExit(
@@ -102,8 +153,12 @@ def validate_console_deps_contract() -> None:
 
 
 def build_toolsets() -> list[AbstractToolset[AgentDeps]]:
-    """Build console toolsets with execute disabled and write approval enabled."""
+    """Build console toolsets with execute disabled and write approval enabled.
 
+    ``create_console_toolset`` is typed for a protocol dependency type; the
+    cast is intentional because ``AgentDeps`` satisfies that protocol
+    structurally via ``backend: LocalBackend``.
+    """
     validate_console_deps_contract()
     toolset = create_console_toolset(include_execute=False, require_write_approval=True)
     return [toolset]
@@ -112,8 +167,12 @@ def build_toolsets() -> list[AbstractToolset[AgentDeps]]:
 def build_agent(
     provider: str, agent_name: str, toolsets: list[AbstractToolset[AgentDeps]]
 ) -> Agent[AgentDeps, str]:
-    """Create the configured agent from explicit provider/name/toolset inputs."""
+    """Create the configured agent from explicit provider/name/toolset inputs.
 
+    Provider selection is passed in by ``main()`` rather than read here,
+    keeping this function a focused factory for ``anthropic`` and
+    ``openrouter`` variants.
+    """
     if provider == "anthropic":
         required_env("ANTHROPIC_API_KEY")
         return Agent(
@@ -134,103 +193,108 @@ def build_agent(
     raise SystemExit("Unsupported AI_PROVIDER. Use 'openrouter' or 'anthropic'.")
 
 
-def set_runtime_state(agent: Agent[AgentDeps, str], backend: LocalBackend) -> None:
-    """Store runtime references used by DBOS background task handlers."""
-
-    global _runtime_agent, _runtime_backend
-    _runtime_agent = agent
-    _runtime_backend = backend
+# ---------------------------------------------------------------------------
+# Queue worker — DBOS workflow + step
+# ---------------------------------------------------------------------------
 
 
-def get_runtime_agent() -> Agent[AgentDeps, str]:
-    """Return initialized agent runtime state or fail fast for invalid startup."""
-
-    if _runtime_agent is None:
-        raise RuntimeError("Runtime agent is not initialized. Start the app via main().")
-    return _runtime_agent
+def _deserialize_history(history_json: str | None) -> list[ModelMessage]:
+    if not history_json:
+        return []
+    return ModelMessagesTypeAdapter.validate_json(history_json)
 
 
-def get_runtime_backend() -> LocalBackend:
-    """Return initialized backend runtime state or fail fast for invalid startup."""
-
-    if _runtime_backend is None:
-        raise RuntimeError("Runtime backend is not initialized. Start the app via main().")
-    return _runtime_backend
+def _serialize_history(messages: list[ModelMessage]) -> str:
+    return ModelMessagesTypeAdapter.dump_json(messages).decode()
 
 
 @DBOS.step()
-def run_agent_step(prompt: str, message_history_json: str | None = None) -> str:
+def run_agent_step(work_item_dict: dict[str, Any]) -> dict[str, Any]:
     """Checkpoint-able agent execution step.
 
-    Accepts optional serialized message_history for multi-turn conversations.
-    Returns JSON with 'output' and 'messages' for history continuity.
+    If a stream handle is registered for this work item, uses
+    ``agent.run_stream()`` for real-time token output. Otherwise falls
+    back to ``agent.run_sync()``. Either way, returns the durable output.
     """
+    rt = _get_runtime()
+    item = WorkItem.model_validate(work_item_dict)
+    history = _deserialize_history(item.input.message_history_json)
+    deps = AgentDeps(backend=rt.backend)
 
-    import json
+    stream_handle = take_stream(item.id)
 
-    agent = get_runtime_agent()
-    backend = get_runtime_backend()
+    if stream_handle is not None:
+        # Streaming path — real-time output to the handle
+        import asyncio
 
-    history: list[ModelMessage] = []
-    if message_history_json:
-        history = ModelMessagesTypeAdapter.validate_json(message_history_json)
+        async def _stream() -> WorkItemOutput:
+            async with rt.agent.run_stream(
+                item.input.prompt,
+                deps=deps,
+                message_history=history,
+            ) as stream:
+                async for chunk in stream.stream_text(delta=True):
+                    stream_handle.write(chunk)
+                stream_handle.close()
+            return WorkItemOutput(
+                text=stream.output,
+                message_history_json=_serialize_history(stream.all_messages()),
+            )
 
-    result = agent.run_sync(
-        prompt,
-        deps=AgentDeps(backend=backend),
-        message_history=history,
-    )
+        output = asyncio.run(_stream())
+    else:
+        # Non-streaming path — background work
+        result = rt.agent.run_sync(item.input.prompt, deps=deps, message_history=history)
+        output = WorkItemOutput(
+            text=result.output,
+            message_history_json=_serialize_history(result.all_messages()),
+        )
 
-    return json.dumps(
-        {
-            "output": result.output,
-            "messages": ModelMessagesTypeAdapter.dump_json(result.all_messages()).decode(),
-        }
-    )
+    return output.model_dump()
 
 
 @DBOS.workflow()
-def execute_task(payload_dict: dict[str, Any]) -> str:
-    """Execute any task from the DBOS work queue.
+def execute_work_item(work_item_dict: dict[str, Any]) -> dict[str, Any]:
+    """Execute any work item from the DBOS queue.
 
     All work — chat, research, code, review — flows through this single
-    workflow. Chat tasks include message_history in context for multi-turn.
-    Returns JSON with output and updated message history.
+    workflow. Returns a dict-serialised ``WorkItemOutput``.
     """
-
-    payload = TaskPayload.model_validate(payload_dict)
-    history_json = payload.context.get("message_history_json")
-    return run_agent_step(payload.prompt, history_json)
+    return run_agent_step(work_item_dict)
 
 
-def enqueue_task(task_type: TaskType, prompt: str, **kwargs: Any) -> str:
-    """Enqueue work and return the generated task id."""
-
-    payload = TaskPayload(type=task_type, prompt=prompt, **kwargs)
-    with SetEnqueueOptions(priority=int(payload.priority)):
-        work_queue.enqueue(execute_task, payload.model_dump())
-    return payload.id
+# ---------------------------------------------------------------------------
+# Enqueue helpers
+# ---------------------------------------------------------------------------
 
 
-def enqueue_task_and_wait(task_type: TaskType, prompt: str, **kwargs: Any) -> str:
-    """Enqueue work and block until complete. Returns raw result JSON."""
+def enqueue(item: WorkItem) -> str:
+    """Enqueue a work item and return its id. Fire-and-forget."""
+    with SetEnqueueOptions(priority=int(item.priority)):
+        work_queue.enqueue(execute_work_item, item.model_dump())
+    return item.id
 
-    payload = TaskPayload(type=task_type, prompt=prompt, **kwargs)
-    with SetEnqueueOptions(priority=int(payload.priority)):
-        handle = work_queue.enqueue(execute_task, payload.model_dump())
-    return handle.get_result()
+
+def enqueue_and_wait(item: WorkItem) -> WorkItemOutput:
+    """Enqueue a work item and block until complete. Returns structured output."""
+    with SetEnqueueOptions(priority=int(item.priority)):
+        handle = work_queue.enqueue(execute_work_item, item.model_dump())
+    raw = handle.get_result()
+    return WorkItemOutput.model_validate(raw)
+
+
+# ---------------------------------------------------------------------------
+# CLI chat loop
+# ---------------------------------------------------------------------------
 
 
 def cli_chat_loop() -> None:
-    """Interactive CLI chat loop — every message enqueues through the work queue.
+    """Interactive CLI chat — every message goes through the work queue.
 
-    Chat messages enter as TaskType.CHAT with CRITICAL priority.
-    Message history is passed via task context for multi-turn continuity.
-    Type 'exit' or Ctrl+C to quit.
+    Each user message becomes a WorkItem with CRITICAL priority and a
+    PrintStreamHandle for real-time output. Message history flows through
+    WorkItemInput/Output for multi-turn continuity.
     """
-
-    import json
-
     history_json: str | None = None
     print("Autopoiesis CLI Chat (type 'exit' to quit)")
     print("---")
@@ -249,28 +313,41 @@ def cli_chat_loop() -> None:
             break
 
         try:
-            context: dict[str, Any] = {}
-            if history_json:
-                context["message_history_json"] = history_json
-
-            result_json = enqueue_task_and_wait(
-                TaskType.CHAT,
-                user_input,
-                priority=TaskPriority.CRITICAL,
-                context=context,
+            item = WorkItem(
+                type=WorkItemType.CHAT,
+                priority=WorkItemPriority.CRITICAL,
+                input=WorkItemInput(
+                    prompt=user_input,
+                    message_history_json=history_json,
+                ),
             )
 
-            result = json.loads(result_json)
-            print(result["output"])
-            history_json = result["messages"]
+            # Register a stream handle so the worker streams to stdout
+            register_stream(item.id, PrintStreamHandle())
+
+            output = enqueue_and_wait(item)
+            history_json = output.message_history_json
 
         except Exception as exc:
             print(f"Error: {exc}", file=sys.stderr)
 
 
-def main() -> None:
-    """Load config, assemble runtime components, and launch DBOS + CLI chat."""
+# ---------------------------------------------------------------------------
+# Entrypoint
+# ---------------------------------------------------------------------------
 
+
+def main() -> None:
+    """Load config, assemble runtime components, and launch DBOS + CLI chat.
+
+    Startup order is intentional:
+    1. load ``.env`` relative to this file
+    2. read provider + agent naming from env
+    3. build backend → toolsets → agent
+    4. store runtime state for queue workers
+    5. configure and launch DBOS
+    6. enter interactive CLI chat loop (all input via queue)
+    """
     load_dotenv(dotenv_path=Path(__file__).with_name(".env"))
 
     provider = os.getenv("AI_PROVIDER", "anthropic").lower()
@@ -279,7 +356,7 @@ def main() -> None:
     backend = build_backend()
     toolsets = build_toolsets()
     agent = build_agent(provider, agent_name, toolsets)
-    set_runtime_state(agent, backend)
+    _set_runtime(agent, backend)
 
     dbos_config: DBOSConfig = {
         "name": os.getenv("DBOS_APP_NAME", "pydantic_dbos_agent"),
