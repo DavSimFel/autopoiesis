@@ -217,4 +217,7 @@ def create_skills_toolset(
         """Read a resource file from a skill directory."""
         return _read_resource(cache, skill_name, resource_name)
 
+    # Ensure pyright recognizes decorator-registered functions as used
+    _ = (list_skills, load_skill, read_skill_resource)
+
     return toolset
