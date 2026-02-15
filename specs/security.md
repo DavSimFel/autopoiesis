@@ -305,7 +305,7 @@ the audit log).
 **R8.5** Hash-chained: each entry includes SHA-256 of
 `canonical_json(previous_entry)`. Genesis entry uses
 `sha256(b"autopoiesis:audit:genesis")`. Canonical JSON uses the same
-serialization as R3.3.
+serialization as R3.4.
 
 **R8.6** Storage: JSONL at `$AUDIT_LOG_PATH` (default:
 `data/audit/approvals.jsonl`).
