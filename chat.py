@@ -14,7 +14,7 @@ import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, cast, get_type_hints
 
 from dotenv import load_dotenv
 from pydantic_ai import AbstractToolset, Agent, DeferredToolRequests
@@ -132,7 +132,12 @@ def validate_console_deps_contract() -> None:
     checking both the ``backend`` annotation and required ``LocalBackend``
     methods at startup, before any agent turns execute.
     """
-    backend_annotation = AgentDeps.__annotations__.get("backend")
+    try:
+        backend_annotation = get_type_hints(AgentDeps).get("backend")
+    except (NameError, TypeError) as exc:
+        raise SystemExit(
+            "Failed to resolve AgentDeps type annotations for console toolset validation."
+        ) from exc
     if backend_annotation is not LocalBackend:
         raise SystemExit(
             "AgentDeps.backend must be typed as LocalBackend to satisfy "
@@ -157,13 +162,32 @@ def validate_console_deps_contract() -> None:
         )
 
 
-def _resolve_skills_dir() -> Path:
-    """Resolve the skills directory, defaulting to ``skills/`` beside ``chat.py``."""
+def _resolve_shipped_skills_dir() -> Path:
+    """Resolve shipped skills, defaulting to ``skills/`` beside ``chat.py``."""
     raw = os.getenv("SKILLS_DIR", "skills")
     path = Path(raw)
     if not path.is_absolute():
         path = Path(__file__).resolve().parent / path
     return path
+
+
+def _resolve_custom_skills_dir() -> Path:
+    """Resolve custom skills, defaulting to ``skills/`` inside the workspace."""
+    raw = os.getenv("CUSTOM_SKILLS_DIR", "skills")
+    path = Path(raw)
+    if not path.is_absolute():
+        path = resolve_workspace_root() / path
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _build_skill_directories() -> list[SkillDirectory]:
+    """Build skill directories in precedence order: shipped, then custom."""
+    shipped_dir = _resolve_shipped_skills_dir()
+    custom_dir = _resolve_custom_skills_dir()
+    if shipped_dir.resolve() == custom_dir.resolve():
+        return [SkillDirectory(path=shipped_dir)]
+    return [SkillDirectory(path=shipped_dir), SkillDirectory(path=custom_dir)]
 
 
 _CONSOLE_INSTRUCTIONS = (
@@ -182,9 +206,7 @@ def build_toolsets() -> tuple[list[AbstractToolset[AgentDeps]], list[str]]:
     """
     validate_console_deps_contract()
     console = create_console_toolset(include_execute=False, require_write_approval=True)
-    skills_toolset, skills_instr = create_skills_toolset(
-        [SkillDirectory(path=_resolve_skills_dir())]
-    )
+    skills_toolset, skills_instr = create_skills_toolset(_build_skill_directories())
 
     toolsets: list[AbstractToolset[AgentDeps]] = [console, skills_toolset]
     instructions = [i for i in [_CONSOLE_INSTRUCTIONS, skills_instr] if i]

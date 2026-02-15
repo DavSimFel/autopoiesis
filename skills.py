@@ -2,13 +2,13 @@
 
 Skills are folders containing a ``SKILL.md`` with YAML frontmatter (metadata)
 and markdown body (instructions). The agent discovers skills at startup by
-scanning frontmatter only — full instructions are loaded on demand to keep
-token usage low.
+scanning frontmatter only — full instructions are loaded on demand to keep token usage low.
 """
 
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, cast
 
@@ -18,13 +18,13 @@ from pydantic_ai import RunContext
 from pydantic_ai.toolsets import FunctionToolset
 
 from models import AgentDeps
+from skillmaker_tools import (
+    extract_skill_metadata,
+    lint_skill_definition,
+    validate_skill_definition,
+)
 
 logger = logging.getLogger(__name__)
-
-
-# ---------------------------------------------------------------------------
-# Models
-# ---------------------------------------------------------------------------
 
 
 class SkillDirectory(BaseModel):
@@ -35,12 +35,7 @@ class SkillDirectory(BaseModel):
 
 
 class Skill(BaseModel):
-    """Skill metadata with lazy-loaded instructions.
-
-    ``instructions`` is ``None`` until ``load_skill()`` is called. This is
-    the progressive disclosure pattern — the agent sees only the 1-line
-    description until it explicitly loads the full instructions.
-    """
+    """Skill metadata with lazy-loaded instructions."""
 
     name: str
     description: str
@@ -52,16 +47,12 @@ class Skill(BaseModel):
     instructions: str | None = None
 
 
-# ---------------------------------------------------------------------------
-# Parsing
-# ---------------------------------------------------------------------------
-
-
 def parse_skill_md(content: str) -> tuple[dict[str, Any], str]:
-    """Parse a SKILL.md file into ``(frontmatter_dict, instructions_markdown)``.
+    """Parse a SKILL.md file into frontmatter and markdown instructions.
 
-    Expects optional YAML frontmatter delimited by ``---``. If no frontmatter
-    is present, returns an empty dict and the full content as instructions.
+    Frontmatter is optional and delimited by ``---`` on its own line.
+    If the delimiters are missing or malformed, returns an empty frontmatter
+    mapping and treats the entire file as instruction content.
     """
     lines = content.splitlines(keepends=True)
     if not lines or lines[0].strip() != "---":
@@ -78,24 +69,22 @@ def parse_skill_md(content: str) -> tuple[dict[str, Any], str]:
     frontmatter_yaml = "".join(lines[1:closing_idx]).strip()
     instructions = "".join(lines[closing_idx + 1 :]).strip()
 
-    loaded_frontmatter: Any = yaml.safe_load(frontmatter_yaml) if frontmatter_yaml else {}
+    safe_load_obj = getattr(yaml, "safe_load", None)
+    if not callable(safe_load_obj):
+        raise ValueError("PyYAML safe_load is unavailable.")
+    safe_load = cast(Callable[[str], object], safe_load_obj)
+    loaded_frontmatter: object = safe_load(frontmatter_yaml) if frontmatter_yaml else {}
     if not isinstance(loaded_frontmatter, dict):
         raise ValueError("SKILL.md frontmatter must be a mapping.")
     frontmatter = cast(dict[str, Any], loaded_frontmatter)
     return frontmatter, instructions
 
 
-# ---------------------------------------------------------------------------
-# Discovery
-# ---------------------------------------------------------------------------
-
-
 def discover_skills(directories: list[SkillDirectory]) -> list[Skill]:
-    """Walk skill directories and build skill metadata from frontmatter only.
+    """Discover skills and build metadata cache from SKILL frontmatter.
 
-    Returns an empty list if directories are missing or contain no valid
-    skills. Never raises on individual skill parse failures — logs a warning
-    and continues.
+    Discovery is resilient: parse errors in individual skill folders are logged
+    and skipped so one bad skill file does not prevent startup.
     """
     skills: list[Skill] = []
 
@@ -110,8 +99,10 @@ def discover_skills(directories: list[SkillDirectory]) -> list[Skill]:
             try:
                 content = skill_file.read_text()
                 frontmatter, _ = parse_skill_md(content)
-                if not frontmatter.get("name"):
+                name_raw = frontmatter.get("name")
+                if not isinstance(name_raw, str) or not name_raw.strip():
                     continue
+                description, tags, version, author = extract_skill_metadata(frontmatter)
 
                 skill_folder = skill_file.parent
                 resources = [
@@ -122,12 +113,12 @@ def discover_skills(directories: list[SkillDirectory]) -> list[Skill]:
 
                 skills.append(
                     Skill(
-                        name=frontmatter["name"],
-                        description=frontmatter.get("description", ""),
+                        name=name_raw,
+                        description=description,
                         path=skill_folder,
-                        tags=frontmatter.get("tags", []),
-                        version=frontmatter.get("version", "1.0.0"),
-                        author=frontmatter.get("author", ""),
+                        tags=tags,
+                        version=version,
+                        author=author,
                         resources=resources,
                     )
                 )
@@ -143,11 +134,6 @@ def discover_skills(directories: list[SkillDirectory]) -> list[Skill]:
                 continue
 
     return skills
-
-
-# ---------------------------------------------------------------------------
-# Toolset
-# ---------------------------------------------------------------------------
 
 
 def _format_skill_list(cache: dict[str, Skill]) -> str:
@@ -224,34 +210,55 @@ def _format_available_resources(resources: list[str]) -> str:
     return ", ".join(sorted(resources))
 
 
-def skills_instructions(cache: dict[str, Skill]) -> str:
-    """Generate a system prompt fragment listing available skills.
+def _load_skill_parts(skill: Skill) -> tuple[dict[str, Any], str]:
+    """Read and parse SKILL.md for lint/validation checks."""
+    content = (skill.path / "SKILL.md").read_text()
+    return parse_skill_md(content)
 
-    Returns an empty string when no skills are discovered, so it contributes
-    nothing to the system prompt.
-    """
+
+def _validate_skill(cache: dict[str, Skill], skill_name: str) -> str:
+    skill = cache.get(skill_name)
+    if skill is None:
+        return f"Skill '{skill_name}' not found."
+    try:
+        frontmatter, instructions = _load_skill_parts(skill)
+    except (OSError, UnicodeDecodeError, ValueError, yaml.YAMLError):
+        logger.warning("Failed to validate skill %s", skill_name, exc_info=True)
+        return f"Error validating skill '{skill_name}'."
+    return validate_skill_definition(skill_name, frontmatter, instructions)
+
+
+def _lint_skill(cache: dict[str, Skill], skill_name: str) -> str:
+    skill = cache.get(skill_name)
+    if skill is None:
+        return f"Skill '{skill_name}' not found."
+    try:
+        _, instructions = _load_skill_parts(skill)
+    except (OSError, UnicodeDecodeError, ValueError, yaml.YAMLError):
+        logger.warning("Failed to lint skill %s", skill_name, exc_info=True)
+        return f"Error linting skill '{skill_name}'."
+    return lint_skill_definition(skill_name, instructions)
+
+
+def skills_instructions(cache: dict[str, Skill]) -> str:
+    """Generate a compact system prompt fragment for skill tool discovery."""
     if not cache:
         return ""
     names = ", ".join(sorted(cache.keys()))
     return (
         f"You have skills available: {names}. "
-        "Use list_skills to see details, load_skill to get full instructions."
+        "Use list_skills to see details, load_skill to get full instructions, "
+        "and validate_skill/lint_skill when editing skills."
     )
 
 
 def create_skills_toolset(
     directories: list[SkillDirectory],
 ) -> tuple[FunctionToolset[AgentDeps], str]:
-    """Create a PydanticAI toolset and instructions for skill discovery and loading.
+    """Create skills tools plus a matching instruction fragment.
 
-    Returns a ``(toolset, instructions_text)`` tuple. The instructions text is
-    a system prompt fragment listing discovered skill names — pass it to the
-    agent's ``instructions`` parameter alongside other instruction sources.
-
-    Tools:
-    - ``list_skills`` — show available skills (name, description, tags)
-    - ``load_skill`` — load full instructions for a skill (progressive disclosure)
-    - ``read_skill_resource`` — read a resource file bundled with a skill
+    Tools expose progressive disclosure (``load_skill``), safe resource reads,
+    and skill authoring quality checks (``validate_skill``/``lint_skill``).
     """
     toolset: FunctionToolset[AgentDeps] = FunctionToolset()
 
@@ -277,7 +284,17 @@ def create_skills_toolset(
         """Read a resource file from a skill directory."""
         return _read_resource(cache, skill_name, resource_name)
 
+    @toolset.tool
+    async def validate_skill(ctx: RunContext[AgentDeps], skill_name: str) -> str:
+        """Validate SKILL.md frontmatter and required structure."""
+        return _validate_skill(cache, skill_name)
+
+    @toolset.tool
+    async def lint_skill(ctx: RunContext[AgentDeps], skill_name: str) -> str:
+        """Lint SKILL.md for common style issues."""
+        return _lint_skill(cache, skill_name)
+
     # Ensure pyright recognizes decorator-registered functions as used
-    _ = (list_skills, load_skill, read_skill_resource)
+    _ = (list_skills, load_skill, read_skill_resource, validate_skill, lint_skill)
 
     return toolset, skills_instructions(cache)

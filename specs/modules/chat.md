@@ -8,7 +8,7 @@ that execute work items from the queue.
 
 ## Status
 
-- **Last updated:** 2026-02-15 (Issue #16)
+- **Last updated:** 2026-02-15 (Issue #9)
 - **Source:** `chat.py`
 
 ## File Structure
@@ -34,7 +34,8 @@ that execute work items from the queue.
 | `DBOS_APP_NAME` | No | `pydantic_dbos_agent` | `main()` | DBOS app name |
 | `DBOS_AGENT_NAME` | No | `chat` | `main()` | Agent name |
 | `DBOS_SYSTEM_DATABASE_URL` | No | `sqlite:///dbostest.sqlite` | `main()` | DBOS database URL |
-| `SKILLS_DIR` | No | `skills` | `_resolve_skills_dir()` | Skill directory path |
+| `SKILLS_DIR` | No | `skills` | `_resolve_shipped_skills_dir()` | Shipped skills path, resolves from `chat.py` dir |
+| `CUSTOM_SKILLS_DIR` | No | `skills` | `_resolve_custom_skills_dir()` | Custom skills path, resolves inside `AGENT_WORKSPACE_ROOT` when relative |
 
 ## Functions
 
@@ -42,11 +43,14 @@ that execute work items from the queue.
 
 - `required_env(name)` — fail-fast env var read
 - `resolve_workspace_root()` — resolve + create workspace dir
-- `_resolve_skills_dir()` — resolve skills directory (default: `skills/`)
+- `_resolve_shipped_skills_dir()` — resolve shipped skills directory (default: `skills/`)
+- `_resolve_custom_skills_dir()` — resolve custom skills directory inside workspace (default: `skills/`)
+- `_build_skill_directories()` — build skill directory list in precedence order (shipped first, custom second)
 - `build_backend()` — `LocalBackend` with execute disabled
 - `validate_console_deps_contract()` — structural typing guard
 - `build_toolsets()` — returns `(toolsets, instructions)`. Console toolset
-  (write approval) + skills toolset. Each module contributes instructions.
+  (write approval) + skills toolset from shipped and custom directories.
+  Custom skills override shipped skills when names collide.
 - `build_agent(provider, name, toolsets, instructions)` — Anthropic or
   OpenRouter factory. Passes instructions to PydanticAI's `instructions`
   parameter for automatic system prompt composition.
@@ -117,6 +121,8 @@ that execute work items from the queue.
 - Required env vars fail with `SystemExit`, not `KeyError`.
 - `.env` loads relative to `chat.py`, not CWD.
 - Workspace root resolves relative to `chat.py` when not absolute.
+- Skills load from shipped + custom locations; custom directory defaults to
+  `<AGENT_WORKSPACE_ROOT>/skills`.
 - Backend execute always disabled. Write approval always required.
 - Console deps contract validated at startup.
 - Workflow/step functions live in `chat.py` to avoid circular imports.
@@ -131,6 +137,11 @@ that execute work items from the queue.
 
 ## Change Log
 
+- 2026-02-15: Skills now load from two places: shipped skills (`SKILLS_DIR`,
+  repo-relative by default) and custom workspace skills (`CUSTOM_SKILLS_DIR`,
+  workspace-relative by default). Custom skills override shipped skills by name.
+  Added shipped `skillmaker` skill and quality tools for skill lint/validation.
+  (Issue #9)
 - 2026-02-15: Skill system integration. `AgentDeps` moved to `models.py`.
   `build_toolsets()` returns `(toolsets, instructions)`. `build_agent()`
   accepts instructions list, passes to PydanticAI `instructions` param.

@@ -16,22 +16,25 @@ only) and loads full instructions on demand.
 
 - **Progressive disclosure** — the agent sees only skill name + description
   until it explicitly loads the full instructions. Keeps token usage low.
+- **Dual skill locations** — shipped skills from `SKILLS_DIR` and custom skills
+  from `CUSTOM_SKILLS_DIR` (workspace-relative by default).
+- **Precedence** — custom skills override shipped skills when names collide.
 - **Skill directory** — a folder scanned for `SKILL.md` files (recursive by
-  default). Configured via `SKILLS_DIR` env var.
+  default).
 - **Resource files** — non-SKILL.md files in a skill folder, readable via
   the `read_skill_resource` tool with path traversal protection.
 
 ## Skill Directory Structure
 
 ```
-skills/
-├── code-review/
-│   ├── SKILL.md
-│   └── checklist.md
-├── research/
-│   ├── SKILL.md
-│   └── report.md
-└── git-workflow/
+<repo>/skills/                        # shipped
+└── skillmaker/
+    ├── SKILL.md
+    ├── skill-template.md
+    └── quality-checklist.md
+
+<AGENT_WORKSPACE_ROOT>/skills/        # custom (default)
+└── your-skill/
     └── SKILL.md
 ```
 
@@ -39,16 +42,17 @@ skills/
 
 ```yaml
 ---
-name: code-review
-description: Review Python code for quality and security
-version: 1.0.0
-tags:
-  - code
-  - review
-author: ""
+name: skillmaker
+description: Create and maintain high-quality skills.
+metadata:
+  version: 1.0.0
+  tags:
+    - skills
+    - quality
+  author: ""
 ---
 
-# Code Review Skill
+# Skillmaker
 
 Detailed instructions the agent follows when this skill is loaded...
 ```
@@ -66,7 +70,8 @@ Detailed instructions the agent follows when this skill is loaded...
 - `parse_skill_md(content)` — split SKILL.md into `(frontmatter_dict, instructions_str)`.
   Uses `yaml.safe_load` (pyyaml). Frontmatter delimiters are line-based (`---`
   on its own line) so embedded `---` in YAML values is safe. Missing frontmatter
-  returns `({}, content)`.
+  returns `({}, content)`. Output is explicitly typed to avoid unknown-type
+  diagnostics under strict Pylance/Pyright settings.
 
 ### Discovery
 
@@ -90,12 +95,17 @@ Detailed instructions the agent follows when this skill is loaded...
   - `read_skill_resource(skill_name, resource_name)` — read a resource file.
     Only resources listed at discovery time are readable. Path traversal
     protected via `resolve()` + `is_relative_to()`.
+  - `validate_skill(skill_name)` — validate SKILL.md structure and metadata.
+  - `lint_skill(skill_name)` — lint SKILL.md instructions for style issues.
+  Validation enforces supported top-level keys and expects extensible fields
+  under `metadata`.
 
 ## Environment Variables
 
 | Var | Required | Default | Used in | Notes |
 |-----|----------|---------|---------|-------|
-| `SKILLS_DIR` | No | `skills` | `chat.py:_resolve_skills_dir()` | Resolves from `chat.py` dir |
+| `SKILLS_DIR` | No | `skills` | `chat.py:_resolve_shipped_skills_dir()` | Shipped skill path, resolves from `chat.py` dir |
+| `CUSTOM_SKILLS_DIR` | No | `skills` | `chat.py:_resolve_custom_skills_dir()` | Custom skill path, resolves inside `AGENT_WORKSPACE_ROOT` when relative |
 
 ## Invariants
 
@@ -105,13 +115,23 @@ Detailed instructions the agent follows when this skill is loaded...
 - `read_skill_resource` only serves files listed in `Skill.resources`.
 - Missing/empty skill directories produce empty results, never errors.
 - `name` field in frontmatter is required — skills without it are skipped.
+- Top-level frontmatter keys should remain within provider-supported schema.
+- `metadata.version` and `metadata.tags` are required.
+- Custom fields like `author` are expected in `metadata`.
+- Directory precedence is deterministic: shipped first, custom second.
+- Name collisions are resolved by last-write-wins in cache construction,
+  meaning custom skills override shipped skills.
 
 ## Dependencies
 
 - `pyyaml>=6.0` (90KB, zero transitive deps)
+- Internal helper module: `skillmaker_tools.py`
 
 ## Change Log
 
+- 2026-02-15: Added dual-location skill model (shipped + custom workspace),
+  deterministic precedence (custom overrides shipped), shipped `skillmaker`
+  skill, and skill quality tools (`validate_skill`, `lint_skill`). (Issue #9)
 - 2026-02-15: Hardened frontmatter parsing (line-delimited delimiters),
   restricted `read_skill_resource` to discovered resources, and added
   graceful invalid-resource error handling. (Issue #9)
