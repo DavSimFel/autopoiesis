@@ -1,14 +1,15 @@
-# Security Model — Draft v2
+# Security Model
 
 ## Purpose
 
 Define the trust boundaries, approval guarantees, and integrity properties
 for autopoiesis agent execution. No tool with side effects executes without
-verifiable, single-use, unexpired human authorization bound to the exact
-plan shown to the human.
+cryptographically signed, single-use, unexpired human authorization bound
+to the exact execution context shown to the human.
 
 ## Status
 - **Last updated:** 2026-02-15 (design phase — not yet implemented)
+- **Revision:** v3
 - **Threat model:** Single-user CLI today, networked multi-surface later
 
 ---
@@ -22,8 +23,10 @@ plan shown to the human.
 | **Plan tampering** | Modify plan between approval display and execution | Yes — no binding |
 | **Approval replay** | Reuse approval for different/repeated action | Yes — no nonce |
 | **Approval injection** | Craft `deferred_tool_results_json` with `approved: true` | Yes — trusted without verification |
-| **Context drift** | Same tool calls but different execution context (workspace, policy) | Yes — nothing bound |
+| **Unauthorized caller** | Any process with the nonce can authorize execution | Yes — bearer-token style |
+| **Context drift** | Same tool calls but different execution context | Yes — nothing bound |
 | **Race condition** | Concurrent execution before nonce is marked consumed | Yes — no atomicity |
+| **Scope escalation** | Approval for narrow action used to authorize broader one | Yes — no scope model |
 | **Audit tampering** | Rewrite audit log after the fact | Yes — no log exists |
 | **UI mismatch** | Human sees truncated/modified version of what's hashed | Yes — display truncates args |
 
@@ -35,7 +38,24 @@ plan shown to the human.
 
 ---
 
-## Core Concept: Approval Envelope
+## Core Concepts
+
+### Identity Keypair
+
+An Ed25519 keypair is the root of trust for human identity.
+
+- **Generated once** at setup (`autopoiesis init` or first run)
+- **Private key** encrypted with a user-chosen passphrase, stored at
+  `$APPROVAL_KEY_PATH` (default: `data/keys/approval.key`)
+- **Public key** stored alongside (`approval.pub`)
+- **Session unlock:** CLI startup prompts for passphrase, decrypts private
+  key, holds it in memory for the process lifetime
+- **Future unlock mechanisms:** WebAuthn/fingerprint in PWA, hardware
+  token — these are alternative key-unlock methods, not a new architecture
+
+The private key never leaves the process. The passphrase never touches disk.
+
+### Approval Envelope
 
 The **ApprovalEnvelope** is the central trust anchor. It is:
 - Created server-side before the human sees anything
@@ -43,172 +63,289 @@ The **ApprovalEnvelope** is the central trust anchor. It is:
 - Immutable after creation
 - The ONLY source of truth for verification at execution time
 
-The submitted `deferred_tool_results_json` carries only the nonce and
-per-tool decisions. Everything else is verified against the stored envelope.
+### Approval Scope
+
+The **ApprovalScope** defines what an approval authorizes. It is:
+- Part of the envelope (hashed and signed)
+- Extensible via new fields
+- Default-deny per field: `None` means "not authorized"
+- Narrowing only: child scopes can restrict, never widen
 
 ---
 
 ## Requirements
 
-### R1: Approval Envelope (server-side trust anchor)
+### R1: Identity & Signing
 
-**R1.1** When the agent produces `DeferredToolRequests`, the system MUST
-create and persist an `ApprovalEnvelope` BEFORE presenting anything to the
-human. Fields:
+**R1.1** At setup, the system MUST generate an Ed25519 keypair.
+The private key MUST be encrypted with a user-provided passphrase
+using a KDF (Argon2id preferred, scrypt acceptable).
+
+**R1.2** At CLI startup, the system MUST prompt for the passphrase,
+decrypt the private key, and hold it in memory. Failed decryption
+→ exit. No fallback to unsigned mode.
+
+**R1.3** The system MUST NOT start agent execution without an unlocked
+signing key. This is the "proof of human" for Phase 1.
+
+**R1.4** Key rotation: the system MUST support re-keying via
+`autopoiesis rotate-key` (decrypt with old passphrase, re-encrypt
+with new). Outstanding pending envelopes are invalidated on rotation.
+
+### R2: Approval Scope (extensible authorization)
+
+**R2.1** Every approval envelope contains an `ApprovalScope` that
+defines exactly what is authorized:
+
+| Field | Type | Phase | Description |
+|-------|------|-------|-------------|
+| `work_item_id` | str | 1 | The specific work item |
+| `tool_call_ids` | list[str] | 1 | Ordered tool calls authorized |
+| `workspace_root` | str | 1 | Resolved absolute workspace path |
+| `agent_name` | str | 1 | Agent that produced the request |
+| `toolset_mode` | str | 1 | e.g. `require_write_approval` |
+| `allowed_paths` | list[str] \| None | Future | Restrict file ops to these paths |
+| `max_cost_cents` | int \| None | Future | Budget cap per approval |
+| `child_scope` | bool | Future | Allow spawned sub-tasks to inherit |
+| `parent_envelope_id` | str \| None | Future | Chain to parent approval |
+| `session_id` | str \| None | Future | Bind to specific process/session |
+| `scope_tags` | list[str] | Future | Arbitrary policy labels |
+
+**R2.2** Default-deny per field: any field set to `None` means that
+capability is not authorized. Adding a new field to the schema MUST
+NOT grant permissions to existing envelopes (because their scope was
+hashed without that field → hash mismatch on any attempt to use it).
+
+**R2.3** Scope narrowing rule: if a child scope is derived from a
+parent (future: `child_scope=True`), every field in the child MUST be
+equal to or more restrictive than the parent. Validation at creation
+time, not execution time.
+
+**R2.4** The scope object is included in the plan hash (R3) and the
+signature (R4). Any scope modification invalidates both.
+
+### R3: Approval Envelope (server-side trust anchor)
+
+**R3.1** When the agent produces `DeferredToolRequests`, the system MUST
+create and persist an `ApprovalEnvelope` BEFORE presenting anything to
+the human. Fields:
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `envelope_id` | UUID4 | Primary key |
-| `work_item_id` | str | The work item this approval belongs to |
-| `nonce` | UUID4 | Single-use token |
-| `plan_hash` | str | SHA-256 of canonical execution payload |
+| `nonce` | UUID4 | Single-use token (UNIQUE constraint) |
+| `scope` | ApprovalScope | What this approval authorizes |
+| `plan_hash` | str | SHA-256 of canonical scope + tool args |
 | `state` | enum | `pending` → `consumed` / `rejected` / `expired` |
 | `issued_at` | datetime(UTC) | Creation time |
 | `expires_at` | datetime(UTC) | `issued_at + APPROVAL_TTL_SECONDS` |
-| `tool_call_ids` | list[str] | Ordered list of tool_call_ids in this envelope |
 
-**R1.2** The `plan_hash` MUST cover the full **execution envelope**, not
-just tool call fields:
+**R3.2** The `plan_hash` MUST cover the **full scope object** plus the
+tool call arguments:
 
-- `work_item_id`
-- For each tool call (in order): `tool_call_id`, `tool_name`, `args`
-- `workspace_root` (resolved absolute path)
-- `toolset_mode` (e.g. `require_write_approval`)
-- `agent_name`
+```
+canonical_payload = {
+    "scope": <ApprovalScope as dict>,
+    "tool_calls": [
+        {"tool_call_id": ..., "tool_name": ..., "args": ...},
+        ...  # preserved order
+    ]
+}
+```
 
-**R1.3** Canonical serialization: `json.dumps(payload, sort_keys=True,
-separators=(',', ':'), ensure_ascii=True)` → UTF-8 bytes → SHA-256 hex.
-Deterministic. No ambiguity.
+**R3.3** Canonical serialization:
+```python
+json.dumps(payload, sort_keys=True, separators=(',', ':'),
+           ensure_ascii=True, allow_nan=False)
+```
+→ UTF-8 bytes → SHA-256 hex. Tool args MUST be strict JSON types
+(no NaN, no Infinity, no undefined). Violation → reject at envelope
+creation time.
 
-**R1.4** At execution time, the system MUST:
-1. Look up the envelope by `nonce` (from the submission)
-2. Verify `state == 'pending'` (atomic transition — see R2)
-3. Verify `now < expires_at`
-4. Recompute `plan_hash` from the current execution context
-5. Verify computed hash == stored hash (detects context drift)
-6. Verify strict bijection: submitted decisions map 1:1 to stored
-   `tool_call_ids`, same order, no missing, no extra
-7. Only then execute
+### R4: Cryptographic Signing
 
-Failure at any step → reject with explicit error, log to audit.
+**R4.1** When the human approves, the system MUST sign the following
+with the unlocked Ed25519 private key:
 
-### R2: Atomic Nonce Consumption
+```
+sign(nonce + plan_hash + canonical_json(decisions))
+```
 
-**R2.1** Each approval envelope has a unique `nonce` (UUID4) with a
+where `decisions` is the ordered list of per-tool-call approve/deny.
+
+**R4.2** The signature MUST be stored on the envelope before submission
+for execution.
+
+**R4.3** At verification time, signature check is the FIRST step — before
+any state mutation. Invalid signature → reject, envelope state unchanged,
+nonce not consumed.
+
+### R5: Verification Order
+
+**R5.1** Verification MUST follow this exact order. Failure at any step
+→ reject with explicit error code, log to audit, stop.
+
+```
+1. Look up envelope by nonce
+   → fail: unknown_nonce
+
+2. Verify signature against public key
+   → fail: invalid_signature (no state mutation)
+
+3. Verify plan_hash matches stored hash
+   → fail: plan_tampered (no state mutation)
+
+4. Verify strict bijection: submitted decisions map 1:1 to
+   scope.tool_call_ids, same order, no missing, no extra
+   → fail: bijection_mismatch (no state mutation)
+
+5. Atomic nonce consumption (see R6):
+   UPDATE ... WHERE nonce=? AND state='pending' AND expires_at > now
+   → fail (0 rows): expired_or_consumed
+
+6. Execute approved tool calls, pass denied as ToolDenied
+```
+
+**R5.2** Steps 1-4 are read-only. Only step 5 mutates state. This
+ensures tampered/unsigned/malformed submissions cannot burn valid
+approvals (no DoS via nonce exhaustion).
+
+### R6: Atomic Nonce Consumption
+
+**R6.1** Each approval envelope has a unique `nonce` (UUID4) with a
 UNIQUE constraint in SQLite.
 
-**R2.2** State transition MUST be atomic:
+**R6.2** State transition MUST be atomic:
 ```sql
 UPDATE approval_envelopes
 SET state = 'consumed', consumed_at = ?
 WHERE nonce = ? AND state = 'pending' AND expires_at > ?
 ```
-If affected rows == 0 → reject (already consumed, expired, or unknown).
-No separate check-then-update.
+If affected rows == 0 → reject. No separate check-then-update.
 
-**R2.3** A consumed nonce is NEVER reusable, regardless of outcome.
-If execution fails midway, the nonce stays consumed. Human must re-approve.
-(Rationale: partial side effects may have occurred.)
+**R6.3** A consumed nonce is NEVER reusable, regardless of outcome.
+If execution fails midway, the nonce stays consumed. Human must
+re-approve. (Rationale: partial side effects may have occurred.)
 
-**R2.4** Expired envelopes MAY be pruned after `nonce_retention_period`
-(default: 7 days). This is for storage hygiene only — expired envelopes
-already fail the `state == 'pending'` check.
+**R6.4** Expired envelopes MAY be pruned after `nonce_retention_period`
+(default: 7 days). Storage hygiene only — expired envelopes already
+fail the `state == 'pending'` check.
 
-**R2.5** Config invariant: `nonce_retention_period >= approval_ttl + skew_margin`.
-Enforced at startup. Default skew margin: 60 seconds.
+**R6.5** Config invariant enforced at startup:
+`nonce_retention_period >= approval_ttl + skew_margin`.
+Default skew margin: 60 seconds.
 
-### R3: Approval Expiry
+### R7: Approval Expiry
 
-**R3.1** Each envelope carries `issued_at` and `expires_at` (UTC).
+**R7.1** Each envelope carries `issued_at` and `expires_at` (UTC).
 Default TTL: 1 hour.
 
-**R3.2** Expiry is checked atomically in the same UPDATE as nonce
-consumption (R2.2). No separate clock check.
+**R7.2** Expiry is checked atomically in the same UPDATE as nonce
+consumption (R6.2). No separate clock check.
 
-**R3.3** `APPROVAL_TTL_SECONDS` configurable via environment variable
+**R7.3** `APPROVAL_TTL_SECONDS` configurable via environment variable
 (default: 3600).
 
-### R4: Audit Log
+### R8: Audit Log
 
-**R4.1** Every approval event MUST be logged with:
+**R8.1** Every approval event MUST be logged with:
 - Timestamp (UTC ISO-8601)
 - `envelope_id`
 - `work_item_id`
 - `plan_hash`
 - `nonce`
 - Decision per tool call (`approved` / `denied` + reason)
-- Outcome: `executed` / `rejected:tampered` / `rejected:expired` /
-  `rejected:replayed` / `rejected:mismatch` / `rejected:bijection`
+- Outcome: `executed` / `rejected:invalid_signature` /
+  `rejected:plan_tampered` / `rejected:expired_or_consumed` /
+  `rejected:bijection_mismatch` / `rejected:unknown_nonce`
 - Computed plan hash at verification time (for drift detection)
+- Signature (hex)
 
-**R4.2** Append-only during normal operation.
+**R8.2** Append-only during normal operation. Single-writer policy:
+only the main process writes to the audit log. No concurrent writers.
 
-**R4.3** Hash-chained: each entry includes SHA-256 of
+**R8.3** Write durability: each entry MUST be flushed (`fsync`) before
+the corresponding tool execution begins. Crash between flush and
+execution → audit shows approval but no execution (safe: re-approval
+needed due to consumed nonce).
+
+**R8.4** Hash-chained: each entry includes SHA-256 of
 `canonical_json(previous_entry)`. Genesis entry uses
-`sha256(b"autopoiesis:audit:genesis")`.
+`sha256(b"autopoiesis:audit:genesis")`. Canonical JSON uses the same
+serialization as R3.3.
 
-**R4.4** Canonical JSON for audit entries uses the same serialization
-as R1.3.
-
-**R4.5** Storage: JSONL at `$AUDIT_LOG_PATH` (default:
+**R8.5** Storage: JSONL at `$AUDIT_LOG_PATH` (default:
 `data/audit/approvals.jsonl`).
 
-**R4.6** Periodic anchor: the system MUST write the current chain head
-hash to a separate file (`data/audit/anchor.json`) after every N entries
-(default: 100) and at clean shutdown. This enables detecting truncation
-attacks.
+**R8.6** Periodic anchor: write current chain head hash to
+`data/audit/anchor.json` after every N entries (default: 100)
+and at clean shutdown.
 
-### R5: UI Integrity
+**R8.7** Tamper-detection scope: the hash chain detects accidental
+corruption and casual tampering. It does NOT protect against an
+attacker with write access to both the log and anchor file (same
+trust domain). External anchoring (e.g. posting chain head to a
+remote service) is a future enhancement for networked deployments.
 
-**R5.1** The approval UI MUST render from the same canonical payload
-used for hashing. No separate "display" transformation.
+### R9: UI Integrity
 
-**R5.2** If display truncation is needed (long args), the full canonical
-payload MUST still be what's hashed. The UI SHOULD indicate truncation
-occurred (e.g. `[truncated, 2847 chars]`).
+**R9.1** The approval UI MUST render tool calls from the same canonical
+payload used for hashing. No separate "display" transformation.
 
-**R5.3** The plan hash SHOULD be displayed to the human (short hex prefix)
-so they can cross-reference with the audit log.
+**R9.2** Long arguments: the UI MUST display the full argument value.
+If the terminal cannot display it usefully, the UI MUST offer an
+expand/confirm flow (e.g. `[2847 chars — show full? Y/n]`) BEFORE
+the human can approve. Approving without seeing full args is not
+permitted.
 
-### R6: Tool Classification
+**R9.3** The plan hash (short hex prefix, 8 chars) MUST be displayed
+alongside the approval prompt so the human can cross-reference with
+the audit log.
 
-**R6.1** Tools MUST be classified as `side_effecting` or `read_only`.
+### R10: Tool Classification
 
-**R6.2** Default: **side-effecting**. A tool is read-only ONLY if
-explicitly marked. Unknown/unclassified tools require approval.
+**R10.1** Tools MUST be classified as `side_effecting` or `read_only`.
 
-**R6.3** Classification is set at toolset registration time, not at
-call time. No runtime reclassification.
+**R10.2** Default: **side-effecting**. A tool is read-only ONLY if
+explicitly marked at toolset registration time. Unknown/unclassified
+tools require approval.
 
-### R7: Denial Semantics
+**R10.3** Classification is immutable after registration. No runtime
+reclassification.
 
-**R7.1** Denial is per-tool-call. Denying one tool does NOT automatically
-deny others in the same batch.
+### R11: Denial Semantics
 
-**R7.2** Denied tools are passed back to the agent as `ToolDenied` with
-the human's denial message. The agent can adjust its plan.
+**R11.1** Denial is per-tool-call. Denying one tool does NOT
+automatically deny others in the same batch.
 
-**R7.3** If ALL tools in a batch are denied, the agent receives all
+**R11.2** Denied tools are passed back to the agent as `ToolDenied`
+with the human's denial message. The agent can adjust its plan.
+
+**R11.3** If ALL tools in a batch are denied, the agent receives all
 denials and can respond with text or a revised plan.
 
-### R8: Future — Cryptographic Approval Tokens
+### R12: Future — Standing Approvals
 
-> **Deferred.** Required when networked or multi-user.
+> **Deferred.** Required when sub-agents can spawn sub-tasks.
 
-**R8.1** Ed25519-signed tokens binding envelope_id, plan_hash, nonce,
-expiry, and scope.
+**R12.1** A standing approval is an envelope with `child_scope=True`
+that authorizes spawned sub-tasks sharing the same `parent_envelope_id`.
 
-**R8.2** Standing approvals scoped to parent work item ID.
+**R12.2** Child envelopes MUST satisfy scope narrowing (R2.3).
 
-**R8.3** Key generated at first run, stored at `$APPROVAL_KEY_PATH`.
+**R12.3** Standing approvals have a separate TTL
+(`STANDING_APPROVAL_TTL_SECONDS`, default: 4 hours) and a
+`max_children` limit (default: 10).
 
-### R9: Future — Taint Propagation
+### R13: Future — Taint Propagation
 
 > **Deferred.** Required when sub-agents spawn sub-agents.
 
-**R9.1** Work items carry trust level from origin.
+**R13.1** Work items carry a trust level derived from origin
+(human-initiated vs. agent-spawned).
 
-**R9.2** Agent-spawned items cannot escalate trust beyond parent.
+**R13.2** Agent-spawned work items MUST NOT escalate trust beyond
+their parent.
 
 ---
 
@@ -216,31 +353,40 @@ expiry, and scope.
 
 | Phase | Requirements | Trigger | Est. LOC |
 |-------|-------------|---------|----------|
-| **1: Integrity** | R1, R2, R3, R5, R6, R7 | Now | ~400 |
-| **2: Audit** | R4 | After Phase 1 | ~200 |
-| **3: Crypto** | R8 | When networked | ~300 |
-| **4: Trust** | R9 | When sub-agents exist | ~200 |
+| **1: Integrity + Signing** | R1-R7, R9-R11 | Now | ~500 |
+| **2: Audit** | R8 | After Phase 1 | ~200 |
+| **3: Standing Approvals** | R12 | When sub-agents exist | ~200 |
+| **4: Taint** | R13 | When sub-agents chain | ~200 |
 
 ## Non-Requirements
 
 - **Encryption at rest** — local SQLite, same-host key = no value
-- **Authentication** — single-user CLI, no login
+- **Authentication** — single-user CLI; passphrase unlocks signing key,
+  not a login session
 - **Authorization levels** — single user = single role, no RBAC
-- **Session binding** — deferred until networked (process-local is sufficient for CLI)
+- **Network verification** — deferred; local signing is sufficient for CLI
+- **External audit anchoring** — deferred; local chain + anchor file
+  matches current threat model
 
 ---
 
 ## Invariants
 
-1. No side-effecting tool executes without a verified, unexpired,
-   single-use human approval matched against a server-side envelope.
-2. The approval is bound to the exact execution context shown to the
-   human — any modification between display and execution invalidates it.
-3. Nonce consumption is atomic — concurrent attempts are serialized by
+1. No side-effecting tool executes without a cryptographically signed,
+   verified, unexpired, single-use human approval matched against a
+   server-side envelope.
+2. The approval is bound to the exact execution scope and tool arguments
+   shown to the human — any modification invalidates the signature and
+   plan hash.
+3. Verification is read-only until the final atomic nonce consumption.
+   Invalid submissions cannot burn valid approvals.
+4. Nonce consumption is atomic — concurrent attempts are serialized by
    the database.
-4. Every approval event is recorded in an append-only, hash-chained,
-   canonically serialized audit log.
 5. Unclassified tools are treated as side-effecting (default-deny).
+6. New scope fields default to `None` (not authorized). Schema extension
+   cannot accidentally grant permissions to existing envelopes.
+7. Every approval event is recorded in an append-only, hash-chained,
+   canonically serialized audit log with single-writer semantics.
 
 ---
 
@@ -248,6 +394,13 @@ expiry, and scope.
 
 | Question | Decision |
 |----------|----------|
+| How to bind approval to human? | Ed25519 keypair, passphrase-unlocked at CLI start. |
 | Consume nonce on attempt or success? | On attempt. Partial side effects may have occurred. |
-| Session binding? | Deferred — process-local is sufficient for CLI. |
+| Can tampered submissions burn nonces? | No. Signature + hash checks are read-only (steps 1-4). Nonce consumed only at step 5. |
+| Session binding? | Deferred — `session_id` field exists in scope but is `None` (not enforced) in Phase 1. |
 | Deny semantics? | Per-call skip-and-continue. Agent gets `ToolDenied` per denied call. |
+| Scope extensibility? | Default-deny per field. New fields = `None` = not authorized. Hash covers full scope. |
+| Audit tamper-resistance? | Honest about scope: detects accidental/casual tampering. Not attacker-with-file-write. |
+| NaN/Infinity in JSON? | `allow_nan=False`. Strict JSON types enforced at envelope creation. |
+| Concurrent audit writes? | Single-writer policy. No file locking needed. |
+| Truncated UI? | Not allowed. Full args shown or expand-and-confirm before approval. |
