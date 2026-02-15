@@ -183,10 +183,7 @@ def enqueue_task_and_wait(task_type: TaskType, prompt: str, **kwargs: Any) -> st
     payload = TaskPayload(type=task_type, prompt=prompt, **kwargs)
     with SetEnqueueOptions(priority=int(payload.priority)):
         handle = work_queue.enqueue(execute_task, payload.model_dump())
-    result = handle.get_result()
-    if not isinstance(result, str):
-        raise RuntimeError("Queued task returned a non-string result.")
-    return result
+    return handle.get_result()
 
 
 def main() -> None:
