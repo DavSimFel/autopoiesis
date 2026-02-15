@@ -80,9 +80,7 @@ def lint_skill_definition(skill_name: str, instructions: str) -> str:
             "Line length exceeds 100 characters at lines: " + _format_line_numbers(long_lines)
         )
     if trailing_ws:
-        warnings.append(
-            "Trailing whitespace found at lines: " + _format_line_numbers(trailing_ws)
-        )
+        warnings.append("Trailing whitespace found at lines: " + _format_line_numbers(trailing_ws))
     if "TODO" in instructions and "TODO(#" not in instructions:
         warnings.append("TODOs should include issue references (`TODO(#123)`).")
 
