@@ -24,6 +24,8 @@ from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.tools import DeferredToolResults, ToolDenied
 
+from approval_security import ApprovalScope, ApprovalStore, ApprovalVerificationError
+
 try:
     from dbos import DBOS, DBOSConfig, SetEnqueueOptions
 except ModuleNotFoundError as exc:
@@ -78,6 +80,7 @@ class _Runtime:
     agent: Agent[AgentDeps, str]
     backend: LocalBackend
     history_db_path: str
+    approval_store: ApprovalStore
 
 
 @dataclass(frozen=True)
@@ -95,9 +98,19 @@ _active_checkpoint_context: ContextVar[_CheckpointContext | None] = ContextVar(
 )
 
 
-def _set_runtime(agent: Agent[AgentDeps, str], backend: LocalBackend, history_db_path: str) -> None:
+def _set_runtime(
+    agent: Agent[AgentDeps, str],
+    backend: LocalBackend,
+    history_db_path: str,
+    approval_store: ApprovalStore,
+) -> None:
     global _runtime
-    _runtime = _Runtime(agent=agent, backend=backend, history_db_path=history_db_path)
+    _runtime = _Runtime(
+        agent=agent,
+        backend=backend,
+        history_db_path=history_db_path,
+        approval_store=approval_store,
+    )
 
 
 def _get_runtime() -> _Runtime:
@@ -286,13 +299,25 @@ def build_agent(
 # ---------------------------------------------------------------------------
 
 
-def _serialize_deferred_requests(requests: DeferredToolRequests) -> str:
+def _build_approval_scope(
+    work_item_id: str, backend: LocalBackend, agent_name: str
+) -> ApprovalScope:
+    return ApprovalScope(
+        work_item_id=work_item_id,
+        workspace_root=str(Path(backend.root_dir).resolve()),
+        agent_name=agent_name,
+    )
+
+
+def _serialize_deferred_requests(
+    requests: DeferredToolRequests, *, scope: ApprovalScope, approval_store: ApprovalStore
+) -> str:
     """Serialize DeferredToolRequests to JSON for transport through the queue.
 
     Extracts the essential fields (tool_call_id, tool_name, args) from each
     approval request so the caller can present them to the user.
     """
-    data = [
+    data: list[dict[str, Any]] = [
         {
             "tool_call_id": call.tool_call_id,
             "tool_name": call.tool_name,
@@ -300,16 +325,19 @@ def _serialize_deferred_requests(requests: DeferredToolRequests) -> str:
         }
         for call in requests.approvals
     ]
-    return json.dumps(data)
+    nonce, plan_hash = approval_store.create_envelope(scope=scope, tool_calls=data)
+    return json.dumps({"nonce": nonce, "plan_hash_prefix": plan_hash[:8], "requests": data})
 
 
-def _deserialize_deferred_results(results_json: str) -> DeferredToolResults:
+def _deserialize_deferred_results(
+    results_json: str, *, scope: ApprovalScope, approval_store: ApprovalStore
+) -> DeferredToolResults:
     """Deserialize approval decisions from JSON back to DeferredToolResults.
 
     Expected format: list of {"tool_call_id": str, "approved": bool,
     "denial_message": str | None}.
     """
-    data: list[dict[str, Any]] = json.loads(results_json)
+    data = approval_store.verify_and_consume(submission_json=results_json, live_scope=scope)
     results = DeferredToolResults()
     for entry in data:
         tool_call_id = entry["tool_call_id"]
@@ -374,11 +402,17 @@ def run_agent_step(work_item_dict: dict[str, Any]) -> dict[str, Any]:
     history_json = recovered_history_json or item.input.message_history_json
     history = _deserialize_history(history_json)
     deps = AgentDeps(backend=rt.backend)
+    agent_name = rt.agent.name or os.getenv("DBOS_AGENT_NAME", "chat")
+    scope = _build_approval_scope(item.id, rt.backend, agent_name)
 
     # Reconstruct deferred tool results if this is a resumption
     deferred_results: DeferredToolResults | None = None
     if item.input.deferred_tool_results_json:
-        deferred_results = _deserialize_deferred_results(item.input.deferred_tool_results_json)
+        deferred_results = _deserialize_deferred_results(
+            item.input.deferred_tool_results_json,
+            scope=scope,
+            approval_store=rt.approval_store,
+        )
 
     # For resumptions after tool approval, prompt is None — use empty string
     # for the API call since the original prompt is already in message_history.
@@ -413,7 +447,11 @@ def run_agent_step(work_item_dict: dict[str, Any]) -> dict[str, Any]:
 
                 if isinstance(result_output, DeferredToolRequests):
                     return WorkItemOutput(
-                        deferred_tool_requests_json=_serialize_deferred_requests(result_output),
+                        deferred_tool_requests_json=_serialize_deferred_requests(
+                            result_output,
+                            scope=scope,
+                            approval_store=rt.approval_store,
+                        ),
                         message_history_json=_serialize_history(all_msgs),
                     )
                 return WorkItemOutput(
@@ -437,7 +475,11 @@ def run_agent_step(work_item_dict: dict[str, Any]) -> dict[str, Any]:
             )
             if isinstance(result.output, DeferredToolRequests):
                 output = WorkItemOutput(
-                    deferred_tool_requests_json=_serialize_deferred_requests(result.output),
+                    deferred_tool_requests_json=_serialize_deferred_requests(
+                        result.output,
+                        scope=scope,
+                        approval_store=rt.approval_store,
+                    ),
                     message_history_json=_serialize_history(result.all_messages()),
                 )
             else:
@@ -487,10 +529,12 @@ def enqueue_and_wait(item: WorkItem) -> WorkItemOutput:
 # ---------------------------------------------------------------------------
 
 
-def _display_approval_requests(requests_json: str) -> list[dict[str, Any]]:
+def _display_approval_requests(requests_json: str) -> dict[str, Any]:
     """Display pending tool approval requests and return the parsed list."""
-    requests: list[dict[str, Any]] = json.loads(requests_json)
+    payload: dict[str, Any] = json.loads(requests_json)
+    requests = cast(list[dict[str, Any]], payload["requests"])
     print("\n🔒 Tool approval required:")
+    print(f"  Plan hash: {payload['plan_hash_prefix']}")
     for i, req in enumerate(requests, 1):
         tool_name = req["tool_name"]
         args: Any = req["args"]
@@ -503,15 +547,16 @@ def _display_approval_requests(requests_json: str) -> list[dict[str, Any]]:
                 print(f"      {arg_name}: {display}")
         else:
             print(f"      args: {args}")
-    return requests
+    return payload
 
 
-def _gather_approvals(requests: list[dict[str, Any]]) -> str:
+def _gather_approvals(payload: dict[str, Any]) -> str:
     """Prompt the user for approval decisions on each tool call.
 
     Returns serialized JSON list of approval decisions for
     ``_deserialize_deferred_results``.
     """
+    requests = cast(list[dict[str, Any]], payload["requests"])
     decisions: list[dict[str, Any]] = []
     if len(requests) == 1:
         try:
@@ -565,7 +610,7 @@ def _gather_approvals(requests: list[dict[str, Any]]) -> str:
                     }
                 )
 
-    return json.dumps(decisions)
+    return json.dumps({"nonce": payload["nonce"], "decisions": decisions})
 
 
 # ---------------------------------------------------------------------------
@@ -625,8 +670,10 @@ def cli_chat_loop() -> None:
 
                 if output.deferred_tool_requests_json is not None:
                     # Agent wants tool approval — display and gather decisions
-                    requests = _display_approval_requests(output.deferred_tool_requests_json)
-                    deferred_results_json = _gather_approvals(requests)
+                    requests_payload = _display_approval_requests(
+                        output.deferred_tool_requests_json
+                    )
+                    deferred_results_json = _gather_approvals(requests_payload)
                     # Re-enqueue without prompt — context is in message history
                     prompt = None
                     continue
@@ -634,6 +681,8 @@ def cli_chat_loop() -> None:
                 # Normal text response — done with this turn
                 break
 
+        except ApprovalVerificationError as exc:
+            print(f"Approval verification failed [{exc.code}]: {exc}", file=sys.stderr)
         except Exception as exc:
             print(f"Error: {exc}", file=sys.stderr)
 
@@ -660,6 +709,7 @@ def main() -> None:
     agent_name = os.getenv("DBOS_AGENT_NAME", "chat")
 
     backend = build_backend()
+    approval_store = ApprovalStore.from_env()
     toolsets, instructions = build_toolsets()
     agent = build_agent(provider, agent_name, toolsets, instructions)
     system_database_url = os.getenv(
@@ -674,7 +724,7 @@ def main() -> None:
     history_db_path = resolve_history_db_path(system_database_url)
     init_history_store(history_db_path)
     cleanup_stale_checkpoints(history_db_path)
-    _set_runtime(agent, backend, history_db_path)
+    _set_runtime(agent, backend, history_db_path, approval_store)
     DBOS(config=dbos_config)
 
     DBOS.launch()

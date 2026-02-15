@@ -8,7 +8,7 @@ that execute work items from the queue.
 
 ## Status
 
-- **Last updated:** 2026-02-15 (Issue #9)
+- **Last updated:** 2026-02-15 (Issue #19)
 - **Source:** `chat.py`
 
 ## File Structure
@@ -34,6 +34,8 @@ that execute work items from the queue.
 | `DBOS_APP_NAME` | No | `pydantic_dbos_agent` | `main()` | DBOS app name |
 | `DBOS_AGENT_NAME` | No | `chat` | `main()` | Agent name |
 | `DBOS_SYSTEM_DATABASE_URL` | No | `sqlite:///dbostest.sqlite` | `main()` | DBOS database URL |
+| `APPROVAL_DB_PATH` | No | `data/approvals.sqlite` | `ApprovalStore.from_env()` | SQLite path for approval envelopes |
+| `APPROVAL_TTL_SECONDS` | No | `3600` | `ApprovalStore.from_env()` | Approval expiry window in seconds |
 | `SKILLS_DIR` | No | `skills` | `_resolve_shipped_skills_dir()` | Shipped skills path, resolves from `chat.py` dir |
 | `CUSTOM_SKILLS_DIR` | No | `skills` | `_resolve_custom_skills_dir()` | Custom skills path, resolves inside `AGENT_WORKSPACE_ROOT` when relative |
 
@@ -64,10 +66,13 @@ that execute work items from the queue.
 
 ### Deferred Tool Serialization
 
-- `_serialize_deferred_requests(requests)` — extract tool_call_id, tool_name,
-  args from `DeferredToolRequests` to JSON for transport through the queue
-- `_deserialize_deferred_results(results_json)` — reconstruct
-  `DeferredToolResults` from JSON approval decisions
+- `_build_approval_scope(work_item_id, backend, agent_name)` — build live
+  execution scope for approval hashing/verification
+- `_serialize_deferred_requests(requests, scope, approval_store)` — persist a
+  nonce-bound envelope and serialize nonce + plan hash prefix + tool calls
+- `_deserialize_deferred_results(results_json, scope, approval_store)` —
+  verify envelope/hash/bijection + atomic nonce consume, then reconstruct
+  `DeferredToolResults`
 
 ### Queue Workers
 
@@ -110,11 +115,13 @@ that execute work items from the queue.
 1. Agent calls a tool with `require_write_approval=True`
 2. PydanticAI returns `DeferredToolRequests` instead of executing the tool
 3. Worker serializes the requests into `WorkItemOutput.deferred_tool_requests_json`
-4. CLI displays tool name + args, prompts user for approval (Y/n/pick)
-5. CLI re-enqueues a new `WorkItem` with same history + approval decisions
-6. Worker reconstructs `DeferredToolResults` and passes to next agent run
-7. Agent executes approved tools, gets denial messages for denied ones
-8. Loop repeats until agent returns a final `str` response
+4. Worker stores an approval envelope (nonce + scope + tool calls + plan hash)
+5. CLI displays tool name + args + plan hash prefix, prompts user for approval
+6. CLI re-enqueues a new `WorkItem` with nonce + approval decisions
+7. Worker verifies nonce, context hash, and decision bijection; then atomically
+   consumes nonce and reconstructs `DeferredToolResults`
+8. Agent executes approved tools, gets denial messages for denied ones
+9. Loop repeats until agent returns a final `str` response
 
 ## Invariants
 
@@ -129,6 +136,7 @@ that execute work items from the queue.
 - Console deps contract validated at startup.
 - Workflow/step functions live in `chat.py` to avoid circular imports.
 - Stream handles are in-process only — not durable, not serialised.
+- Deferred approvals are nonce-bound and single-use (atomic consume in SQLite).
 - Deferred tool requests/results are serialized as JSON for queue transport.
 
 ## Dependencies
@@ -147,6 +155,10 @@ that execute work items from the queue.
   workspace-relative by default). Custom skills override shipped skills by name.
   Added shipped `skillmaker` skill and quality tools for skill lint/validation.
   (Issue #9)
+- 2026-02-15: Deferred approval envelopes now persist in SQLite with canonical
+  plan hashing, context-drift verification, bijection checks, and atomic
+  nonce consumption. Added `APPROVAL_DB_PATH` and `APPROVAL_TTL_SECONDS`.
+  (Issue #19)
 - 2026-02-15: Skill system integration. `AgentDeps` moved to `models.py`.
   `build_toolsets()` returns `(toolsets, instructions)`. `build_agent()`
   accepts instructions list, passes to PydanticAI `instructions` param.
