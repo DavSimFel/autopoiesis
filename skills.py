@@ -10,10 +10,10 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import yaml
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from pydantic_ai import RunContext
 from pydantic_ai.toolsets import FunctionToolset
 
@@ -63,17 +63,25 @@ def parse_skill_md(content: str) -> tuple[dict[str, Any], str]:
     Expects optional YAML frontmatter delimited by ``---``. If no frontmatter
     is present, returns an empty dict and the full content as instructions.
     """
-    if not content.startswith("---"):
+    lines = content.splitlines(keepends=True)
+    if not lines or lines[0].strip() != "---":
         return {}, content.strip()
 
-    end = content.find("---", 3)
-    if end == -1:
+    closing_idx: int | None = None
+    for idx, line in enumerate(lines[1:], start=1):
+        if line.strip() == "---":
+            closing_idx = idx
+            break
+    if closing_idx is None:
         return {}, content.strip()
 
-    frontmatter_yaml = content[3:end].strip()
-    instructions = content[end + 3 :].strip()
+    frontmatter_yaml = "".join(lines[1:closing_idx]).strip()
+    instructions = "".join(lines[closing_idx + 1 :]).strip()
 
-    frontmatter: dict[str, Any] = yaml.safe_load(frontmatter_yaml) or {}
+    loaded_frontmatter: Any = yaml.safe_load(frontmatter_yaml) if frontmatter_yaml else {}
+    if not isinstance(loaded_frontmatter, dict):
+        raise ValueError("SKILL.md frontmatter must be a mapping.")
+    frontmatter = cast(dict[str, Any], loaded_frontmatter)
     return frontmatter, instructions
 
 
@@ -123,7 +131,14 @@ def discover_skills(directories: list[SkillDirectory]) -> list[Skill]:
                         resources=resources,
                     )
                 )
-            except Exception:
+            except (
+                OSError,
+                UnicodeDecodeError,
+                ValueError,
+                TypeError,
+                yaml.YAMLError,
+                ValidationError,
+            ):
                 logger.warning("Failed to parse skill at %s", skill_file, exc_info=True)
                 continue
 
@@ -165,21 +180,48 @@ def _load_skill_instructions(cache: dict[str, Skill], skill_name: str) -> str:
 
 def _read_resource(cache: dict[str, Skill], skill_name: str, resource_name: str) -> str:
     """Read a resource file from a skill directory with path traversal protection."""
-    if skill_name not in cache:
+    skill = cache.get(skill_name)
+    if skill is None:
         return f"Skill '{skill_name}' not found."
 
-    skill = cache[skill_name]
-    resource_path = (skill.path / resource_name).resolve()
-    skill_dir_resolved = skill.path.resolve()
+    error_message: str | None = None
+    resolved_path: Path | None = None
 
-    # Security: prevent path traversal outside the skill directory
-    if not resource_path.is_relative_to(skill_dir_resolved):
-        return "Error: resource path escapes skill directory."
+    if resource_name not in skill.resources:
+        error_message = (
+            f"Resource '{resource_name}' is not listed for skill '{skill_name}'. "
+            f"Available: {_format_available_resources(skill.resources)}"
+        )
+    else:
+        resolved_path = (skill.path / resource_name).resolve()
+        skill_dir_resolved = skill.path.resolve()
+        if not resolved_path.is_relative_to(skill_dir_resolved):
+            error_message = "Error: resource path escapes skill directory."
+        elif not resolved_path.exists():
+            error_message = (
+                f"Resource '{resource_name}' not found. "
+                f"Available: {_format_available_resources(skill.resources)}"
+            )
+        elif not resolved_path.is_file():
+            error_message = f"Resource '{resource_name}' is not a file."
 
-    if not resource_path.exists():
-        return f"Resource '{resource_name}' not found. Available: {skill.resources}"
+    if error_message is not None:
+        return error_message
 
-    return resource_path.read_text()
+    if resolved_path is None:
+        return f"Resource '{resource_name}' could not be resolved."
+    try:
+        return resolved_path.read_text()
+    except (OSError, UnicodeDecodeError):
+        logger.warning("Failed to read resource %s for skill %s", resource_name, skill_name)
+        return f"Error reading resource '{resource_name}'."
+
+
+def _format_available_resources(resources: list[str]) -> str:
+    """Format a stable resource list for user-facing error messages."""
+    if not resources:
+        return "none"
+    return ", ".join(sorted(resources))
 
 
 def skills_instructions(cache: dict[str, Skill]) -> str:
@@ -214,7 +256,6 @@ def create_skills_toolset(
     toolset: FunctionToolset[AgentDeps] = FunctionToolset()
 
     discovered = discover_skills(directories)
-    # TODO: cache invalidation / refresh mechanism
     cache: dict[str, Skill] = {s.name: s for s in discovered}
 
     @toolset.tool

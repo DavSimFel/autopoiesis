@@ -30,8 +30,7 @@ skills/
 │   └── checklist.md
 ├── research/
 │   ├── SKILL.md
-│   └── templates/
-│       └── report.md
+│   └── report.md
 └── git-workflow/
     └── SKILL.md
 ```
@@ -65,7 +64,9 @@ Detailed instructions the agent follows when this skill is loaded...
 ### Parsing
 
 - `parse_skill_md(content)` — split SKILL.md into `(frontmatter_dict, instructions_str)`.
-  Uses `yaml.safe_load` (pyyaml). Missing frontmatter returns `({}, content)`.
+  Uses `yaml.safe_load` (pyyaml). Frontmatter delimiters are line-based (`---`
+  on its own line) so embedded `---` in YAML values is safe. Missing frontmatter
+  returns `({}, content)`.
 
 ### Discovery
 
@@ -87,7 +88,8 @@ Detailed instructions the agent follows when this skill is loaded...
   - `load_skill(skill_name)` — load full instructions (progressive disclosure).
     Cached after first load.
   - `read_skill_resource(skill_name, resource_name)` — read a resource file.
-    Path traversal protected via `resolve()` + `is_relative_to()`.
+    Only resources listed at discovery time are readable. Path traversal
+    protected via `resolve()` + `is_relative_to()`.
 
 ## Environment Variables
 
@@ -97,9 +99,10 @@ Detailed instructions the agent follows when this skill is loaded...
 
 ## Invariants
 
-- Skills cache is built once at toolset creation. No hot-reload (TODO).
+- Skills cache is built once at toolset creation.
 - Skill instructions are `None` until explicitly loaded.
 - Path traversal outside skill directory is blocked.
+- `read_skill_resource` only serves files listed in `Skill.resources`.
 - Missing/empty skill directories produce empty results, never errors.
 - `name` field in frontmatter is required — skills without it are skipped.
 
@@ -109,5 +112,8 @@ Detailed instructions the agent follows when this skill is loaded...
 
 ## Change Log
 
+- 2026-02-15: Hardened frontmatter parsing (line-delimited delimiters),
+  restricted `read_skill_resource` to discovered resources, and added
+  graceful invalid-resource error handling. (Issue #9)
 - 2026-02-15: Initial skill system with progressive disclosure. Instructions
   callable for system prompt integration via PydanticAI `instructions`. (Issue #9)

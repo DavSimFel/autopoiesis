@@ -13,7 +13,8 @@ Edit `.env`:
 - `AI_PROVIDER=anthropic` or `AI_PROVIDER=openrouter`
 - If `anthropic`: set `ANTHROPIC_API_KEY`
 - If `openrouter`: set `OPENROUTER_API_KEY`
-- `AGENT_WORKSPACE_ROOT` controls backend workspace location (relative paths resolve from repo root)
+- `AGENT_WORKSPACE_ROOT` controls backend workspace location (relative paths resolve from `chat.py`)
+- `SKILLS_DIR` sets the skills directory path (default: `skills`, relative paths resolve from `chat.py`)
 - Optional DBOS settings:
   - `DBOS_APP_NAME`
   - `DBOS_AGENT_NAME`
