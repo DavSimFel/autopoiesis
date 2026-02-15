@@ -1,13 +1,9 @@
-"""Durable interactive CLI chat with DBOS persistence and provider switching.
-
-Run this module as the project entrypoint to load repo-local `.env` settings,
-build the agent/backend/toolset stack, launch DBOS, and start an interactive
-CLI session. `AI_PROVIDER` selects `anthropic` or `openrouter` at startup.
-"""
+"""Durable interactive CLI chat with DBOS-backed background queue execution."""
 
 import os
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from dotenv import load_dotenv
 from pydantic_ai import AbstractToolset, Agent
@@ -15,7 +11,7 @@ from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 
 try:
-    from dbos import DBOS, DBOSConfig
+    from dbos import DBOS, DBOSConfig, SetEnqueueOptions
     from pydantic_ai.durable_exec.dbos import DBOSAgent
 except ModuleNotFoundError as exc:
     raise SystemExit(
@@ -30,24 +26,23 @@ except ModuleNotFoundError as exc:
         "Missing backend dependency. Run `uv sync` so `pydantic-ai-backend==0.1.6` is installed."
     ) from exc
 
+from models import TaskPayload, TaskType
+from work_queue import work_queue
+
 
 @dataclass
 class AgentDeps:
-    """Runtime dependencies injected into agent turns.
-
-    `backend` is kept as an explicit field so `AgentDeps` structurally matches
-    the console toolset dependency protocol used by `pydantic-ai-backend`.
-    """
+    """Runtime dependencies injected into agent turns."""
 
     backend: LocalBackend
 
 
-def required_env(name: str) -> str:
-    """Return env var value or exit with a clear startup error.
+_runtime_agent: Agent[AgentDeps, str] | None = None
+_runtime_backend: LocalBackend | None = None
 
-    Failing fast with `SystemExit` (not `KeyError`) ensures missing required
-    configuration is surfaced before any interactive conversation begins.
-    """
+
+def required_env(name: str) -> str:
+    """Return env var value or exit with a clear startup error."""
 
     value = os.getenv(name)
     if value:
@@ -56,12 +51,7 @@ def required_env(name: str) -> str:
 
 
 def resolve_workspace_root() -> Path:
-    """Resolve and create the agent workspace root directory.
-
-    Relative `AGENT_WORKSPACE_ROOT` values are resolved from this file's
-    directory (not the current working directory) for consistent behavior
-    across local runs, containers, and process launch contexts.
-    """
+    """Resolve and create the agent workspace root directory."""
 
     raw_root = os.getenv("AGENT_WORKSPACE_ROOT", "data/agent-workspace")
     path = Path(raw_root)
@@ -72,21 +62,13 @@ def resolve_workspace_root() -> Path:
 
 
 def build_backend() -> LocalBackend:
-    """Create the local filesystem backend with shell execution disabled.
-
-    The backend always uses the resolved workspace root and `enable_execute`
-    stays `False` to keep tool access scoped to file operations only.
-    """
+    """Create the local filesystem backend with shell execution disabled."""
 
     return LocalBackend(root_dir=resolve_workspace_root(), enable_execute=False)
 
 
 def validate_console_deps_contract() -> None:
-    """Fail fast if console toolset structural assumptions stop holding.
-
-    This guard protects the intentional cast in `build_toolsets()` by checking
-    both `AgentDeps.backend` typing and the required `LocalBackend` methods.
-    """
+    """Fail fast if console toolset structural assumptions stop holding."""
 
     backend_annotation = AgentDeps.__annotations__.get("backend")
     if backend_annotation is not LocalBackend:
@@ -114,11 +96,7 @@ def validate_console_deps_contract() -> None:
 
 
 def build_toolsets() -> list[AbstractToolset[AgentDeps]]:
-    """Build console toolsets with execute disabled and write approval enabled.
-
-    `create_console_toolset` is typed for a protocol dependency type; we cast
-    intentionally because `AgentDeps` satisfies that protocol structurally.
-    """
+    """Build console toolsets with execute disabled and write approval enabled."""
 
     validate_console_deps_contract()
     toolset = create_console_toolset(include_execute=False, require_write_approval=True)
@@ -128,11 +106,7 @@ def build_toolsets() -> list[AbstractToolset[AgentDeps]]:
 def build_agent(
     provider: str, agent_name: str, toolsets: list[AbstractToolset[AgentDeps]]
 ) -> Agent[AgentDeps, str]:
-    """Create the configured agent from explicit provider/name/toolset inputs.
-
-    Provider selection is passed in by `main()` rather than read here, keeping
-    this function a focused factory for `anthropic` and `openrouter` variants.
-    """
+    """Create the configured agent from explicit provider/name/toolset inputs."""
 
     if provider == "anthropic":
         required_env("ANTHROPIC_API_KEY")
@@ -154,13 +128,69 @@ def build_agent(
     raise SystemExit("Unsupported AI_PROVIDER. Use 'openrouter' or 'anthropic'.")
 
 
-def main() -> None:
-    """Load config, assemble runtime components, then launch durable CLI chat.
+def set_runtime_state(agent: Agent[AgentDeps, str], backend: LocalBackend) -> None:
+    """Store runtime references used by DBOS background task handlers."""
 
-    The startup order is intentional: load `.env`, read provider/agent naming,
-    build backend/toolsets/agent, initialize DBOS, launch DBOS, then attach
-    runtime deps for interactive execution.
-    """
+    global _runtime_agent, _runtime_backend
+    _runtime_agent = agent
+    _runtime_backend = backend
+
+
+def get_runtime_agent() -> Agent[AgentDeps, str]:
+    """Return initialized agent runtime state or fail fast for invalid startup."""
+
+    if _runtime_agent is None:
+        raise RuntimeError("Runtime agent is not initialized. Start the app via main().")
+    return _runtime_agent
+
+
+def get_runtime_backend() -> LocalBackend:
+    """Return initialized backend runtime state or fail fast for invalid startup."""
+
+    if _runtime_backend is None:
+        raise RuntimeError("Runtime backend is not initialized. Start the app via main().")
+    return _runtime_backend
+
+
+@DBOS.step()
+def run_agent_step(prompt: str) -> str:
+    """Checkpoint-able single-turn agent execution step for background work."""
+
+    result = get_runtime_agent().run_sync(prompt, deps=AgentDeps(backend=get_runtime_backend()))
+    return result.output
+
+
+@DBOS.workflow()
+def execute_task(payload_dict: dict[str, Any]) -> str:
+    """Execute a background task from the DBOS work queue."""
+
+    payload = TaskPayload.model_validate(payload_dict)
+    return run_agent_step(payload.prompt)
+
+
+def enqueue_task(task_type: TaskType, prompt: str, **kwargs: Any) -> str:
+    """Enqueue background work and return the generated task id."""
+
+    payload = TaskPayload(type=task_type, prompt=prompt, **kwargs)
+    with SetEnqueueOptions(priority=int(payload.priority)):
+        work_queue.enqueue(execute_task, payload.model_dump())
+    return payload.id
+
+
+def enqueue_task_and_wait(task_type: TaskType, prompt: str, **kwargs: Any) -> str:
+    """Enqueue background work and block until `handle.get_result()` returns."""
+
+    payload = TaskPayload(type=task_type, prompt=prompt, **kwargs)
+    with SetEnqueueOptions(priority=int(payload.priority)):
+        handle = work_queue.enqueue(execute_task, payload.model_dump())
+    result = handle.get_result()
+    if not isinstance(result, str):
+        raise RuntimeError("Queued task returned a non-string result.")
+    return result
+
+
+def main() -> None:
+    """Load config, assemble runtime components, and launch DBOS + CLI chat."""
 
     load_dotenv(dotenv_path=Path(__file__).with_name(".env"))
 
@@ -170,6 +200,7 @@ def main() -> None:
     backend = build_backend()
     toolsets = build_toolsets()
     agent = build_agent(provider, agent_name, toolsets)
+    set_runtime_state(agent, backend)
 
     dbos_config: DBOSConfig = {
         "name": os.getenv("DBOS_APP_NAME", "pydantic_dbos_agent"),

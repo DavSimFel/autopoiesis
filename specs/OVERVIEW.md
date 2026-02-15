@@ -4,12 +4,16 @@ Autopoiesis is a durable interactive CLI chat application built around a Pydanti
 
 The runtime combines model-facing agent logic with durable execution so conversations can run through a DBOS-managed lifecycle. Provider selection is abstracted behind configuration so the same CLI entrypoint can target either Anthropic or OpenRouter.
 
+Issue #8 adds a DBOS priority queue foundation for non-interactive background
+tasks while keeping interactive CLI chat on `to_cli_sync()`.
+
 ## Architecture
 
 - **PydanticAI agent** handles model orchestration, deps typing, and tool wiring.
 - **DBOS durability layer** wraps agent execution and provides launch/runtime lifecycle management.
 - **Provider abstraction** selects Anthropic or OpenRouter at startup without changing call sites.
 - **Backend tool integration** uses `LocalBackend` and the console toolset for file operations inside a scoped workspace.
+- **Background queue path** uses DBOS priority queue semantics for durable async work.
 
 ## Key Concepts
 
@@ -18,8 +22,11 @@ The runtime combines model-facing agent logic with durable execution so conversa
 - **Console toolset** is created with `include_execute=False` and `require_write_approval=True`.
 - **Provider switching** is controlled by `AI_PROVIDER` (`anthropic` or `openrouter`).
 - **Fail-fast env validation** uses `required_env(...)` to raise `SystemExit` on missing required keys.
+- **Task model** (`TaskPayload`, `TaskType`, `TaskPriority`) standardizes background enqueue payloads.
 
 ## Data Flow
+
+### Interactive chat
 
 1. `.env`
 2. `load_dotenv(dotenv_path=Path(__file__).with_name(".env"))`
@@ -28,6 +35,14 @@ The runtime combines model-facing agent logic with durable execution so conversa
 5. `DBOS(config=dbos_config)`
 6. `DBOS.launch()`
 7. `dbos_agent.to_cli_sync(deps=AgentDeps(backend=backend))`
+
+### Background work
+
+1. Caller builds `TaskPayload` and enqueues via `work_queue.enqueue(...)`
+2. DBOS worker dequeues by queue priority
+3. `execute_task(payload_dict)` validates payload
+4. `run_agent_step(prompt)` performs single-turn agent run
+5. Caller may fetch durable result via `handle.get_result()`
 
 ## Development Workflow
 
@@ -41,4 +56,4 @@ For workflow rationale, see `specs/decisions/001-trunk-based-workflow.md`.
 ## Module Index
 
 - `chat.py`: `specs/modules/chat.md`
-
+- Queue foundation: `specs/modules/queue.md`
