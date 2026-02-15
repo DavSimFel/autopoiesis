@@ -79,7 +79,10 @@ The **ApprovalScope** defines what an approval authorizes. It is:
 
 **R1.1** At setup, the system MUST generate an Ed25519 keypair.
 The private key MUST be encrypted with a user-provided passphrase
-using a KDF (Argon2id preferred, scrypt acceptable).
+using Argon2id (minimum: 3 iterations, 64 MiB memory, 1 parallelism)
+or scrypt (minimum: N=2^15, r=8, p=1) as fallback. KDF parameters
+MUST be stored alongside the encrypted key. If future OWASP minimums
+increase, the system MUST re-derive on next unlock with upgraded params.
 
 **R1.2** At CLI startup, the system MUST prompt for the passphrase,
 decrypt the private key, and hold it in memory. Failed decryption
@@ -91,6 +94,12 @@ signing key. This is the "proof of human" for Phase 1.
 **R1.4** Key rotation: the system MUST support re-keying via
 `autopoiesis rotate-key` (decrypt with old passphrase, re-encrypt
 with new). Outstanding pending envelopes are invalidated on rotation.
+
+**R1.5** Keyring retention: on rotation, the old public key MUST be
+retained in a keyring file (`$APPROVAL_KEY_PATH/keyring.json`) with
+its `key_id`, `created_at`, and `retired_at`. This enables
+verification of historical audit entries and old envelope signatures.
+The old private key is securely discarded.
 
 ### R2: Approval Scope (extensible authorization)
 
@@ -153,7 +162,11 @@ canonical_payload = {
 }
 ```
 
-**R3.3** Canonical serialization:
+**R3.3** The envelope MUST record `key_id` — the SHA-256 fingerprint
+of the public key used for signing. This enables historical
+verification after key rotation.
+
+**R3.4** Canonical serialization:
 ```python
 json.dumps(payload, sort_keys=True, separators=(',', ':'),
            ensure_ascii=True, allow_nan=False)
@@ -164,14 +177,25 @@ creation time.
 
 ### R4: Cryptographic Signing
 
-**R4.1** When the human approves, the system MUST sign the following
-with the unlocked Ed25519 private key:
+**R4.1** When the human approves, the system MUST sign a canonical
+**signed object** with the unlocked Ed25519 private key:
 
-```
-sign(nonce + plan_hash + canonical_json(decisions))
+```python
+signed_object = {
+    "ctx": "autopoiesis.approval.v1",
+    "nonce": "<uuid4 hex>",
+    "plan_hash": "<sha256 hex>",
+    "key_id": "<public key fingerprint>",
+    "decisions": [
+        {"tool_call_id": "...", "approved": true/false},
+        ...  # preserved order
+    ]
+}
 ```
 
-where `decisions` is the ordered list of per-tool-call approve/deny.
+The signed payload is `canonical_json(signed_object)` (same
+serialization as R3.4). The `ctx` field provides domain separation
+and versioning — verifiers MUST reject unknown context strings.
 
 **R4.2** The signature MUST be stored on the envelope before submission
 for execution.
@@ -192,8 +216,10 @@ nonce not consumed.
 2. Verify signature against public key
    → fail: invalid_signature (no state mutation)
 
-3. Verify plan_hash matches stored hash
-   → fail: plan_tampered (no state mutation)
+3. Recompute plan_hash from LIVE execution context (current
+   workspace_root, agent_name, toolset_mode) + stored tool calls.
+   Compare against stored plan_hash.
+   → fail: context_drift (no state mutation)
 
 4. Verify strict bijection: submitted decisions map 1:1 to
    scope.tool_call_ids, same order, no missing, no extra
@@ -256,9 +282,10 @@ consumption (R6.2). No separate clock check.
 - `nonce`
 - Decision per tool call (`approved` / `denied` + reason)
 - Outcome: `executed` / `rejected:invalid_signature` /
-  `rejected:plan_tampered` / `rejected:expired_or_consumed` /
+  `rejected:context_drift` / `rejected:expired_or_consumed` /
   `rejected:bijection_mismatch` / `rejected:unknown_nonce`
 - Computed plan hash at verification time (for drift detection)
+- `key_id` (public key fingerprint used for signing)
 - Signature (hex)
 
 **R8.2** Append-only during normal operation. Single-writer policy:
@@ -372,6 +399,8 @@ their parent.
 
 ## Invariants
 
+### Phase 1 (Integrity + Signing)
+
 1. No side-effecting tool executes without a cryptographically signed,
    verified, unexpired, single-use human approval matched against a
    server-side envelope.
@@ -385,8 +414,14 @@ their parent.
 5. Unclassified tools are treated as side-effecting (default-deny).
 6. New scope fields default to `None` (not authorized). Schema extension
    cannot accidentally grant permissions to existing envelopes.
-7. Every approval event is recorded in an append-only, hash-chained,
-   canonically serialized audit log with single-writer semantics.
+7. Context drift is detected: plan hash is recomputed from live execution
+   context at verification time.
+
+### Phase 2 (Audit) — additional invariant
+
+8. Every approval event is recorded in an append-only, hash-chained,
+   canonically serialized audit log with single-writer semantics and
+   fsync-before-execute durability.
 
 ---
 
