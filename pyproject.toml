@@ -1,0 +1,8 @@
+[project]
+name = "autopoiesis"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+  "pydantic-ai-slim[openai,anthropic,cli,dbos,mcp]>=1.59,<2",
+  "python-dotenv>=1.2,<2",
+]

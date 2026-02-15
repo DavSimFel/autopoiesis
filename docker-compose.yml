@@ -1,0 +1,16 @@
+services:
+  chat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    environment:
+      DBOS_SYSTEM_DATABASE_URL: sqlite:////data/dbostest.sqlite
+    stdin_open: true
+    tty: true
+    volumes:
+      - dbos-data:/data
+
+volumes:
+  dbos-data:
