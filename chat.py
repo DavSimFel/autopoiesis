@@ -17,10 +17,9 @@ from pathlib import Path
 from typing import Any, cast
 
 from dotenv import load_dotenv
-from pydantic_ai import AbstractToolset, Agent
+from pydantic_ai import AbstractToolset, Agent, DeferredToolRequests
 from pydantic_ai.messages import ModelMessage, ModelMessagesTypeAdapter
 from pydantic_ai.models.openai import OpenAIChatModel
-from pydantic_ai import DeferredToolRequests
 from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.tools import DeferredToolResults, ToolDenied
 
