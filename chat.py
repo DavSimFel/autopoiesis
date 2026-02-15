@@ -1,3 +1,10 @@
+"""Durable interactive CLI chat with DBOS persistence and provider switching.
+
+Run this module as the project entrypoint to load repo-local `.env` settings,
+build the agent/backend/toolset stack, launch DBOS, and start an interactive
+CLI session. `AI_PROVIDER` selects `anthropic` or `openrouter` at startup.
+"""
+
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -27,10 +34,22 @@ except ModuleNotFoundError as exc:
 
 @dataclass
 class AgentDeps:
+    """Runtime dependencies injected into agent turns.
+
+    `backend` is kept as an explicit field so `AgentDeps` structurally matches
+    the console toolset dependency protocol used by `pydantic-ai-backend`.
+    """
+
     backend: LocalBackend
 
 
 def required_env(name: str) -> str:
+    """Return env var value or exit with a clear startup error.
+
+    Failing fast with `SystemExit` (not `KeyError`) ensures missing required
+    configuration is surfaced before any interactive conversation begins.
+    """
+
     value = os.getenv(name)
     if value:
         return value
@@ -38,6 +57,13 @@ def required_env(name: str) -> str:
 
 
 def resolve_workspace_root() -> Path:
+    """Resolve and create the agent workspace root directory.
+
+    Relative `AGENT_WORKSPACE_ROOT` values are resolved from this file's
+    directory (not the current working directory) for consistent behavior
+    across local runs, containers, and process launch contexts.
+    """
+
     raw_root = os.getenv("AGENT_WORKSPACE_ROOT", "data/agent-workspace")
     path = Path(raw_root)
     if not path.is_absolute():
@@ -47,10 +73,22 @@ def resolve_workspace_root() -> Path:
 
 
 def build_backend() -> LocalBackend:
+    """Create the local filesystem backend with shell execution disabled.
+
+    The backend always uses the resolved workspace root and `enable_execute`
+    stays `False` to keep tool access scoped to file operations only.
+    """
+
     return LocalBackend(root_dir=resolve_workspace_root(), enable_execute=False)
 
 
 def validate_console_deps_contract() -> None:
+    """Fail fast if console toolset structural assumptions stop holding.
+
+    This guard protects the intentional cast in `build_toolsets()` by checking
+    both `AgentDeps.backend` typing and the required `LocalBackend` methods.
+    """
+
     backend_annotation = AgentDeps.__annotations__.get("backend")
     if backend_annotation is not LocalBackend:
         raise SystemExit(
@@ -66,6 +104,12 @@ def validate_console_deps_contract() -> None:
 
 
 def build_toolsets() -> list[AbstractToolset[AgentDeps]]:
+    """Build console toolsets with execute disabled and write approval enabled.
+
+    `create_console_toolset` is typed for a protocol dependency type; we cast
+    intentionally because `AgentDeps` satisfies that protocol structurally.
+    """
+
     validate_console_deps_contract()
     toolset = create_console_toolset(include_execute=False, require_write_approval=True)
     # `create_console_toolset` returns FunctionToolset[ConsoleDeps]. This cast is intentional:
@@ -76,6 +120,12 @@ def build_toolsets() -> list[AbstractToolset[AgentDeps]]:
 def build_agent(
     provider: str, agent_name: str, toolsets: list[AbstractToolset[AgentDeps]]
 ) -> Agent[AgentDeps, str]:
+    """Create the configured agent from explicit provider/name/toolset inputs.
+
+    Provider selection is passed in by `main()` rather than read here, keeping
+    this function a focused factory for `anthropic` and `openrouter` variants.
+    """
+
     if provider == "anthropic":
         required_env("ANTHROPIC_API_KEY")
         return Agent(
@@ -97,6 +147,13 @@ def build_agent(
 
 
 def main() -> None:
+    """Load config, assemble runtime components, then launch durable CLI chat.
+
+    The startup order is intentional: load `.env`, read provider/agent naming,
+    build backend/toolsets/agent, initialize DBOS, launch DBOS, then attach
+    runtime deps for interactive execution.
+    """
+
     load_dotenv(dotenv_path=Path(__file__).with_name(".env"))
 
     provider = os.getenv("AI_PROVIDER", "anthropic").lower()
