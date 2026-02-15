@@ -7,12 +7,25 @@ WorkItem flowing through the same queue.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import IntEnum, StrEnum
 from typing import Any
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
+from pydantic_ai_backends import LocalBackend
+
+
+@dataclass
+class AgentDeps:
+    """Runtime dependencies injected into agent turns.
+
+    ``backend`` is an explicit field so ``AgentDeps`` structurally matches the
+    console toolset dependency protocol used by ``pydantic-ai-backend``.
+    """
+
+    backend: LocalBackend
 
 
 class WorkItemPriority(IntEnum):

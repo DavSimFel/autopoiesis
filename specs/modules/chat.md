@@ -16,7 +16,8 @@ that execute work items from the queue.
 | File | Responsibility |
 |------|---------------|
 | `chat.py` | Startup, agent wiring, DBOS workflow/step, enqueue helpers, approval UI, CLI loop |
-| `models.py` | `WorkItem`, `WorkItemInput`, `WorkItemOutput`, priority/type enums |
+| `models.py` | `AgentDeps`, `WorkItem`, `WorkItemInput`, `WorkItemOutput`, priority/type enums |
+| `skills.py` | Skill discovery, progressive loading, skills toolset |
 | `work_queue.py` | Queue instance only (no functions importing from `chat.py`) |
 | `streaming.py` | `StreamHandle` protocol, `PrintStreamHandle`, registry |
 
@@ -33,6 +34,7 @@ that execute work items from the queue.
 | `DBOS_APP_NAME` | No | `pydantic_dbos_agent` | `main()` | DBOS app name |
 | `DBOS_AGENT_NAME` | No | `chat` | `main()` | Agent name |
 | `DBOS_SYSTEM_DATABASE_URL` | No | `sqlite:///dbostest.sqlite` | `main()` | DBOS database URL |
+| `SKILLS_DIR` | No | `skills` | `_resolve_skills_dir()` | Skill directory path |
 
 ## Functions
 
@@ -40,9 +42,10 @@ that execute work items from the queue.
 
 - `required_env(name)` — fail-fast env var read
 - `resolve_workspace_root()` — resolve + create workspace dir
+- `_resolve_skills_dir()` — resolve skills directory (default: `skills/`)
 - `build_backend()` — `LocalBackend` with execute disabled
 - `validate_console_deps_contract()` — structural typing guard
-- `build_toolsets()` — console toolset with write approval
+- `build_toolsets()` — console toolset (write approval) + skills toolset
 - `build_agent(provider, name, toolsets)` — Anthropic or OpenRouter factory
 
 ### Runtime State
@@ -125,6 +128,8 @@ that execute work items from the queue.
 
 ## Change Log
 
+- 2026-02-15: Skill system integration. `AgentDeps` moved to `models.py`.
+  `build_toolsets()` now includes skills toolset. `SKILLS_DIR` env var. (Issue #9)
 - 2026-02-15: Deferred tool approval flow. Agent calls with
   `output_type=[str, DeferredToolRequests]`. CLI gathers human approval
   and re-enqueues. `WorkItemInput` gains `deferred_tool_results_json`,

@@ -38,7 +38,15 @@ except ModuleNotFoundError as exc:
         "Missing backend dependency. Run `uv sync` so `pydantic-ai-backend==0.1.6` is installed."
     ) from exc
 
-from models import WorkItem, WorkItemInput, WorkItemOutput, WorkItemPriority, WorkItemType
+from models import (
+    AgentDeps,
+    WorkItem,
+    WorkItemInput,
+    WorkItemOutput,
+    WorkItemPriority,
+    WorkItemType,
+)
+from skills import SkillDirectory, create_skills_toolset
 from streaming import PrintStreamHandle, register_stream, take_stream
 from work_queue import work_queue
 
@@ -48,22 +56,6 @@ AgentOutput = str | DeferredToolRequests
 
 # Maximum characters to display for a tool argument value in the approval UI.
 _APPROVAL_ARG_DISPLAY_MAX = 200
-
-# ---------------------------------------------------------------------------
-# Agent deps
-# ---------------------------------------------------------------------------
-
-
-@dataclass
-class AgentDeps:
-    """Runtime dependencies injected into agent turns.
-
-    ``backend`` is an explicit field so ``AgentDeps`` structurally matches the
-    console toolset dependency protocol used by ``pydantic-ai-backend``.
-    """
-
-    backend: LocalBackend
-
 
 # ---------------------------------------------------------------------------
 # Runtime state — set once in main(), read by queue workers
@@ -165,16 +157,26 @@ def validate_console_deps_contract() -> None:
         )
 
 
-def build_toolsets() -> list[AbstractToolset[AgentDeps]]:
-    """Build console toolsets with execute disabled and write approval enabled.
+def _resolve_skills_dir() -> Path:
+    """Resolve the skills directory, defaulting to ``skills/`` beside ``chat.py``."""
+    raw = os.getenv("SKILLS_DIR", "skills")
+    path = Path(raw)
+    if not path.is_absolute():
+        path = Path(__file__).resolve().parent / path
+    return path
 
-    ``create_console_toolset`` is typed for a protocol dependency type; the
-    cast is intentional because ``AgentDeps`` satisfies that protocol
-    structurally via ``backend: LocalBackend``.
+
+def build_toolsets() -> list[AbstractToolset[AgentDeps]]:
+    """Build console + skills toolsets.
+
+    Console toolset has execute disabled and write approval enabled.
+    Skills toolset provides ``list_skills``, ``load_skill``, and
+    ``read_skill_resource`` tools with progressive disclosure.
     """
     validate_console_deps_contract()
-    toolset = create_console_toolset(include_execute=False, require_write_approval=True)
-    return [toolset]
+    console = create_console_toolset(include_execute=False, require_write_approval=True)
+    skills = create_skills_toolset([SkillDirectory(path=_resolve_skills_dir())])
+    return [console, skills]
 
 
 def build_agent(
