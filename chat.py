@@ -25,7 +25,15 @@ from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.tools import DeferredToolResults, ToolDenied
 
-from approval_security import ApprovalScope, ApprovalStore, ApprovalVerificationError
+from approval_keys import ApprovalKeyManager
+from approval_policy import ToolPolicyRegistry
+from approval_store import ApprovalStore
+from approval_types import (
+    ApprovalScope,
+    ApprovalVerificationError,
+    DeferredToolCall,
+    SignedDecision,
+)
 
 try:
     from dbos import DBOS, DBOSConfig, SetEnqueueOptions
@@ -79,6 +87,8 @@ class _Runtime:
     backend: LocalBackend
     history_db_path: str
     approval_store: ApprovalStore
+    key_manager: ApprovalKeyManager
+    tool_policy: ToolPolicyRegistry
 
 
 @dataclass(frozen=True)
@@ -101,6 +111,8 @@ def _set_runtime(
     backend: LocalBackend,
     history_db_path: str,
     approval_store: ApprovalStore,
+    key_manager: ApprovalKeyManager,
+    tool_policy: ToolPolicyRegistry,
 ) -> None:
     global _runtime
     _runtime = _Runtime(
@@ -108,6 +120,8 @@ def _set_runtime(
         backend=backend,
         history_db_path=history_db_path,
         approval_store=approval_store,
+        key_manager=key_manager,
+        tool_policy=tool_policy,
     )
 
 
@@ -308,14 +322,19 @@ def _build_approval_scope(
 
 
 def _serialize_deferred_requests(
-    requests: DeferredToolRequests, *, scope: ApprovalScope, approval_store: ApprovalStore
+    requests: DeferredToolRequests,
+    *,
+    scope: ApprovalScope,
+    approval_store: ApprovalStore,
+    key_manager: ApprovalKeyManager,
+    tool_policy: ToolPolicyRegistry,
 ) -> str:
     """Serialize DeferredToolRequests to JSON for transport through the queue.
 
     Extracts the essential fields (tool_call_id, tool_name, args) from each
     approval request so the caller can present them to the user.
     """
-    data: list[dict[str, Any]] = [
+    data: list[DeferredToolCall] = [
         {
             "tool_call_id": call.tool_call_id,
             "tool_name": call.tool_name,
@@ -323,26 +342,48 @@ def _serialize_deferred_requests(
         }
         for call in requests.approvals
     ]
-    nonce, plan_hash = approval_store.create_envelope(scope=scope, tool_calls=data)
-    return json.dumps({"nonce": nonce, "plan_hash_prefix": plan_hash[:8], "requests": data})
+    tool_policy.validate_deferred_calls(data)
+    nonce, plan_hash = approval_store.create_envelope(
+        scope=scope,
+        tool_calls=data,
+        key_id=key_manager.current_key_id(),
+    )
+    return json.dumps(
+        {"nonce": nonce, "plan_hash_prefix": plan_hash[:8], "requests": data},
+        ensure_ascii=True,
+        allow_nan=False,
+    )
 
 
 def _deserialize_deferred_results(
-    results_json: str, *, scope: ApprovalScope, approval_store: ApprovalStore
+    results_json: str,
+    *,
+    scope: ApprovalScope,
+    approval_store: ApprovalStore,
+    key_manager: ApprovalKeyManager,
 ) -> DeferredToolResults:
     """Deserialize approval decisions from JSON back to DeferredToolResults.
 
     Expected format: list of {"tool_call_id": str, "approved": bool,
     "denial_message": str | None}.
     """
-    data = approval_store.verify_and_consume(submission_json=results_json, live_scope=scope)
+    data = approval_store.verify_and_consume(
+        submission_json=results_json,
+        live_scope=scope,
+        key_manager=key_manager,
+    )
     results = DeferredToolResults()
     for entry in data:
         tool_call_id = entry["tool_call_id"]
         if entry["approved"]:
             results.approvals[tool_call_id] = True
         else:
-            message = entry.get("denial_message", "User denied this tool call.")
+            denial_message = entry.get("denial_message")
+            message = (
+                denial_message
+                if isinstance(denial_message, str) and denial_message
+                else "User denied this tool call."
+            )
             results.approvals[tool_call_id] = ToolDenied(message)
     return results
 
@@ -411,6 +452,7 @@ def run_agent_step(work_item_dict: dict[str, Any]) -> dict[str, Any]:
             item.input.deferred_tool_results_json,
             scope=scope,
             approval_store=rt.approval_store,
+            key_manager=rt.key_manager,
         )
 
     # For resumptions after tool approval, prompt is None — use empty string
@@ -426,23 +468,24 @@ def run_agent_step(work_item_dict: dict[str, Any]) -> dict[str, Any]:
     try:
         if stream_handle is not None:
             # Streaming path — real-time output to the handle.
-            # TODO: replace asyncio.run() with async-native step when moving beyond CLI.
             # asyncio.run() creates a new event loop; breaks if called from an existing one
             # (e.g., inside an async web framework).
 
             async def _stream() -> WorkItemOutput:
-                async with rt.agent.run_stream(
-                    prompt,
-                    deps=deps,
-                    message_history=history,
-                    output_type=output_type,
-                    deferred_tool_results=deferred_results,
-                ) as stream:
-                    async for chunk in stream.stream_text(delta=True):
-                        stream_handle.write(chunk)
+                try:
+                    async with rt.agent.run_stream(
+                        prompt,
+                        deps=deps,
+                        message_history=history,
+                        output_type=output_type,
+                        deferred_tool_results=deferred_results,
+                    ) as stream:
+                        async for chunk in stream.stream_text(delta=True):
+                            stream_handle.write(chunk)
+                        result_output: AgentOutput = await stream.get_output()
+                        all_msgs = stream.all_messages()
+                finally:
                     stream_handle.close()
-                    result_output: AgentOutput = await stream.get_output()
-                    all_msgs = stream.all_messages()
 
                 if isinstance(result_output, DeferredToolRequests):
                     return WorkItemOutput(
@@ -450,6 +493,8 @@ def run_agent_step(work_item_dict: dict[str, Any]) -> dict[str, Any]:
                             result_output,
                             scope=scope,
                             approval_store=rt.approval_store,
+                            key_manager=rt.key_manager,
+                            tool_policy=rt.tool_policy,
                         ),
                         message_history_json=_serialize_history(all_msgs),
                     )
@@ -458,11 +503,7 @@ def run_agent_step(work_item_dict: dict[str, Any]) -> dict[str, Any]:
                     message_history_json=_serialize_history(all_msgs),
                 )
 
-            try:
-                output = asyncio.run(_stream())
-            except Exception:
-                stream_handle.close()
-                raise
+            output = asyncio.run(_stream())
         else:
             # Non-streaming path — background work
             result = rt.agent.run_sync(
@@ -478,6 +519,8 @@ def run_agent_step(work_item_dict: dict[str, Any]) -> dict[str, Any]:
                         result.output,
                         scope=scope,
                         approval_store=rt.approval_store,
+                        key_manager=rt.key_manager,
+                        tool_policy=rt.tool_policy,
                     ),
                     message_history_json=_serialize_history(result.all_messages()),
                 )
@@ -545,67 +588,71 @@ def _display_approval_requests(requests_json: str) -> dict[str, Any]:
     return payload
 
 
-def _gather_approvals(payload: dict[str, Any]) -> str:
+def _decision_entry(tool_call_id: str, approved: bool) -> dict[str, Any]:
+    return {
+        "tool_call_id": tool_call_id,
+        "approved": approved,
+        "denial_message": None if approved else "User denied this action.",
+    }
+
+
+def _collect_single_decision(request: dict[str, Any]) -> list[dict[str, Any]]:
+    try:
+        answer = input("  Approve? [Y/n] ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        answer = "n"
+    approved = answer in ("", "y", "yes")
+    return [_decision_entry(str(request["tool_call_id"]), approved)]
+
+
+def _collect_batch_decisions(requests: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    try:
+        answer = input("  Approve all? [Y/n/pick] ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        answer = "n"
+    if answer in ("", "y", "yes"):
+        return [_decision_entry(str(req["tool_call_id"]), True) for req in requests]
+    if answer in ("pick", "p"):
+        decisions: list[dict[str, Any]] = []
+        for i, req in enumerate(requests, 1):
+            try:
+                choice = input(f"  [{i}] {req['tool_name']} - approve? [Y/n] ").strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                choice = "n"
+            approved = choice in ("", "y", "yes")
+            decisions.append(_decision_entry(str(req["tool_call_id"]), approved))
+        return decisions
+    return [_decision_entry(str(req["tool_call_id"]), False) for req in requests]
+
+
+def _gather_approvals(
+    payload: dict[str, Any], *, approval_store: ApprovalStore, key_manager: ApprovalKeyManager
+) -> str:
     """Prompt the user for approval decisions on each tool call.
 
     Returns serialized JSON payload of approval decisions for
     ``_deserialize_deferred_results``.
     """
+    nonce = payload.get("nonce")
+    if not isinstance(nonce, str) or not nonce:
+        raise ValueError("Approval payload nonce is missing.")
     requests = cast(list[dict[str, Any]], payload["requests"])
-    decisions: list[dict[str, Any]] = []
-    if len(requests) == 1:
-        try:
-            answer = input("  Approve? [Y/n] ").strip().lower()
-        except (EOFError, KeyboardInterrupt):
-            answer = "n"
-        approved = answer in ("", "y", "yes")
-        decisions.append(
-            {
-                "tool_call_id": requests[0]["tool_call_id"],
-                "approved": approved,
-                "denial_message": None if approved else "User denied this action.",
-            }
-        )
-    else:
-        try:
-            answer = input("  Approve all? [Y/n/pick] ").strip().lower()
-        except (EOFError, KeyboardInterrupt):
-            answer = "n"
+    decisions = (
+        _collect_single_decision(requests[0])
+        if len(requests) == 1
+        else _collect_batch_decisions(requests)
+    )
 
-        if answer in ("", "y", "yes"):
-            for req in requests:
-                decisions.append(
-                    {
-                        "tool_call_id": req["tool_call_id"],
-                        "approved": True,
-                        "denial_message": None,
-                    }
-                )
-        elif answer in ("pick", "p"):
-            for i, req in enumerate(requests, 1):
-                try:
-                    choice = input(f"  [{i}] {req['tool_name']} — approve? [Y/n] ").strip().lower()
-                except (EOFError, KeyboardInterrupt):
-                    choice = "n"
-                approved = choice in ("", "y", "yes")
-                decisions.append(
-                    {
-                        "tool_call_id": req["tool_call_id"],
-                        "approved": approved,
-                        "denial_message": None if approved else "User denied this action.",
-                    }
-                )
-        else:
-            for req in requests:
-                decisions.append(
-                    {
-                        "tool_call_id": req["tool_call_id"],
-                        "approved": False,
-                        "denial_message": "User denied this action.",
-                    }
-                )
-
-    return json.dumps({"nonce": payload["nonce"], "decisions": decisions})
+    signed_decisions: list[SignedDecision] = [
+        {"tool_call_id": str(item["tool_call_id"]), "approved": bool(item["approved"])}
+        for item in decisions
+    ]
+    approval_store.store_signed_approval(
+        nonce=nonce,
+        decisions=signed_decisions,
+        key_manager=key_manager,
+    )
+    return json.dumps({"nonce": nonce, "decisions": decisions}, ensure_ascii=True, allow_nan=False)
 
 
 # ---------------------------------------------------------------------------
@@ -624,6 +671,7 @@ def cli_chat_loop() -> None:
     displays the pending actions, gathers user decisions, and re-enqueues
     with the approval results until the agent produces a final text response.
     """
+    rt = _get_runtime()
     history_json: str | None = None
     print("Autopoiesis CLI Chat (type 'exit' to quit)")
     print("---")
@@ -670,7 +718,11 @@ def cli_chat_loop() -> None:
                     requests_payload = _display_approval_requests(
                         output.deferred_tool_requests_json
                     )
-                    deferred_results_json = _gather_approvals(requests_payload)
+                    deferred_results_json = _gather_approvals(
+                        requests_payload,
+                        approval_store=rt.approval_store,
+                        key_manager=rt.key_manager,
+                    )
                     # Re-enqueue without prompt — context is in message history
                     prompt = None
                     continue
@@ -680,7 +732,7 @@ def cli_chat_loop() -> None:
 
         except ApprovalVerificationError as exc:
             print(f"Approval verification failed [{exc.code}]: {exc}", file=sys.stderr)
-        except Exception as exc:
+        except (OSError, RuntimeError, ValueError) as exc:
             print(f"Error: {exc}", file=sys.stderr)
 
 
@@ -689,24 +741,43 @@ def cli_chat_loop() -> None:
 # ---------------------------------------------------------------------------
 
 
+def _rotate_key(base_dir: Path) -> None:
+    approval_store = ApprovalStore.from_env(base_dir=base_dir)
+    key_manager = ApprovalKeyManager.from_env(base_dir=base_dir)
+    key_manager.rotate_key_interactive(expire_pending_envelopes=approval_store.expire_pending_envelopes)
+    print("Approval signing key rotated. Pending approvals were expired.")
+
+
 def main() -> None:
     """Load config, assemble runtime components, and launch DBOS + CLI chat.
 
     Startup order is intentional:
     1. load ``.env`` relative to this file
-    2. read provider + agent naming from env
-    3. build backend → toolsets → agent
-    4. store runtime state for queue workers
-    5. configure and launch DBOS
-    6. enter interactive CLI chat loop (all input via queue)
+    2. parse command mode (chat or rotate-key)
+    3. unlock approval signing key (or rotate and exit)
+    4. build backend → toolsets → agent
+    5. store runtime state for queue workers
+    6. configure and launch DBOS
+    7. enter interactive CLI chat loop (all input via queue)
     """
-    load_dotenv(dotenv_path=Path(__file__).with_name(".env"))
+    base_dir = Path(__file__).resolve().parent
+    load_dotenv(dotenv_path=base_dir / ".env")
+
+    args = sys.argv[1:]
+    if args:
+        if len(args) == 1 and args[0] == "rotate-key":
+            _rotate_key(base_dir)
+            return
+        raise SystemExit("Usage: python chat.py [rotate-key]")
 
     provider = os.getenv("AI_PROVIDER", "anthropic").lower()
     agent_name = os.getenv("DBOS_AGENT_NAME", "chat")
 
     backend = build_backend()
-    approval_store = ApprovalStore.from_env()
+    approval_store = ApprovalStore.from_env(base_dir=base_dir)
+    key_manager = ApprovalKeyManager.from_env(base_dir=base_dir)
+    key_manager.ensure_unlocked_interactive()
+    tool_policy = ToolPolicyRegistry.default()
     toolsets, instructions = build_toolsets()
     agent = build_agent(provider, agent_name, toolsets, instructions)
     system_database_url = os.getenv(
@@ -721,7 +792,7 @@ def main() -> None:
     history_db_path = resolve_history_db_path(system_database_url)
     init_history_store(history_db_path)
     cleanup_stale_checkpoints(history_db_path)
-    _set_runtime(agent, backend, history_db_path, approval_store)
+    _set_runtime(agent, backend, history_db_path, approval_store, key_manager, tool_policy)
     DBOS(config=dbos_config)
 
     DBOS.launch()

@@ -8,7 +8,7 @@ cryptographically signed, single-use, unexpired human authorization bound
 to the exact execution context shown to the human.
 
 ## Status
-- **Last updated:** 2026-02-15 (design phase — not yet implemented)
+- **Last updated:** 2026-02-15 (Phase 1 implemented: R1-R7, R9-R11)
 - **Revision:** v3
 - **Threat model:** Single-user CLI today, networked multi-surface later
 
@@ -97,7 +97,7 @@ decrypt the private key, and hold it in memory. Failed decryption
 signing key. This is the "proof of human" for Phase 1.
 
 **R1.4** Key rotation: the system MUST support re-keying via
-`autopoiesis rotate-key` by generating a NEW keypair, encrypting the
+`python chat.py rotate-key` by generating a NEW keypair, encrypting the
 new private key with the new passphrase, and switching active signing
 to the new `key_id`. Outstanding pending envelopes are invalidated on
 rotation.

@@ -34,8 +34,14 @@ that execute work items from the queue.
 | `DBOS_APP_NAME` | No | `pydantic_dbos_agent` | `main()` | DBOS app name |
 | `DBOS_AGENT_NAME` | No | `chat` | `main()` | Agent name |
 | `DBOS_SYSTEM_DATABASE_URL` | No | `sqlite:///dbostest.sqlite` | `main()` | DBOS database URL |
-| `APPROVAL_DB_PATH` | No | derived from `DBOS_SYSTEM_DATABASE_URL` | `ApprovalStore.from_env()` | Optional SQLite override for approval envelopes |
-| `APPROVAL_TTL_SECONDS` | No | `3600` | `ApprovalStore.from_env()` | Approval expiry window in seconds |
+| `APPROVAL_DB_PATH` | No | derived from `DBOS_SYSTEM_DATABASE_URL` | `ApprovalStore.from_env(base_dir=...)` | Optional SQLite override for approval envelopes |
+| `APPROVAL_TTL_SECONDS` | No | `3600` | `ApprovalStore.from_env(base_dir=...)` | Approval expiry window in seconds |
+| `APPROVAL_KEY_DIR` | No | `data/keys` | `ApprovalKeyManager.from_env(base_dir=...)` | Base directory for approval key material |
+| `APPROVAL_PRIVATE_KEY_PATH` | No | `$APPROVAL_KEY_DIR/approval.key` | `ApprovalKeyManager.from_env(base_dir=...)` | Encrypted Ed25519 private key path |
+| `APPROVAL_PUBLIC_KEY_PATH` | No | `$APPROVAL_KEY_DIR/approval.pub` | `ApprovalKeyManager.from_env(base_dir=...)` | Active public key path |
+| `APPROVAL_KEYRING_PATH` | No | `$APPROVAL_KEY_DIR/keyring.json` | `ApprovalKeyManager.from_env(base_dir=...)` | Active/retired verification keyring |
+| `NONCE_RETENTION_PERIOD_SECONDS` | No | `604800` | `ApprovalStore.from_env(base_dir=...)` | Expired envelope pruning horizon |
+| `APPROVAL_CLOCK_SKEW_SECONDS` | No | `60` | `ApprovalStore.from_env(base_dir=...)` | Startup invariant with retention + TTL |
 | `SKILLS_DIR` | No | `skills` | `_resolve_shipped_skills_dir()` | Shipped skills path, resolves from `chat.py` dir |
 | `CUSTOM_SKILLS_DIR` | No | `skills` | `_resolve_custom_skills_dir()` | Custom skills path, resolves inside `AGENT_WORKSPACE_ROOT` when relative |
 
@@ -59,7 +65,7 @@ that execute work items from the queue.
 
 ### Runtime State
 
-- `_Runtime` dataclass holds agent + backend for the process lifetime
+- `_Runtime` dataclass holds agent + backend + approval store + unlocked key manager + tool policy for the process lifetime
 - `_set_runtime()` / `_get_runtime()` — set in `main()`, read by workers
 - `_CheckpointContext` + `ContextVar` store active checkpoint metadata per
   execution context for history processor writes
@@ -68,10 +74,11 @@ that execute work items from the queue.
 
 - `_build_approval_scope(approval_context_id, backend, agent_name)` — build live
   execution scope for approval hashing/verification
-- `_serialize_deferred_requests(requests, scope, approval_store)` — persist a
-  nonce-bound envelope and serialize nonce + plan hash prefix + tool calls
-- `_deserialize_deferred_results(results_json, scope, approval_store)` —
-  verify envelope/hash/bijection + atomic nonce consume, then reconstruct
+- `_serialize_deferred_requests(requests, scope, approval_store, key_manager, tool_policy)` —
+  validate deferred calls against immutable tool policy, persist a nonce-bound
+  envelope with `key_id`, and serialize nonce + plan hash prefix + tool calls
+- `_deserialize_deferred_results(results_json, scope, approval_store, key_manager)` —
+  verify signature-first + context drift + bijection + atomic nonce consume, then reconstruct
   `DeferredToolResults`
 
 ### Queue Workers
@@ -93,7 +100,9 @@ that execute work items from the queue.
 
 - `_display_approval_requests(requests_json)` — display pending tool calls
   with tool name and full arguments; returns parsed approval payload
-- `_gather_approvals(payload)` — prompt user for y/n on each tool call
+- `_gather_approvals(payload, approval_store, key_manager)` — prompt user for y/n on each tool call,
+  persist signed approval object + signature on the envelope, then return
+  serialized submission (`nonce` + per-call decisions)
   (supports approve-all, deny-all, or pick individually); returns serialized
   approval decisions
 
@@ -109,20 +118,24 @@ that execute work items from the queue.
 
 ### Entrypoint
 
-- `main()` — load .env → build stack → set runtime → DBOS launch → chat loop
+- `main()` — load .env → optional `rotate-key` command path → unlock approval key
+  (required) → build stack → set runtime → DBOS launch → chat loop
+- `_rotate_key(base_dir)` — interactive key rotation; invalidates pending envelopes
 
 ## Deferred Tool Approval Flow
 
 1. Agent calls a tool with `require_write_approval=True`
 2. PydanticAI returns `DeferredToolRequests` instead of executing the tool
-3. Worker serializes the requests into `WorkItemOutput.deferred_tool_requests_json`
-4. Worker stores an approval envelope (nonce + scope + tool calls + plan hash)
-5. CLI displays full tool args + plan hash prefix, prompts user for approval
-6. CLI re-enqueues a new `WorkItem` with nonce + approval decisions
-7. Worker verifies nonce, context hash, and decision bijection; then atomically
-   consumes nonce and reconstructs `DeferredToolResults`
-8. Agent executes approved tools, gets denial messages for denied ones
-9. Loop repeats until agent returns a final `str` response
+3. Worker validates deferred tool classifications (read-only tools in deferred requests are rejected)
+4. Worker serializes requests into `WorkItemOutput.deferred_tool_requests_json`
+5. Worker stores an approval envelope (nonce + scope + tool calls + plan hash + key_id)
+6. CLI displays full tool args + plan hash prefix, prompts user for approval
+7. CLI signs canonical signed object and persists signature on the envelope
+8. CLI re-enqueues a new `WorkItem` with nonce + approval decisions
+9. Worker verifies signature/key first, then context hash and decision bijection,
+   then atomically consumes nonce and reconstructs `DeferredToolResults`
+10. Agent executes approved tools, gets denial messages for denied ones
+11. Loop repeats until agent returns a final `str` response
 
 ## Invariants
 
@@ -138,7 +151,10 @@ that execute work items from the queue.
 - Workflow/step functions live in `chat.py` to avoid circular imports.
 - Stream handles are in-process only — not durable, not serialised.
 - Deferred approvals are nonce-bound and single-use (atomic consume in SQLite).
-- Invalid approval submissions are rejected before nonce consumption.
+- Agent execution is blocked unless approval signing key is unlocked at startup.
+- No approval execution path exists without a persisted envelope signature.
+- Invalid/tampered approval submissions are rejected before nonce consumption.
+- Unknown tool names default to side-effecting in deferred tool classification.
 - Deferred tool requests/results are serialized as JSON for queue transport.
 
 ## Dependencies
@@ -164,6 +180,12 @@ that execute work items from the queue.
   Approval context now uses a stable `approval_context_id` across
   re-enqueued work items, and malformed submissions are rejected before
   nonce consumption.
+  (Issue #19)
+- 2026-02-15: Phase 1 security completion wiring. Approval flow now requires
+  unlocked Ed25519 signing key at startup, stores envelope `key_id`, signs
+  approval decisions before re-enqueue, verifies signature before consume, and
+  enforces immutable tool classification defaults. Added key rotation command
+  (`python chat.py rotate-key`) that expires pending envelopes.
   (Issue #19)
 - 2026-02-15: Skill system integration. `AgentDeps` moved to `models.py`.
   `build_toolsets()` returns `(toolsets, instructions)`. `build_agent()`
