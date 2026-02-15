@@ -13,6 +13,7 @@ Edit `.env`:
 - `AI_PROVIDER=anthropic` or `AI_PROVIDER=openrouter`
 - If `anthropic`: set `ANTHROPIC_API_KEY`
 - If `openrouter`: set `OPENROUTER_API_KEY`
+- `AGENT_WORKSPACE_ROOT` controls backend workspace location (relative paths resolve from repo root)
 - Optional DBOS settings:
   - `DBOS_APP_NAME`
   - `DBOS_AGENT_NAME`
@@ -36,6 +37,10 @@ Notes:
 - CLI is interactive (`stdin_open` + `tty` are enabled in Compose).
 - DBOS sqlite state is persisted in a named volume `dbos-data` mounted at `/data`.
 - Compose overrides DBOS sqlite URL to `sqlite:////data/dbostest.sqlite`.
+- Backend workspace is persisted at `/data/agent-workspace` in Compose.
+- Enabled backend tools: `ls`, `read_file`, `write_file`, `edit_file`, `glob`, `grep`.
+- `execute` is disabled at both toolset and backend layers.
+- Writes require approval in the toolset.
 - Container runs as non-root user `appuser`.
 
 ## VS Code

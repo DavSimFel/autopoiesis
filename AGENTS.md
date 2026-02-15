@@ -6,6 +6,7 @@ Durable interactive CLI chat built with PydanticAI + DBOS, with provider switch 
 - Runtime: Python 3.12+
 - Package manager: `uv` only
 - Entry point: `chat.py`
+- Backend integration: `pydantic-ai-backend==0.1.6` via `pydantic_ai_backends`
 
 ## Setup Commands
 
@@ -35,7 +36,7 @@ Notes:
 ## Project Structure
 
 ```text
-chat.py               # Provider selection, env loading, DBOS launch, interactive CLI
+chat.py               # Provider selection, env loading, backend toolset wiring, DBOS launch, interactive CLI
 pyproject.toml        # Dependency source of truth
 uv.lock               # Locked dependency graph
 docker-compose.yml    # Interactive container runtime + DBOS volume
@@ -48,10 +49,18 @@ Dockerfile            # uv-based image, non-root runtime
 
 - Keep provider values explicit: `AI_PROVIDER=openrouter` or `AI_PROVIDER=anthropic`.
 - Validate required keys with `required_env(...)` before use.
+- Guard optional/runtime imports with fail-fast `SystemExit` messages that recommend `uv sync`.
 - For OpenRouter use `OpenAIChatModel` + `OpenAIProvider(base_url="https://openrouter.ai/api/v1")`.
 - For Anthropic use model strings with `anthropic:` prefix.
 - Load env from repo-local file only:
   - `load_dotenv(dotenv_path=Path(__file__).with_name(".env"))`
+- Backend wiring pattern:
+  - Define `AgentDeps` with `backend: LocalBackend`.
+  - Build backend with `LocalBackend(root_dir=..., enable_execute=False)`.
+  - Build toolset with `create_console_toolset(include_execute=False, require_write_approval=True)`.
+  - Pass `deps_type=AgentDeps` and `toolsets=[...]` when constructing `Agent`.
+  - Pass runtime deps to CLI via `dbos_agent.to_cli_sync(deps=AgentDeps(backend=backend))`.
+- Resolve `AGENT_WORKSPACE_ROOT` relative to `chat.py` when env value is not absolute.
 - Keep startup order:
   1. load env
   2. validate/build agent
