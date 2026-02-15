@@ -39,32 +39,40 @@ class WorkItemType(StrEnum):
 class WorkItemInput(BaseModel):
     """Structured inputs for agent execution.
 
-    `message_history_json` carries serialized PydanticAI message history
-    for multi-turn conversation continuity. It is optional — single-turn
-    background tasks leave it None.
+    ``prompt`` is the user's message — required for initial turns, None when
+    resuming after deferred tool approval (context is in message history).
+    ``message_history_json`` carries serialized PydanticAI message history
+    for multi-turn conversation continuity. ``deferred_tool_results_json``
+    carries serialized approval decisions from a previous deferred tool
+    request, allowing the agent to resume after human-in-the-loop approval.
     """
 
-    prompt: str
+    prompt: str | None = None
     message_history_json: str | None = None
+    deferred_tool_results_json: str | None = None
 
 
 class WorkItemOutput(BaseModel):
     """Structured outputs from agent execution.
 
-    `text` is the agent's response. `message_history_json` is the updated
-    conversation history (serialized) for the next turn.
+    When the agent completes normally, ``text`` holds the response and
+    ``deferred_tool_requests_json`` is None. When the agent encounters
+    tools requiring approval, ``text`` is None and
+    ``deferred_tool_requests_json`` holds the serialized approval requests
+    for the caller to resolve.
     """
 
-    text: str
+    text: str | None = None
     message_history_json: str | None = None
+    deferred_tool_requests_json: str | None = None
 
 
 class WorkItem(BaseModel):
     """Single unit of work flowing through the DBOS priority queue.
 
-    - `input`: what the agent receives (prompt + optional history)
-    - `output`: what the agent produced (filled after execution, None before)
-    - `payload`: arbitrary caller metadata (labels, source, etc.). Reserved for
+    - ``input``: what the agent receives (prompt + optional history + optional approvals)
+    - ``output``: what the agent produced (filled after execution, None before)
+    - ``payload``: arbitrary caller metadata (labels, source, etc.). Reserved for
       future use — not consumed by the worker yet.
     """
 
