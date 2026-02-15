@@ -3,20 +3,26 @@
 All work — including interactive chat — flows through the DBOS priority queue.
 When a stream handle is registered for a work item, the worker streams tokens
 in real time. Durability comes from the final output, not the stream.
+
+Tools that require write approval produce ``DeferredToolRequests``. The caller
+(e.g. CLI chat loop) gathers human approval and re-enqueues with the decisions.
 """
 
 import asyncio
+import json
 import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Union
 
 from dotenv import load_dotenv
 from pydantic_ai import AbstractToolset, Agent
 from pydantic_ai.messages import ModelMessage, ModelMessagesTypeAdapter
 from pydantic_ai.models.openai import OpenAIChatModel
+from pydantic_ai.output import DeferredToolRequests
 from pydantic_ai.providers.openai import OpenAIProvider
+from pydantic_ai.tools import DeferredToolResults, ToolDenied
 
 try:
     from dbos import DBOS, DBOSConfig, SetEnqueueOptions
@@ -36,6 +42,10 @@ except ModuleNotFoundError as exc:
 from models import WorkItem, WorkItemInput, WorkItemOutput, WorkItemPriority, WorkItemType
 from streaming import PrintStreamHandle, register_stream, take_stream
 from work_queue import work_queue
+
+# The union output type for agent runs — str for normal responses,
+# DeferredToolRequests when tools need approval before execution.
+AgentOutput = Union[str, DeferredToolRequests]
 
 # ---------------------------------------------------------------------------
 # Agent deps
@@ -195,6 +205,46 @@ def build_agent(
 
 
 # ---------------------------------------------------------------------------
+# Deferred tool serialization
+# ---------------------------------------------------------------------------
+
+
+def _serialize_deferred_requests(requests: DeferredToolRequests) -> str:
+    """Serialize DeferredToolRequests to JSON for transport through the queue.
+
+    Extracts the essential fields (tool_call_id, tool_name, args) from each
+    approval request so the caller can present them to the user.
+    """
+    data = [
+        {
+            "tool_call_id": call.tool_call_id,
+            "tool_name": call.tool_name,
+            "args": call.args,
+        }
+        for call in requests.approvals
+    ]
+    return json.dumps(data)
+
+
+def _deserialize_deferred_results(results_json: str) -> DeferredToolResults:
+    """Deserialize approval decisions from JSON back to DeferredToolResults.
+
+    Expected format: list of {"tool_call_id": str, "approved": bool,
+    "denial_message": str | None}.
+    """
+    data: list[dict[str, Any]] = json.loads(results_json)
+    results = DeferredToolResults()
+    for entry in data:
+        tool_call_id = entry["tool_call_id"]
+        if entry["approved"]:
+            results.approvals[tool_call_id] = True
+        else:
+            message = entry.get("denial_message", "User denied this tool call.")
+            results.approvals[tool_call_id] = ToolDenied(message)
+    return results
+
+
+# ---------------------------------------------------------------------------
 # Queue worker — DBOS workflow + step
 # ---------------------------------------------------------------------------
 
@@ -213,16 +263,26 @@ def _serialize_history(messages: list[ModelMessage]) -> str:
 def run_agent_step(work_item_dict: dict[str, Any]) -> dict[str, Any]:
     """Checkpoint-able agent execution step.
 
-    If a stream handle is registered for this work item, uses
-    ``agent.run_stream()`` for real-time token output. Otherwise falls
-    back to ``agent.run_sync()``. Either way, returns the durable output.
+    Handles three scenarios:
+    1. Streaming with stream handle → ``agent.run_stream()`` with real-time output
+    2. Non-streaming → ``agent.run_sync()``
+    3. Resuming after deferred tool approval → passes ``deferred_tool_results``
+
+    In all cases, passes ``output_type=[str, DeferredToolRequests]`` so the
+    agent can return either a text response or a deferred tool approval request.
     """
     rt = _get_runtime()
     item = WorkItem.model_validate(work_item_dict)
     history = _deserialize_history(item.input.message_history_json)
     deps = AgentDeps(backend=rt.backend)
 
+    # Reconstruct deferred tool results if this is a resumption
+    deferred_results: DeferredToolResults | None = None
+    if item.input.deferred_tool_results_json:
+        deferred_results = _deserialize_deferred_results(item.input.deferred_tool_results_json)
+
     stream_handle = take_stream(item.id)
+    output_type: list[type[AgentOutput]] = [str, DeferredToolRequests]
 
     if stream_handle is not None:
         # Streaming path — real-time output to the handle.
@@ -235,14 +295,22 @@ def run_agent_step(work_item_dict: dict[str, Any]) -> dict[str, Any]:
                 item.input.prompt,
                 deps=deps,
                 message_history=history,
+                output_type=output_type,
+                deferred_tool_results=deferred_results,
             ) as stream:
                 async for chunk in stream.stream_text(delta=True):
                     stream_handle.write(chunk)
                 stream_handle.close()
-                result_text: str = await stream.get_output()
+                result_output: AgentOutput = await stream.get_output()
                 all_msgs = stream.all_messages()
+
+            if isinstance(result_output, DeferredToolRequests):
+                return WorkItemOutput(
+                    deferred_tool_requests_json=_serialize_deferred_requests(result_output),
+                    message_history_json=_serialize_history(all_msgs),
+                )
             return WorkItemOutput(
-                text=result_text,
+                text=result_output,
                 message_history_json=_serialize_history(all_msgs),
             )
 
@@ -253,11 +321,23 @@ def run_agent_step(work_item_dict: dict[str, Any]) -> dict[str, Any]:
             raise
     else:
         # Non-streaming path — background work
-        result = rt.agent.run_sync(item.input.prompt, deps=deps, message_history=history)
-        output = WorkItemOutput(
-            text=result.output,
-            message_history_json=_serialize_history(result.all_messages()),
+        result = rt.agent.run_sync(
+            item.input.prompt,
+            deps=deps,
+            message_history=history,
+            output_type=output_type,
+            deferred_tool_results=deferred_results,
         )
+        if isinstance(result.output, DeferredToolRequests):
+            output = WorkItemOutput(
+                deferred_tool_requests_json=_serialize_deferred_requests(result.output),
+                message_history_json=_serialize_history(result.all_messages()),
+            )
+        else:
+            output = WorkItemOutput(
+                text=result.output,
+                message_history_json=_serialize_history(result.all_messages()),
+            )
 
     return output.model_dump()
 
@@ -293,6 +373,84 @@ def enqueue_and_wait(item: WorkItem) -> WorkItemOutput:
 
 
 # ---------------------------------------------------------------------------
+# CLI approval display
+# ---------------------------------------------------------------------------
+
+
+def _display_approval_requests(requests_json: str) -> list[dict[str, Any]]:
+    """Display pending tool approval requests and return the parsed list."""
+    requests: list[dict[str, Any]] = json.loads(requests_json)
+    print("\n🔒 Tool approval required:")
+    for i, req in enumerate(requests, 1):
+        tool_name = req["tool_name"]
+        args = req["args"]
+        print(f"  [{i}] {tool_name}")
+        if isinstance(args, dict):
+            for key, value in args.items():
+                display = str(value)
+                if len(display) > 200:
+                    display = display[:200] + "..."
+                print(f"      {key}: {display}")
+        else:
+            print(f"      args: {args}")
+    return requests
+
+
+def _gather_approvals(requests: list[dict[str, Any]]) -> str:
+    """Prompt the user for approval decisions on each tool call.
+
+    Returns serialized JSON list of approval decisions for
+    ``_deserialize_deferred_results``.
+    """
+    decisions: list[dict[str, Any]] = []
+    if len(requests) == 1:
+        try:
+            answer = input("  Approve? [Y/n] ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            answer = "n"
+        approved = answer in ("", "y", "yes")
+        decisions.append({
+            "tool_call_id": requests[0]["tool_call_id"],
+            "approved": approved,
+            "denial_message": None if approved else "User denied this action.",
+        })
+    else:
+        try:
+            answer = input("  Approve all? [Y/n/pick] ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            answer = "n"
+
+        if answer in ("", "y", "yes"):
+            for req in requests:
+                decisions.append({
+                    "tool_call_id": req["tool_call_id"],
+                    "approved": True,
+                    "denial_message": None,
+                })
+        elif answer in ("pick", "p"):
+            for i, req in enumerate(requests, 1):
+                try:
+                    choice = input(f"  [{i}] {req['tool_name']} — approve? [Y/n] ").strip().lower()
+                except (EOFError, KeyboardInterrupt):
+                    choice = "n"
+                approved = choice in ("", "y", "yes")
+                decisions.append({
+                    "tool_call_id": req["tool_call_id"],
+                    "approved": approved,
+                    "denial_message": None if approved else "User denied this action.",
+                })
+        else:
+            for req in requests:
+                decisions.append({
+                    "tool_call_id": req["tool_call_id"],
+                    "approved": False,
+                    "denial_message": "User denied this action.",
+                })
+
+    return json.dumps(decisions)
+
+
+# ---------------------------------------------------------------------------
 # CLI chat loop
 # ---------------------------------------------------------------------------
 
@@ -303,6 +461,10 @@ def cli_chat_loop() -> None:
     Each user message becomes a WorkItem with CRITICAL priority and a
     PrintStreamHandle for real-time output. Message history flows through
     WorkItemInput/Output for multi-turn continuity.
+
+    When the agent requests tool approval (e.g. file writes), the loop
+    displays the pending actions, gathers user decisions, and re-enqueues
+    with the approval results until the agent produces a final text response.
     """
     history_json: str | None = None
     print("Autopoiesis CLI Chat (type 'exit' to quit)")
@@ -322,20 +484,37 @@ def cli_chat_loop() -> None:
             break
 
         try:
-            item = WorkItem(
-                type=WorkItemType.CHAT,
-                priority=WorkItemPriority.CRITICAL,
-                input=WorkItemInput(
-                    prompt=user_input,
-                    message_history_json=history_json,
-                ),
-            )
+            prompt = user_input
+            deferred_results_json: str | None = None
 
-            # Register a stream handle so the worker streams to stdout
-            register_stream(item.id, PrintStreamHandle())
+            # Approval loop — keeps re-enqueuing until we get a text response
+            while True:
+                item = WorkItem(
+                    type=WorkItemType.CHAT,
+                    priority=WorkItemPriority.CRITICAL,
+                    input=WorkItemInput(
+                        prompt=prompt,
+                        message_history_json=history_json,
+                        deferred_tool_results_json=deferred_results_json,
+                    ),
+                )
 
-            output = enqueue_and_wait(item)
-            history_json = output.message_history_json
+                # Register a stream handle so the worker streams to stdout
+                register_stream(item.id, PrintStreamHandle())
+
+                output = enqueue_and_wait(item)
+                history_json = output.message_history_json
+
+                if output.deferred_tool_requests_json is not None:
+                    # Agent wants tool approval — display and gather decisions
+                    requests = _display_approval_requests(output.deferred_tool_requests_json)
+                    deferred_results_json = _gather_approvals(requests)
+                    # Re-enqueue with same prompt + approvals; history carries context
+                    prompt = ""
+                    continue
+
+                # Normal text response — done with this turn
+                break
 
         except Exception as exc:
             print(f"Error: {exc}", file=sys.stderr)
