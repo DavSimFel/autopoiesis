@@ -14,13 +14,13 @@ import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Union
+from typing import Any
 
 from dotenv import load_dotenv
 from pydantic_ai import AbstractToolset, Agent
 from pydantic_ai.messages import ModelMessage, ModelMessagesTypeAdapter
 from pydantic_ai.models.openai import OpenAIChatModel
-from pydantic_ai.output import DeferredToolRequests
+from pydantic_ai import DeferredToolRequests
 from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.tools import DeferredToolResults, ToolDenied
 
@@ -45,7 +45,10 @@ from work_queue import work_queue
 
 # The union output type for agent runs — str for normal responses,
 # DeferredToolRequests when tools need approval before execution.
-AgentOutput = Union[str, DeferredToolRequests]
+AgentOutput = str | DeferredToolRequests
+
+# Maximum characters to display for a tool argument value in the approval UI.
+_APPROVAL_ARG_DISPLAY_MAX = 200
 
 # ---------------------------------------------------------------------------
 # Agent deps
@@ -383,14 +386,15 @@ def _display_approval_requests(requests_json: str) -> list[dict[str, Any]]:
     print("\n🔒 Tool approval required:")
     for i, req in enumerate(requests, 1):
         tool_name = req["tool_name"]
-        args = req["args"]
+        args: Any = req["args"]
         print(f"  [{i}] {tool_name}")
         if isinstance(args, dict):
-            for key, value in args.items():
-                display = str(value)
-                if len(display) > 200:
-                    display = display[:200] + "..."
-                print(f"      {key}: {display}")
+            typed_args: dict[str, Any] = args
+            for arg_name, arg_value in typed_args.items():
+                display = str(arg_value)
+                if len(display) > _APPROVAL_ARG_DISPLAY_MAX:
+                    display = display[:_APPROVAL_ARG_DISPLAY_MAX] + "..."
+                print(f"      {arg_name}: {display}")
         else:
             print(f"      args: {args}")
     return requests
