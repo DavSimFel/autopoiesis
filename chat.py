@@ -236,9 +236,11 @@ def run_agent_step(work_item_dict: dict[str, Any]) -> dict[str, Any]:
                 async for chunk in stream.stream_text(delta=True):
                     stream_handle.write(chunk)
                 stream_handle.close()
+                result_text: str = await stream.get_output()
+                all_msgs = stream.all_messages()
             return WorkItemOutput(
-                text=stream.output,
-                message_history_json=_serialize_history(stream.all_messages()),
+                text=result_text,
+                message_history_json=_serialize_history(all_msgs),
             )
 
         output = asyncio.run(_stream())
