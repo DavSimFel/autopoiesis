@@ -296,19 +296,25 @@ the corresponding tool execution begins. Crash between flush and
 execution → audit shows approval but no execution (safe: re-approval
 needed due to consumed nonce).
 
-**R8.4** Hash-chained: each entry includes SHA-256 of
+**R8.4** Fail-closed: if the audit append or fsync fails (I/O error,
+disk full, permissions), the system MUST reject tool execution. An
+unauditable approval MUST NOT proceed. The failure is logged to stderr
+and the nonce remains consumed (human must re-approve after fixing
+the audit log).
+
+**R8.5** Hash-chained: each entry includes SHA-256 of
 `canonical_json(previous_entry)`. Genesis entry uses
 `sha256(b"autopoiesis:audit:genesis")`. Canonical JSON uses the same
 serialization as R3.3.
 
-**R8.5** Storage: JSONL at `$AUDIT_LOG_PATH` (default:
+**R8.6** Storage: JSONL at `$AUDIT_LOG_PATH` (default:
 `data/audit/approvals.jsonl`).
 
-**R8.6** Periodic anchor: write current chain head hash to
+**R8.7** Periodic anchor: write current chain head hash to
 `data/audit/anchor.json` after every N entries (default: 100)
 and at clean shutdown.
 
-**R8.7** Tamper-detection scope: the hash chain detects accidental
+**R8.8** Tamper-detection scope: the hash chain detects accidental
 corruption and casual tampering. It does NOT protect against an
 attacker with write access to both the log and anchor file (same
 trust domain). External anchoring (e.g. posting chain head to a
