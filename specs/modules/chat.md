@@ -1,114 +1,97 @@
-# Module: chat.py
+# Module: chat
 
 ## Purpose
 
-`chat.py` is the runtime entrypoint for the durable interactive CLI chat app. It loads configuration, builds a provider-specific PydanticAI agent with a local backend toolset, initializes DBOS, and starts the CLI loop.
+`chat.py` is the runtime entrypoint. It builds the agent stack, launches DBOS,
+and enters the CLI chat loop. It also hosts the DBOS workflow/step functions
+that execute work items from the queue.
 
 ## Status
 
-- **Last updated:** 2026-02-15 (PR #2)
+- **Last updated:** 2026-02-15 (Issue #8)
 - **Source:** `chat.py`
 
-## API Surface
+## File Structure
 
-### Environment Variables
+| File | Responsibility |
+|------|---------------|
+| `chat.py` | Startup, agent wiring, DBOS workflow/step, enqueue helpers, CLI loop |
+| `models.py` | `WorkItem`, `WorkItemInput`, `WorkItemOutput`, priority/type enums |
+| `work_queue.py` | Queue instance only (no functions importing from `chat.py`) |
+| `streaming.py` | `StreamHandle` protocol, `PrintStreamHandle`, registry |
 
-| Env Var | Required | Default | Source in code | Description |
-|---|---|---|---|---|
-| `AI_PROVIDER` | No | `anthropic` | `main()` | Provider selection (`anthropic` or `openrouter`) |
-| `ANTHROPIC_API_KEY` | If `AI_PROVIDER=anthropic` | - | `build_agent()` via `required_env()` | Anthropic API key |
-| `ANTHROPIC_MODEL` | No | `anthropic:claude-3-5-sonnet-latest` | `build_agent()` via `os.getenv()` | Anthropic model string |
-| `OPENROUTER_API_KEY` | If `AI_PROVIDER=openrouter` | - | `build_agent()` via `required_env()` | OpenRouter API key |
-| `OPENROUTER_MODEL` | No | `openai/gpt-4o-mini` | `build_agent()` via `os.getenv()` | OpenRouter model string |
-| `AGENT_WORKSPACE_ROOT` | No | `data/agent-workspace` | `resolve_workspace_root()` | Agent file access root (relative to `chat.py` when not absolute) |
-| `DBOS_APP_NAME` | No | `pydantic_dbos_agent` | `main()` | DBOS application name |
-| `DBOS_AGENT_NAME` | No | `chat` | `main()` | Agent/CLI name |
-| `DBOS_SYSTEM_DATABASE_URL` | No | `sqlite:///dbostest.sqlite` | `main()` | DBOS database connection |
+## Environment Variables
+
+| Var | Required | Default | Used in | Notes |
+|-----|----------|---------|---------|-------|
+| `AI_PROVIDER` | No | `anthropic` | `main()` | Provider selection |
+| `ANTHROPIC_API_KEY` | If anthropic | — | `build_agent()` | API key |
+| `ANTHROPIC_MODEL` | No | `anthropic:claude-3-5-sonnet-latest` | `build_agent()` | Model string |
+| `OPENROUTER_API_KEY` | If openrouter | — | `build_agent()` | API key |
+| `OPENROUTER_MODEL` | No | `openai/gpt-4o-mini` | `build_agent()` | Model id |
+| `AGENT_WORKSPACE_ROOT` | No | `data/agent-workspace` | `resolve_workspace_root()` | Resolves from `chat.py` dir |
+| `DBOS_APP_NAME` | No | `pydantic_dbos_agent` | `main()` | DBOS app name |
+| `DBOS_AGENT_NAME` | No | `chat` | `main()` | Agent name |
+| `DBOS_SYSTEM_DATABASE_URL` | No | `sqlite:///dbostest.sqlite` | `main()` | DBOS database URL |
 
 ## Functions
 
-### `required_env(name: str) -> str`
+### Startup
 
-- Reads an env var and returns its value when present.
-- Raises `SystemExit` with a clear message when missing.
-- Intentionally fail-fast at startup; does not raise `KeyError`.
+- `required_env(name)` — fail-fast env var read
+- `resolve_workspace_root()` — resolve + create workspace dir
+- `build_backend()` — `LocalBackend` with execute disabled
+- `validate_console_deps_contract()` — structural typing guard
+- `build_toolsets()` — console toolset with write approval
+- `build_agent(provider, name, toolsets)` — Anthropic or OpenRouter factory
 
-### `resolve_workspace_root() -> Path`
+### Runtime State
 
-- Reads `AGENT_WORKSPACE_ROOT` with default `data/agent-workspace`.
-- Resolves relative paths against `Path(__file__).resolve().parent`, not CWD.
-- Creates the directory with `mkdir(parents=True, exist_ok=True)` before returning.
+- `_Runtime` dataclass holds agent + backend for the process lifetime
+- `_set_runtime()` / `_get_runtime()` — set in `main()`, read by workers
 
-### `build_backend() -> LocalBackend`
+### Queue Workers
 
-- Builds `LocalBackend(root_dir=resolve_workspace_root(), enable_execute=False)`.
-- Keeps shell execution disabled for the backend.
+- `run_agent_step(work_item_dict)` — `@DBOS.step()`. Checks for stream
+  handle: if present, uses `agent.run_stream()` for real-time output;
+  otherwise `agent.run_sync()`. Returns `WorkItemOutput` as dict.
+- `execute_work_item(work_item_dict)` — `@DBOS.workflow()`. Delegates to
+  `run_agent_step()`.
 
-### `validate_console_deps_contract() -> None`
+### Enqueue Helpers
 
-- Runtime compatibility check for the console toolset dependency contract.
-- Verifies `AgentDeps.backend` annotation is exactly `LocalBackend`.
-- Verifies `LocalBackend` exposes callable methods:
-  `ls_info`, `read`, `write`, `edit`, `glob_info`, `grep_raw`.
-- Exits with `SystemExit` if the structural contract is broken.
+- `enqueue(item)` — fire-and-forget, returns work item id
+- `enqueue_and_wait(item)` — blocks on `handle.get_result()`, returns `WorkItemOutput`
 
-### `build_toolsets() -> list[AbstractToolset[AgentDeps]]`
+### CLI
 
-- Calls `validate_console_deps_contract()` first.
-- Creates one console toolset via
-  `create_console_toolset(include_execute=False, require_write_approval=True)`.
-- Uses an intentional `cast(...)` because the factory is typed for protocol deps,
-  while `AgentDeps` satisfies that protocol structurally through `backend: LocalBackend`.
+- `cli_chat_loop()` — interactive loop. Each message → `WorkItem` with
+  CRITICAL priority + `PrintStreamHandle` → `enqueue_and_wait()`.
+  History flows through `WorkItemInput.message_history_json`.
 
-### `build_agent(provider: str, agent_name: str, toolsets: list[AbstractToolset[AgentDeps]]) -> Agent[AgentDeps, str]`
+### Entrypoint
 
-- Provider factory with explicit parameters for provider, name, and toolsets.
-- Does provider branching only from the `provider` argument (selection is done in `main()`).
-- `anthropic` branch:
-  - requires `ANTHROPIC_API_KEY` via `required_env()`
-  - uses model from `ANTHROPIC_MODEL` defaulting to `anthropic:claude-3-5-sonnet-latest`
-- `openrouter` branch:
-  - builds `OpenAIChatModel`
-  - uses `OpenAIProvider(base_url="https://openrouter.ai/api/v1", api_key=required_env("OPENROUTER_API_KEY"))`
-  - reads model from `OPENROUTER_MODEL` defaulting to `openai/gpt-4o-mini`
-- Unknown provider raises `SystemExit`.
+- `main()` — load .env → build stack → set runtime → DBOS launch → chat loop
 
-### `main() -> None`
+## Invariants
 
-- Startup sequence is ordered and intentional:
-  1. `load_dotenv(dotenv_path=Path(__file__).with_name(".env"))`
-  2. Read `AI_PROVIDER` and `DBOS_AGENT_NAME` from env
-  3. `build_backend()`
-  4. `build_toolsets()`
-  5. `build_agent(provider, agent_name, toolsets)`
-  6. `DBOS(config=dbos_config)` (defaults include SQLite URL)
-  7. `DBOSAgent(agent, name=agent_name)`
-  8. `DBOS.launch()`
-  9. `dbos_agent.to_cli_sync(deps=AgentDeps(backend=backend))`
-
-## Invariants & Rules
-
-- Required env vars fail fast with `SystemExit`, not `KeyError`.
-- `.env` loads from a path relative to `chat.py` (`Path(__file__).with_name(".env")`), not CWD.
+- All work goes through the queue. No direct `agent.run_sync()` outside workers.
+- Required env vars fail with `SystemExit`, not `KeyError`.
+- `.env` loads relative to `chat.py`, not CWD.
 - Workspace root resolves relative to `chat.py` when not absolute.
-- Workspace directory is auto-created on startup.
-- Backend execute is always disabled (`enable_execute=False`).
-- Write approval is always required (`require_write_approval=True`).
-- Console deps contract is validated at startup (`validate_console_deps_contract()`).
-- `build_toolsets()` uses intentional `cast()` because `AgentDeps` satisfies the console deps protocol structurally via `backend: LocalBackend`.
-- DBOS defaults to SQLite (`sqlite:///dbostest.sqlite`), which is appropriate for development and typically replaced in production.
+- Backend execute always disabled. Write approval always required.
+- Console deps contract validated at startup.
+- Workflow/step functions live in `chat.py` to avoid circular imports.
+- Stream handles are in-process only — not durable, not serialised.
 
 ## Dependencies
 
-- `pydantic-ai-slim[openai,anthropic,cli,dbos,mcp]>=1.59,<2` - core agent framework with provider, CLI, and DBOS extras.
-- `pydantic-ai-backend==0.1.6` - `LocalBackend` and console toolset integration.
-- `python-dotenv>=1.2,<2` - `.env` loading.
-
-Notes:
-- `dbos` is consumed via the `dbos` extra on `pydantic-ai-slim`, not as a direct top-level dependency entry.
-- The `mcp` extra is present in `pyproject.toml` but not currently used directly in `chat.py`.
+- `pydantic-ai-slim[openai,anthropic,cli,dbos,mcp]>=1.59,<2`
+- `pydantic-ai-backend==0.1.6`
+- `python-dotenv>=1.2,<2`
 
 ## Change Log
 
-- 2026-02-15: Added living module spec synced to current `chat.py` implementation, including env vars, startup order, and structural typing contract details. (PR #2)
-
+- 2026-02-15: Unified all work through priority queue. WorkItem model with
+  structured input/output. Stream handles for real-time CLI output. Removed
+  `to_cli_sync()` / `DBOSAgent`. (Issue #8)
