@@ -16,7 +16,7 @@ Edit `.env`:
 - `AGENT_WORKSPACE_ROOT` controls backend workspace location (relative paths resolve from `chat.py`)
 - `SKILLS_DIR` sets the shipped skills directory path (default: `skills`, relative paths resolve from `chat.py`)
 - `CUSTOM_SKILLS_DIR` sets the custom skills directory path (default: `skills`, relative paths resolve inside `AGENT_WORKSPACE_ROOT`)
-- `APPROVAL_DB_PATH` sets where deferred approval envelopes are stored (default: `data/approvals.sqlite`)
+- `APPROVAL_DB_PATH` (optional) overrides where deferred approval envelopes are stored. If unset, uses the SQLite file from `DBOS_SYSTEM_DATABASE_URL`.
 - `APPROVAL_TTL_SECONDS` sets approval expiry in seconds (default: `3600`)
 - Optional DBOS settings:
   - `DBOS_APP_NAME`

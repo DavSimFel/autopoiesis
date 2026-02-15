@@ -208,11 +208,45 @@ class ApprovalStore:
             raise ApprovalVerificationError(
                 "invalid_submission", "Approval submission is missing nonce."
             )
+        validated_decisions = self._validate_decisions(decisions)
+        return {"nonce": nonce, "decisions": validated_decisions}
+
+    def _validate_decisions(self, decisions: Any) -> list[dict[str, Any]]:
         if not isinstance(decisions, list):
             raise ApprovalVerificationError(
                 "invalid_submission", "Approval submission is missing decisions."
             )
-        return {"nonce": nonce, "decisions": decisions}
+        validated: list[dict[str, Any]] = []
+        decision_entries = cast(list[Any], decisions)
+        for entry in decision_entries:
+            if not isinstance(entry, dict):
+                raise ApprovalVerificationError(
+                    "invalid_submission", "Approval decision entry must be an object."
+                )
+            decision = cast(dict[str, Any], entry)
+            tool_call_id = decision.get("tool_call_id")
+            approved = decision.get("approved")
+            denial_message = decision.get("denial_message")
+            if not isinstance(tool_call_id, str) or not tool_call_id:
+                raise ApprovalVerificationError(
+                    "invalid_submission", "Approval decision is missing tool_call_id."
+                )
+            if not isinstance(approved, bool):
+                raise ApprovalVerificationError(
+                    "invalid_submission", "Approval decision approved must be a boolean."
+                )
+            if denial_message is not None and not isinstance(denial_message, str):
+                raise ApprovalVerificationError(
+                    "invalid_submission", "Approval decision denial_message must be a string."
+                )
+            validated.append(
+                {
+                    "tool_call_id": tool_call_id,
+                    "approved": approved,
+                    "denial_message": denial_message,
+                }
+            )
+        return validated
 
     def _verify_bijection(
         self, tool_calls: list[dict[str, Any]], decisions: list[dict[str, Any]]

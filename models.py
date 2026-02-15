@@ -58,11 +58,15 @@ class WorkItemInput(BaseModel):
     for multi-turn conversation continuity. ``deferred_tool_results_json``
     carries serialized approval decisions from a previous deferred tool
     request, allowing the agent to resume after human-in-the-loop approval.
+    ``approval_context_id`` is a stable id shared across re-enqueued work
+    items in a single approval loop so plan verification binds to the same
+    logical turn instead of each queue item id.
     """
 
     prompt: str | None = None
     message_history_json: str | None = None
     deferred_tool_results_json: str | None = None
+    approval_context_id: str | None = None
 
 
 class WorkItemOutput(BaseModel):

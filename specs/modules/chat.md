@@ -34,7 +34,7 @@ that execute work items from the queue.
 | `DBOS_APP_NAME` | No | `pydantic_dbos_agent` | `main()` | DBOS app name |
 | `DBOS_AGENT_NAME` | No | `chat` | `main()` | Agent name |
 | `DBOS_SYSTEM_DATABASE_URL` | No | `sqlite:///dbostest.sqlite` | `main()` | DBOS database URL |
-| `APPROVAL_DB_PATH` | No | `data/approvals.sqlite` | `ApprovalStore.from_env()` | SQLite path for approval envelopes |
+| `APPROVAL_DB_PATH` | No | derived from `DBOS_SYSTEM_DATABASE_URL` | `ApprovalStore.from_env()` | Optional SQLite override for approval envelopes |
 | `APPROVAL_TTL_SECONDS` | No | `3600` | `ApprovalStore.from_env()` | Approval expiry window in seconds |
 | `SKILLS_DIR` | No | `skills` | `_resolve_shipped_skills_dir()` | Shipped skills path, resolves from `chat.py` dir |
 | `CUSTOM_SKILLS_DIR` | No | `skills` | `_resolve_custom_skills_dir()` | Custom skills path, resolves inside `AGENT_WORKSPACE_ROOT` when relative |
@@ -66,7 +66,7 @@ that execute work items from the queue.
 
 ### Deferred Tool Serialization
 
-- `_build_approval_scope(work_item_id, backend, agent_name)` — build live
+- `_build_approval_scope(approval_context_id, backend, agent_name)` — build live
   execution scope for approval hashing/verification
 - `_serialize_deferred_requests(requests, scope, approval_store)` — persist a
   nonce-bound envelope and serialize nonce + plan hash prefix + tool calls
@@ -92,8 +92,8 @@ that execute work items from the queue.
 ### CLI Approval Display
 
 - `_display_approval_requests(requests_json)` — display pending tool calls
-  with tool name and arguments; returns parsed request list
-- `_gather_approvals(requests)` — prompt user for y/n on each tool call
+  with tool name and full arguments; returns parsed approval payload
+- `_gather_approvals(payload)` — prompt user for y/n on each tool call
   (supports approve-all, deny-all, or pick individually); returns serialized
   approval decisions
 
@@ -104,7 +104,8 @@ that execute work items from the queue.
   `enqueue_and_wait()`. If output contains `deferred_tool_requests_json`,
   displays pending tool calls, gathers user approval, and re-enqueues with
   `deferred_tool_results_json` until a final text response is received.
-  History flows through `WorkItemInput.message_history_json`.
+  History flows through `WorkItemInput.message_history_json`. Approval scope
+  continuity flows through `WorkItemInput.approval_context_id`.
 
 ### Entrypoint
 
@@ -116,7 +117,7 @@ that execute work items from the queue.
 2. PydanticAI returns `DeferredToolRequests` instead of executing the tool
 3. Worker serializes the requests into `WorkItemOutput.deferred_tool_requests_json`
 4. Worker stores an approval envelope (nonce + scope + tool calls + plan hash)
-5. CLI displays tool name + args + plan hash prefix, prompts user for approval
+5. CLI displays full tool args + plan hash prefix, prompts user for approval
 6. CLI re-enqueues a new `WorkItem` with nonce + approval decisions
 7. Worker verifies nonce, context hash, and decision bijection; then atomically
    consumes nonce and reconstructs `DeferredToolResults`
@@ -137,6 +138,7 @@ that execute work items from the queue.
 - Workflow/step functions live in `chat.py` to avoid circular imports.
 - Stream handles are in-process only — not durable, not serialised.
 - Deferred approvals are nonce-bound and single-use (atomic consume in SQLite).
+- Invalid approval submissions are rejected before nonce consumption.
 - Deferred tool requests/results are serialized as JSON for queue transport.
 
 ## Dependencies
@@ -157,7 +159,11 @@ that execute work items from the queue.
   (Issue #9)
 - 2026-02-15: Deferred approval envelopes now persist in SQLite with canonical
   plan hashing, context-drift verification, bijection checks, and atomic
-  nonce consumption. Added `APPROVAL_DB_PATH` and `APPROVAL_TTL_SECONDS`.
+  nonce consumption. Added `APPROVAL_TTL_SECONDS` and optional
+  `APPROVAL_DB_PATH` override; default storage follows DBOS SQLite.
+  Approval context now uses a stable `approval_context_id` across
+  re-enqueued work items, and malformed submissions are rejected before
+  nonce consumption.
   (Issue #19)
 - 2026-02-15: Skill system integration. `AgentDeps` moved to `models.py`.
   `build_toolsets()` returns `(toolsets, instructions)`. `build_agent()`

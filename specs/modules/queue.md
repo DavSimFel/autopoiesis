@@ -7,14 +7,14 @@ chat, background research, code generation, reviews. One queue, one path.
 
 ## Status
 
-- **Last updated:** 2026-02-15 (Issue #21)
+- **Last updated:** 2026-02-15 (Issue #19, #21)
 - **Source:** `models.py`, `work_queue.py`, `streaming.py`, `chat.py`
 
 ## Core Concept: WorkItem
 
 A `WorkItem` is the universal unit of work. It has:
 
-- **input** (`WorkItemInput`): prompt + optional message history
+- **input** (`WorkItemInput`): prompt + optional message history + optional deferred approvals
 - **output** (`WorkItemOutput`): agent response + updated history (filled after execution)
 - **payload** (`dict[str, Any]`): arbitrary caller metadata
 
@@ -44,28 +44,30 @@ comes from the final `WorkItemOutput` persisted after completion.
 
 | Field | Type | Notes |
 |-------|------|-------|
-| `prompt` | `str` | Agent input text |
+| `prompt` | `str \| None` | Agent input text (None when resuming approval loop) |
 | `message_history_json` | `str \| None` | Serialised PydanticAI message history |
+| `deferred_tool_results_json` | `str \| None` | Serialized deferred approval decisions |
+| `approval_context_id` | `str \| None` | Stable id across re-enqueued approval loop items |
 
 #### `WorkItemOutput(BaseModel)`
 
 | Field | Type | Notes |
 |-------|------|-------|
-| `text` | `str` | Agent response |
+| `text` | `str \| None` | Agent response (None when requesting approval) |
 | `message_history_json` | `str \| None` | Updated history for next turn |
+| `deferred_tool_requests_json` | `str \| None` | Serialized deferred approval requests |
 
 #### `WorkItem(BaseModel)`
 
 | Field | Type | Default | Notes |
 |-------|------|---------|-------|
-| `id` | `str` | `uuid4().hex[:12]` | Short unique id |
+| `id` | `str` | `uuid4().hex` | Unique id |
 | `type` | `WorkItemType` | required | Intent category |
 | `priority` | `WorkItemPriority` | `NORMAL` | Queue priority |
 | `input` | `WorkItemInput` | required | Structured inputs |
 | `output` | `WorkItemOutput \| None` | `None` | Filled after execution |
 | `payload` | `dict[str, Any]` | `{}` | Arbitrary metadata |
 | `created_at` | `datetime` | `now(UTC)` | Timezone-aware |
-| `max_tokens` | `int \| None` | `None` | Optional token budget |
 
 ### `work_queue.py`
 
@@ -136,3 +138,5 @@ execution so DBOS replay can resume with minimal repeated model work.
   (Issue #21, PR #23)
 - 2026-02-15: Created. WorkItem model, stream handles, unified queue path. (Issue #8)
 - 2026-02-15: Added history checkpoint persistence + crash recovery resume flow. (Issue #21)
+- 2026-02-15: Added deferred-approval transport fields to WorkItem input/output
+  and stable `approval_context_id` for multi-step approval verification. (Issue #19)

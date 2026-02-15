@@ -71,3 +71,29 @@ def test_drift_rejection_does_not_consume_nonce(tmp_path: Path) -> None:
     # The failed attempt must not burn the nonce.
     decisions = store.verify_and_consume(submission_json=submission_json, live_scope=original_scope)
     assert decisions[0]["tool_call_id"] == "call-1"
+
+
+def test_invalid_decision_schema_does_not_consume_nonce(tmp_path: Path) -> None:
+    store = _store(tmp_path / "approvals.sqlite")
+    scope = _scope("w4")
+    nonce, _ = store.create_envelope(scope=scope, tool_calls=_tool_calls())
+    invalid_submission = json.dumps(
+        {
+            "nonce": nonce,
+            "decisions": [
+                {
+                    "tool_call_id": "call-1",
+                    "approved": "yes",
+                    "denial_message": None,
+                }
+            ],
+        }
+    )
+
+    with pytest.raises(ApprovalVerificationError) as exc:
+        store.verify_and_consume(submission_json=invalid_submission, live_scope=scope)
+    assert exc.value.code == "invalid_submission"
+
+    # Invalid submission must not burn the nonce.
+    decisions = store.verify_and_consume(submission_json=_submission(nonce), live_scope=scope)
+    assert decisions[0]["approved"] is True

@@ -16,6 +16,7 @@ from contextvars import ContextVar, Token
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast, get_type_hints
+from uuid import uuid4
 
 from dotenv import load_dotenv
 from pydantic_ai import AbstractToolset, Agent, DeferredToolRequests
@@ -64,9 +65,6 @@ from work_queue import work_queue
 # The union output type for agent runs — str for normal responses,
 # DeferredToolRequests when tools need approval before execution.
 AgentOutput = str | DeferredToolRequests
-
-# Maximum characters to display for a tool argument value in the approval UI.
-_APPROVAL_ARG_DISPLAY_MAX = 200
 
 # ---------------------------------------------------------------------------
 # Runtime state — set once in main(), read by queue workers
@@ -300,10 +298,10 @@ def build_agent(
 
 
 def _build_approval_scope(
-    work_item_id: str, backend: LocalBackend, agent_name: str
+    approval_context_id: str, backend: LocalBackend, agent_name: str
 ) -> ApprovalScope:
     return ApprovalScope(
-        work_item_id=work_item_id,
+        work_item_id=approval_context_id,
         workspace_root=str(Path(backend.root_dir).resolve()),
         agent_name=agent_name,
     )
@@ -403,7 +401,8 @@ def run_agent_step(work_item_dict: dict[str, Any]) -> dict[str, Any]:
     history = _deserialize_history(history_json)
     deps = AgentDeps(backend=rt.backend)
     agent_name = rt.agent.name or os.getenv("DBOS_AGENT_NAME", "chat")
-    scope = _build_approval_scope(item.id, rt.backend, agent_name)
+    approval_context_id = item.input.approval_context_id or item.id
+    scope = _build_approval_scope(approval_context_id, rt.backend, agent_name)
 
     # Reconstruct deferred tool results if this is a resumption
     deferred_results: DeferredToolResults | None = None
@@ -539,21 +538,17 @@ def _display_approval_requests(requests_json: str) -> dict[str, Any]:
         tool_name = req["tool_name"]
         args: Any = req["args"]
         print(f"  [{i}] {tool_name}")
-        if isinstance(args, dict):
-            for arg_name, arg_value in cast(dict[str, object], args).items():
-                display = str(arg_value)
-                if len(display) > _APPROVAL_ARG_DISPLAY_MAX:
-                    display = display[:_APPROVAL_ARG_DISPLAY_MAX] + "..."
-                print(f"      {arg_name}: {display}")
-        else:
-            print(f"      args: {args}")
+        serialized = json.dumps(args, ensure_ascii=True, sort_keys=True, indent=2, allow_nan=False)
+        print("      args:")
+        for line in serialized.splitlines():
+            print(f"        {line}")
     return payload
 
 
 def _gather_approvals(payload: dict[str, Any]) -> str:
     """Prompt the user for approval decisions on each tool call.
 
-    Returns serialized JSON list of approval decisions for
+    Returns serialized JSON payload of approval decisions for
     ``_deserialize_deferred_results``.
     """
     requests = cast(list[dict[str, Any]], payload["requests"])
@@ -649,6 +644,7 @@ def cli_chat_loop() -> None:
         try:
             prompt: str | None = user_input
             deferred_results_json: str | None = None
+            approval_context_id = uuid4().hex
 
             # Approval loop — keeps re-enqueuing until we get a text response
             while True:
@@ -659,6 +655,7 @@ def cli_chat_loop() -> None:
                         prompt=prompt,
                         message_history_json=history_json,
                         deferred_tool_results_json=deferred_results_json,
+                        approval_context_id=approval_context_id,
                     ),
                 )
 
