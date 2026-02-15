@@ -411,11 +411,13 @@ def _gather_approvals(requests: list[dict[str, Any]]) -> str:
         except (EOFError, KeyboardInterrupt):
             answer = "n"
         approved = answer in ("", "y", "yes")
-        decisions.append({
-            "tool_call_id": requests[0]["tool_call_id"],
-            "approved": approved,
-            "denial_message": None if approved else "User denied this action.",
-        })
+        decisions.append(
+            {
+                "tool_call_id": requests[0]["tool_call_id"],
+                "approved": approved,
+                "denial_message": None if approved else "User denied this action.",
+            }
+        )
     else:
         try:
             answer = input("  Approve all? [Y/n/pick] ").strip().lower()
@@ -424,11 +426,13 @@ def _gather_approvals(requests: list[dict[str, Any]]) -> str:
 
         if answer in ("", "y", "yes"):
             for req in requests:
-                decisions.append({
-                    "tool_call_id": req["tool_call_id"],
-                    "approved": True,
-                    "denial_message": None,
-                })
+                decisions.append(
+                    {
+                        "tool_call_id": req["tool_call_id"],
+                        "approved": True,
+                        "denial_message": None,
+                    }
+                )
         elif answer in ("pick", "p"):
             for i, req in enumerate(requests, 1):
                 try:
@@ -436,18 +440,22 @@ def _gather_approvals(requests: list[dict[str, Any]]) -> str:
                 except (EOFError, KeyboardInterrupt):
                     choice = "n"
                 approved = choice in ("", "y", "yes")
-                decisions.append({
-                    "tool_call_id": req["tool_call_id"],
-                    "approved": approved,
-                    "denial_message": None if approved else "User denied this action.",
-                })
+                decisions.append(
+                    {
+                        "tool_call_id": req["tool_call_id"],
+                        "approved": approved,
+                        "denial_message": None if approved else "User denied this action.",
+                    }
+                )
         else:
             for req in requests:
-                decisions.append({
-                    "tool_call_id": req["tool_call_id"],
-                    "approved": False,
-                    "denial_message": "User denied this action.",
-                })
+                decisions.append(
+                    {
+                        "tool_call_id": req["tool_call_id"],
+                        "approved": False,
+                        "denial_message": "User denied this action.",
+                    }
+                )
 
     return json.dumps(decisions)
 
