@@ -5,7 +5,6 @@ Interactive chat uses agent.run_stream() with message_history for multi-turn
 conversation and streaming output.
 """
 
-import asyncio
 import os
 import sys
 from dataclasses import dataclass
@@ -14,7 +13,7 @@ from typing import Any
 
 from dotenv import load_dotenv
 from pydantic_ai import AbstractToolset, Agent
-from pydantic_ai.messages import ModelMessage
+from pydantic_ai.messages import ModelMessage, ModelMessagesTypeAdapter
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 
@@ -33,7 +32,7 @@ except ModuleNotFoundError as exc:
         "Missing backend dependency. Run `uv sync` so `pydantic-ai-backend==0.1.6` is installed."
     ) from exc
 
-from models import TaskPayload, TaskType
+from models import TaskPayload, TaskPriority, TaskType
 from work_queue import work_queue
 
 
@@ -160,23 +159,52 @@ def get_runtime_backend() -> LocalBackend:
 
 
 @DBOS.step()
-def run_agent_step(prompt: str) -> str:
-    """Checkpoint-able single-turn agent execution step for background work."""
+def run_agent_step(prompt: str, message_history_json: str | None = None) -> str:
+    """Checkpoint-able agent execution step.
 
-    result = get_runtime_agent().run_sync(prompt, deps=AgentDeps(backend=get_runtime_backend()))
-    return result.output
+    Accepts optional serialized message_history for multi-turn conversations.
+    Returns JSON with 'output' and 'messages' for history continuity.
+    """
+
+    import json
+
+    agent = get_runtime_agent()
+    backend = get_runtime_backend()
+
+    history: list[ModelMessage] = []
+    if message_history_json:
+        history = ModelMessagesTypeAdapter.validate_json(message_history_json)
+
+    result = agent.run_sync(
+        prompt,
+        deps=AgentDeps(backend=backend),
+        message_history=history,
+    )
+
+    return json.dumps(
+        {
+            "output": result.output,
+            "messages": ModelMessagesTypeAdapter.dump_json(result.all_messages()).decode(),
+        }
+    )
 
 
 @DBOS.workflow()
 def execute_task(payload_dict: dict[str, Any]) -> str:
-    """Execute a background task from the DBOS work queue."""
+    """Execute any task from the DBOS work queue.
+
+    All work — chat, research, code, review — flows through this single
+    workflow. Chat tasks include message_history in context for multi-turn.
+    Returns JSON with output and updated message history.
+    """
 
     payload = TaskPayload.model_validate(payload_dict)
-    return run_agent_step(payload.prompt)
+    history_json = payload.context.get("message_history_json")
+    return run_agent_step(payload.prompt, history_json)
 
 
 def enqueue_task(task_type: TaskType, prompt: str, **kwargs: Any) -> str:
-    """Enqueue background work and return the generated task id."""
+    """Enqueue work and return the generated task id."""
 
     payload = TaskPayload(type=task_type, prompt=prompt, **kwargs)
     with SetEnqueueOptions(priority=int(payload.priority)):
@@ -185,7 +213,7 @@ def enqueue_task(task_type: TaskType, prompt: str, **kwargs: Any) -> str:
 
 
 def enqueue_task_and_wait(task_type: TaskType, prompt: str, **kwargs: Any) -> str:
-    """Enqueue background work and block until `handle.get_result()` returns."""
+    """Enqueue work and block until complete. Returns raw result JSON."""
 
     payload = TaskPayload(type=task_type, prompt=prompt, **kwargs)
     with SetEnqueueOptions(priority=int(payload.priority)):
@@ -193,36 +221,17 @@ def enqueue_task_and_wait(task_type: TaskType, prompt: str, **kwargs: Any) -> st
     return handle.get_result()
 
 
-async def run_chat_turn(prompt: str, history: list[ModelMessage]) -> list[ModelMessage]:
-    """Run a single interactive chat turn with streaming output.
-
-    Uses agent.run_stream() for real-time token streaming and passes
-    message_history for multi-turn conversation continuity. Returns
-    the updated message history including the new exchange.
-    """
-
-    agent = get_runtime_agent()
-    backend = get_runtime_backend()
-    async with agent.run_stream(
-        prompt,
-        deps=AgentDeps(backend=backend),
-        message_history=history,
-    ) as stream:
-        async for chunk in stream.stream_text(delta=True):
-            print(chunk, end="", flush=True)
-        print()
-    return stream.all_messages()
-
-
 def cli_chat_loop() -> None:
-    """Interactive CLI chat loop — all input goes through the queue conceptually.
+    """Interactive CLI chat loop — every message enqueues through the work queue.
 
-    Chat turns use CRITICAL priority and run via run_chat_turn() with streaming.
-    Conversation history persists across turns for multi-turn context.
+    Chat messages enter as TaskType.CHAT with CRITICAL priority.
+    Message history is passed via task context for multi-turn continuity.
     Type 'exit' or Ctrl+C to quit.
     """
 
-    history: list[ModelMessage] = []
+    import json
+
+    history_json: str | None = None
     print("Autopoiesis CLI Chat (type 'exit' to quit)")
     print("---")
 
@@ -240,7 +249,21 @@ def cli_chat_loop() -> None:
             break
 
         try:
-            history = asyncio.run(run_chat_turn(user_input, history))
+            context: dict[str, Any] = {}
+            if history_json:
+                context["message_history_json"] = history_json
+
+            result_json = enqueue_task_and_wait(
+                TaskType.CHAT,
+                user_input,
+                priority=TaskPriority.CRITICAL,
+                context=context,
+            )
+
+            result = json.loads(result_json)
+            print(result["output"])
+            history_json = result["messages"]
+
         except Exception as exc:
             print(f"Error: {exc}", file=sys.stderr)
 
