@@ -166,6 +166,13 @@ def _resolve_skills_dir() -> Path:
     return path
 
 
+_CONSOLE_INSTRUCTIONS = (
+    "You have filesystem tools for reading, writing, and editing files "
+    "in the workspace. Write and edit operations require user approval. "
+    "Shell execution is disabled."
+)
+
+
 def build_toolsets() -> tuple[list[AbstractToolset[AgentDeps]], list[str]]:
     """Build all toolsets and collect their system prompt instructions.
 
@@ -180,7 +187,7 @@ def build_toolsets() -> tuple[list[AbstractToolset[AgentDeps]], list[str]]:
     )
 
     toolsets: list[AbstractToolset[AgentDeps]] = [console, skills_toolset]
-    instructions = [i for i in [skills_instr] if i]
+    instructions = [i for i in [_CONSOLE_INSTRUCTIONS, skills_instr] if i]
     return toolsets, instructions
 
 
