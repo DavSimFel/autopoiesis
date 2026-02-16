@@ -45,7 +45,7 @@ Uses stdlib `pty.openpty()` — zero external dependencies. Enables interactive 
 - **Approval flow**: mutating tools require approval via `ApprovalRequiredToolset` predicate
 - **Feature gate**: `ENABLE_EXECUTE` env var (default `false`) — tools hidden dynamically via `PreparedToolset`
 - **Timeout**: default 30s with kill
-- **Env blocklist**: `_DANGEROUS_ENV_VARS` frozenset blocks `LD_PRELOAD`, `PYTHONPATH`, etc.
+- **Env blocklist**: `_DANGEROUS_ENV_VARS` blocks `ANTHROPIC_API_KEY`, `AWS_SECRET_ACCESS_KEY`, `DATABASE_URL`, `DB_PASSWORD`, `GITHUB_TOKEN`, `LD_PRELOAD`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `PASSWORD`, `PRIVATE_KEY`, `PYTHONPATH`, and `SECRET_KEY`. Explicit `env` values containing these keys are rejected; omitted `env` inherits parent vars with these keys removed.
 - **Log cleanup**: `cleanup_exec_logs(max_age_hours)` runs at startup
 
 ## Observability
@@ -56,6 +56,9 @@ Uses stdlib `pty.openpty()` — zero external dependencies. Enables interactive 
 
 ## Change Log
 
+- 2026-02-16: Fixed `execute`/`execute_pty` env inheritance to filter dangerous
+  parent vars when `env` is omitted, and aligned `_DANGEROUS_ENV_VARS` with
+  `LD_PRELOAD` + `PYTHONPATH`. (Issue #78)
 - 2026-02-16: Replaced full-file reads in `_tail_lines` and `_read_tail` with
   seek-based bounded reads. `process_log` uses streaming line-slice instead of
   loading entire log into memory. Deleted dead `approval_security.py` shim.

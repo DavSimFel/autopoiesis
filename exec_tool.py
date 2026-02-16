@@ -18,16 +18,18 @@ _background_tasks: set[asyncio.Task[None]] = set()
 
 _DANGEROUS_ENV_VARS: frozenset[str] = frozenset(
     {
+        "ANTHROPIC_API_KEY",
         "AWS_SECRET_ACCESS_KEY",
         "DATABASE_URL",
         "DB_PASSWORD",
         "GITHUB_TOKEN",
+        "LD_PRELOAD",
         "OPENAI_API_KEY",
-        "ANTHROPIC_API_KEY",
         "OPENROUTER_API_KEY",
-        "SECRET_KEY",
-        "PRIVATE_KEY",
         "PASSWORD",
+        "PRIVATE_KEY",
+        "PYTHONPATH",
+        "SECRET_KEY",
     }
 )
 
@@ -44,6 +46,14 @@ def validate_env(env: dict[str, str] | None) -> dict[str, str] | None:
         msg = f"Blocked env vars: {', '.join(sorted(blocked))}"
         raise ValueError(msg)
     return env
+
+
+def resolve_env(env: dict[str, str] | None) -> dict[str, str]:
+    """Return a subprocess env with dangerous inherited variables removed."""
+    safe_env = validate_env(env)
+    if safe_env is not None:
+        return safe_env
+    return {k: v for k, v in os.environ.items() if k not in _DANGEROUS_ENV_VARS}
 
 
 def sandbox_cwd(cwd: str | None, workspace_root: Path) -> str:
@@ -248,7 +258,7 @@ async def execute(
     """
     workspace_root = Path(ctx.deps.backend.root_dir)
     safe_cwd = sandbox_cwd(cwd, workspace_root)
-    safe_env = validate_env(env)
+    safe_env = resolve_env(env)
     session_id = exec_registry.new_session_id()
     log_path = exec_registry.log_path_for(workspace_root, session_id)
     proc, master_fd = await _spawn_subprocess(command, safe_cwd, safe_env, log_path)
@@ -283,7 +293,7 @@ async def execute_pty(
     """
     workspace_root = Path(ctx.deps.backend.root_dir)
     safe_cwd = sandbox_cwd(cwd, workspace_root)
-    safe_env = validate_env(env)
+    safe_env = resolve_env(env)
     session_id = exec_registry.new_session_id()
     log_path = exec_registry.log_path_for(workspace_root, session_id)
     proc, master_fd = await _spawn_pty_session(command, safe_cwd, safe_env, log_path)

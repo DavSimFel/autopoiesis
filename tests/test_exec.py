@@ -100,7 +100,14 @@ def test_cleanup_exec_logs(workspace: Path) -> None:
 
 def testvalidate_env_blocks_dangerous() -> None:
     with pytest.raises(ValueError, match="Blocked env vars"):
-        validate_env({"ANTHROPIC_API_KEY": "secret", "HOME": "/root"})
+        validate_env(
+            {
+                "ANTHROPIC_API_KEY": "secret",
+                "HOME": "/root",
+                "LD_PRELOAD": "/tmp/libevil.so",
+                "PYTHONPATH": "/tmp/evil",
+            }
+        )
 
 
 def testvalidate_env_allows_safe() -> None:
@@ -155,6 +162,26 @@ async def test_execute_background(mock_ctx: MagicMock, workspace: Path) -> None:
 async def test_execute_timeout(mock_ctx: MagicMock, workspace: Path) -> None:
     result = await execute(mock_ctx, "sleep 60", timeout=1.0)
     assert result.metadata["exit_code"] != 0  # killed
+
+
+@pytest.mark.asyncio()
+async def test_execute_omitted_env_filters_dangerous_vars(
+    mock_ctx: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "leaked-openai-key")
+    monkeypatch.setenv("PYTHONPATH", "/tmp/leaked-pythonpath")
+    cmd = (
+        "python3 -c "
+        "'import os; "
+        "print(os.getenv(\"OPENAI_API_KEY\", \"<missing>\")); "
+        "print(os.getenv(\"PYTHONPATH\", \"<missing>\"))'"
+    )
+    result = await execute(mock_ctx, cmd, timeout=10.0)
+    output = str(result.return_value)
+    assert "<missing>" in output
+    assert "leaked-openai-key" not in output
+    assert "/tmp/leaked-pythonpath" not in output
 
 
 # --- WorkItemType ---
