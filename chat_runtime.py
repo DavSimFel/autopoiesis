@@ -19,6 +19,12 @@ from approval_policy import ToolPolicyRegistry
 from approval_store import ApprovalStore
 from memory_tools import create_memory_toolset
 from models import AgentDeps
+from prompts import (
+    BASE_SYSTEM_PROMPT,
+    CONSOLE_INSTRUCTIONS,
+    EXEC_INSTRUCTIONS,
+    compose_system_prompt,
+)
 from skills import SkillDirectory, create_skills_toolset
 from toolset_wrappers import wrap_toolsets
 
@@ -132,11 +138,6 @@ def _build_skill_directories() -> list[SkillDirectory]:
     return [SkillDirectory(path=shipped_dir), SkillDirectory(path=custom_dir)]
 
 
-_CONSOLE_INSTRUCTIONS = (
-    "You have filesystem tools for reading, writing, and editing files "
-    "in the workspace. Write and edit operations require user approval."
-)
-
 _READ_ONLY_EXEC_TOOLS: frozenset[str] = frozenset({"process_list", "process_poll", "process_log"})
 
 
@@ -201,23 +202,30 @@ def _build_exec_toolset() -> AbstractToolset[AgentDeps]:
 
 def build_toolsets(
     memory_db_path: str | None = None,
-) -> tuple[list[AbstractToolset[AgentDeps]], list[str]]:
-    """Build all toolsets and collect their system prompt instructions."""
+) -> tuple[list[AbstractToolset[AgentDeps]], str]:
+    """Build all toolsets and return their static capability system prompt."""
     validate_console_deps_contract()
     console = create_console_toolset(include_execute=False, require_write_approval=True)
     skills_toolset, skills_instr = create_skills_toolset(_build_skill_directories())
     toolsets: list[AbstractToolset[AgentDeps]] = [console, skills_toolset]
-    instructions = [i for i in [_CONSOLE_INSTRUCTIONS, skills_instr] if i]
+    system_prompt_fragments: list[str] = [
+        BASE_SYSTEM_PROMPT,
+        CONSOLE_INSTRUCTIONS,
+        skills_instr,
+    ]
 
+    exec_enabled = os.getenv("ENABLE_EXECUTE", "").lower() in ("1", "true", "yes")
     toolsets.append(_build_exec_toolset())
+    if exec_enabled:
+        system_prompt_fragments.append(EXEC_INSTRUCTIONS)
 
     if memory_db_path is not None:
         workspace_root = resolve_workspace_root()
         memory_toolset, memory_instr = create_memory_toolset(memory_db_path, workspace_root)
         toolsets.append(memory_toolset)
-        instructions.append(memory_instr)
+        system_prompt_fragments.append(memory_instr)
 
-    return wrap_toolsets(toolsets), instructions
+    return wrap_toolsets(toolsets), compose_system_prompt(system_prompt_fragments)
 
 
 async def _strict_tool_definitions(
@@ -242,22 +250,21 @@ def build_agent(
     provider: str,
     agent_name: str,
     toolsets: list[AbstractToolset[AgentDeps]],
-    instructions: list[str],
+    system_prompt: str,
+    instructions: list[str] | None = None,
     history_processors: Sequence[HistoryProcessor[AgentDeps]] | None = None,
 ) -> Agent[AgentDeps, str]:
-    """Create the configured agent from explicit provider/name/toolset/instructions."""
-    all_instructions: list[str] = [
-        "You are a helpful coding assistant with filesystem and skill tools.",
-        *instructions,
-    ]
+    """Create the configured agent from explicit provider/name/toolset settings."""
     hp = history_processors or []
+    dynamic_instructions = instructions if instructions is not None else None
     if provider == "anthropic":
         required_env("ANTHROPIC_API_KEY")
         return Agent(
             os.getenv("ANTHROPIC_MODEL", "anthropic:claude-3-5-sonnet-latest"),
             deps_type=AgentDeps,
             toolsets=toolsets,
-            instructions=all_instructions,
+            system_prompt=system_prompt,
+            instructions=dynamic_instructions,
             history_processors=hp,
             name=agent_name,
         )
@@ -273,7 +280,8 @@ def build_agent(
             model,
             deps_type=AgentDeps,
             toolsets=toolsets,
-            instructions=all_instructions,
+            system_prompt=system_prompt,
+            instructions=dynamic_instructions,
             history_processors=hp,
             name=agent_name,
             prepare_tools=_strict_tool_definitions,
