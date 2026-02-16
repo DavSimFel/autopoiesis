@@ -108,8 +108,14 @@ class TestBuildAgent:
 
     def test_empty_instructions_not_coerced(self) -> None:
         """Empty list should stay as empty list, not become None."""
-        from chat_runtime import build_agent
+        from chat_runtime import AgentOptions, build_agent
 
-        agent = build_agent("anthropic", "test", [], "prompt", instructions=[])
+        agent = build_agent(
+            "anthropic",
+            "test",
+            [],
+            "prompt",
+            options=AgentOptions(instructions=[]),
+        )
         # The key assertion: empty list should not be truthy-coerced to None
         assert agent is not None

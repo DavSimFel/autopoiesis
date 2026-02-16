@@ -262,19 +262,27 @@ def build_model_settings() -> ModelSettings | None:
     return settings if settings else None
 
 
+@dataclass
+class AgentOptions:
+    """Optional behavioural knobs for :func:`build_agent`."""
+
+    instructions: list[str] | None = None
+    history_processors: Sequence[HistoryProcessor[AgentDeps]] = ()
+    model_settings: ModelSettings | None = None
+
+
 def build_agent(
     provider: str,
     agent_name: str,
     toolsets: list[AbstractToolset[AgentDeps]],
     system_prompt: str,
-    instructions: list[str] | None = None,
-    history_processors: Sequence[HistoryProcessor[AgentDeps]] | None = None,
-    model_settings: ModelSettings | None = None,
+    options: AgentOptions | None = None,
 ) -> Agent[AgentDeps, str]:
     """Create the configured agent from explicit provider/name/toolset settings."""
-    hp = history_processors or []
-    dynamic_instructions = instructions if instructions is not None else None
-    effective_settings = model_settings or build_model_settings()
+    opts = options or AgentOptions()
+    hp = list(opts.history_processors)
+    dynamic_instructions = opts.instructions if opts.instructions is not None else None
+    effective_settings = opts.model_settings or build_model_settings()
     if provider == "anthropic":
         required_env("ANTHROPIC_API_KEY")
         return Agent(

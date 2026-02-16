@@ -14,6 +14,7 @@ from approval_policy import ToolPolicyRegistry
 from approval_store import ApprovalStore
 from chat_cli import cli_chat_loop
 from chat_runtime import (
+    AgentOptions,
     Runtime,
     build_agent,
     build_backend,
@@ -98,11 +99,13 @@ def main() -> None:
         agent_name,
         toolsets,
         system_prompt,
-        history_processors=[
-            _truncate_processor,
-            _compact_processor,
-            checkpoint_history_processor,
-        ],
+        options=AgentOptions(
+            history_processors=[
+                _truncate_processor,
+                _compact_processor,
+                checkpoint_history_processor,
+            ],
+        ),
     )
     instrument_agent(agent)
     system_database_url = os.getenv(

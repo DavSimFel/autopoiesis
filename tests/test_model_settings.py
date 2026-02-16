@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from pydantic_ai.settings import ModelSettings
 
-from chat_runtime import build_agent, build_model_settings
+from chat_runtime import AgentOptions, build_agent, build_model_settings
 
 _TEMP_HALF = 0.5
 _TEMP_LOW = 0.3
@@ -71,7 +71,8 @@ class TestBuildAgentEndStrategy:
                 provider="anthropic",
                 agent_name="test",
                 toolsets=[],
-                instructions=[],
+                system_prompt="test",
+                options=AgentOptions(instructions=[]),
             )
             assert agent.end_strategy == "exhaustive"
 
@@ -86,8 +87,8 @@ class TestBuildAgentEndStrategy:
                 provider="anthropic",
                 agent_name="test",
                 toolsets=[],
-                instructions=[],
-                model_settings=settings,
+                system_prompt="test",
+                options=AgentOptions(instructions=[], model_settings=settings),
             )
             ms = agent.model_settings
             assert ms is not None
