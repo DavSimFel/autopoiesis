@@ -253,8 +253,12 @@ async def execute(
     log_path = exec_registry.log_path_for(workspace_root, session_id)
     proc, master_fd = await _spawn_subprocess(command, safe_cwd, safe_env, log_path)
     session = exec_registry.ProcessSession(
-        session_id=session_id, command=command, process=proc,
-        log_path=log_path, master_fd=master_fd, background=background,
+        session_id=session_id,
+        command=command,
+        process=proc,
+        log_path=log_path,
+        master_fd=master_fd,
+        background=background,
     )
     return await _finish_session(session, timeout)
 
@@ -284,7 +288,11 @@ async def execute_pty(
     log_path = exec_registry.log_path_for(workspace_root, session_id)
     proc, master_fd = await _spawn_pty_session(command, safe_cwd, safe_env, log_path)
     session = exec_registry.ProcessSession(
-        session_id=session_id, command=command, process=proc,
-        log_path=log_path, master_fd=master_fd, background=background,
+        session_id=session_id,
+        command=command,
+        process=proc,
+        log_path=log_path,
+        master_fd=master_fd,
+        background=background,
     )
     return await _finish_session(session, timeout)

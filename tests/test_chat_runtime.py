@@ -38,10 +38,13 @@ class TestBuildToolsets:
     def _env(self, tmp_path: pytest.TempPathFactory) -> None:  # type: ignore[override]
         workspace = str(tmp_path)
         self._patches = [
-            patch.dict(os.environ, {
-                "AGENT_WORKSPACE_ROOT": workspace,
-                "ANTHROPIC_API_KEY": "test-key",
-            }),
+            patch.dict(
+                os.environ,
+                {
+                    "AGENT_WORKSPACE_ROOT": workspace,
+                    "ANTHROPIC_API_KEY": "test-key",
+                },
+            ),
         ]
         for p in self._patches:
             p.start()
