@@ -8,3 +8,4 @@ Inspirational research and analysis informing autopoiesis development. These are
 | [ai-interface-ux-study.md](ai-interface-ux-study.md) | UI/UX study for human-AI interaction — workflows, interface design, visual language, tech stack | 2026-02-16 |
 | [openclaw-agency-study.md](openclaw-agency-study.md) | Analysis of OpenClaw's high-agency architecture — mechanisms, risks, opportunities | 2026-02-16 |
 | [realtime-data-exchange-patterns.md](realtime-data-exchange-patterns.md) | Real-time data exchange patterns — WebSocket pub/sub, state sync, reconnection, protocol design | 2026-02-16 |
+| [file-based-knowledge-management.md](file-based-knowledge-management.md) | File-based knowledge management — persistence patterns, memory systems, workspace organization | 2026-02-16 |
