@@ -18,6 +18,14 @@ TASKS_FILE="$SCRIPT_DIR/tasks.json"
 
 cd "$REPO_ROOT"
 
+# Load .env if present
+if [ -f "$REPO_ROOT/.env" ]; then
+    set -a
+    # shellcheck disable=SC1091
+    source "$REPO_ROOT/.env"
+    set +a
+fi
+
 export AI_PROVIDER="${AI_PROVIDER:-anthropic}"
 DEFAULT_TIMEOUT="${HARNESS_TIMEOUT:-120}"
 
