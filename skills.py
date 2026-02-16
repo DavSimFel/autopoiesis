@@ -45,6 +45,7 @@ class Skill(BaseModel):
     author: str = ""
     resources: list[str] = []
     instructions: str | None = None
+    instructions_mtime: float | None = None
 
 
 def parse_skill_md(content: str) -> tuple[dict[str, Any], str]:
@@ -147,19 +148,38 @@ def _format_skill_list(cache: dict[str, Skill]) -> str:
     return "\n".join(lines)
 
 
-def _load_skill_instructions(cache: dict[str, Skill], skill_name: str) -> str:
-    """Load and return full instructions for a skill, caching for future calls."""
+def load_skill_instructions(cache: dict[str, Skill], skill_name: str) -> str:
+    """Load and return full instructions for a skill, caching for future calls.
+
+    Instructions are cached after first load but invalidated when the
+    SKILL.md file's mtime changes, so edits during a session are picked up.
+    """
     if skill_name not in cache:
         available = ", ".join(sorted(cache.keys())) if cache else "none"
         return f"Skill '{skill_name}' not found. Available: {available}"
 
     skill = cache[skill_name]
+    skill_file = skill.path / "SKILL.md"
+
+    # Check if cached instructions are stale via file mtime.
+    if skill.instructions is not None and skill.instructions_mtime is not None:
+        try:
+            current_mtime = skill_file.stat().st_mtime
+        except OSError:
+            current_mtime = None
+        if current_mtime is not None and current_mtime != skill.instructions_mtime:
+            skill.instructions = None
+            skill.instructions_mtime = None
+
     if skill.instructions is None:
-        skill_file = skill.path / "SKILL.md"
         if not skill_file.exists():
             return f"SKILL.md not found at {skill.path}"
         content = skill_file.read_text()
         _, skill.instructions = parse_skill_md(content)
+        try:
+            skill.instructions_mtime = skill_file.stat().st_mtime
+        except OSError:
+            skill.instructions_mtime = None
 
     return f"# Skill: {skill.name}\n\n{skill.instructions}"
 
@@ -273,7 +293,7 @@ def create_skills_toolset(
     @toolset.tool
     async def load_skill(ctx: RunContext[AgentDeps], skill_name: str) -> str:
         """Load full instructions for a skill by name (progressive disclosure)."""
-        return _load_skill_instructions(cache, skill_name)
+        return load_skill_instructions(cache, skill_name)
 
     @toolset.tool
     async def read_skill_resource(

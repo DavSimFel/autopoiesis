@@ -111,6 +111,9 @@ Detailed instructions the agent follows when this skill is loaded...
 
 - Skills cache is built once at toolset creation.
 - Skill instructions are `None` until explicitly loaded.
+- Cached instructions are invalidated when the SKILL.md file's mtime
+  changes, so edits during a running session are picked up on next
+  `load_skill` call.
 - Path traversal outside skill directory is blocked.
 - `read_skill_resource` only serves files listed in `Skill.resources`.
 - Missing/empty skill directories produce empty results, never errors.
@@ -129,6 +132,11 @@ Detailed instructions the agent follows when this skill is loaded...
 
 ## Change Log
 
+- 2026-02-16: Added mtime-based cache invalidation for skill instructions.
+  `load_skill` now checks SKILL.md mtime and reloads when the file has
+  changed since last cache. `Skill` model gains `instructions_mtime` field.
+  `_load_skill_instructions` renamed to `load_skill_instructions` (public).
+  (Issue #34)
 - 2026-02-15: Added dual-location skill model (shipped + custom workspace),
   deterministic precedence (custom overrides shipped), shipped `skillmaker`
   skill, and skill quality tools (`validate_skill`, `lint_skill`). (Issue #9)
