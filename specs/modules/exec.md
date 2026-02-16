@@ -56,6 +56,12 @@ Uses stdlib `pty.openpty()` — zero external dependencies. Enables interactive 
 
 ## Change Log
 
+- 2026-02-16: Replaced module-level mutable session dict in
+  `exec_registry.py` with a lock-protected `ExecRegistry` class and
+  injectable registry helpers (`get_registry()` / `set_registry()`).
+  Existing module API (`add/get/list_sessions/mark_exited/reset`) now
+  delegates to the active registry instance for safer concurrent access
+  and easier test isolation. (Issue #83)
 - 2026-02-16: Fixed `execute`/`execute_pty` env inheritance to filter dangerous
   parent vars when `env` is omitted, and aligned `_DANGEROUS_ENV_VARS` with
   `LD_PRELOAD` + `PYTHONPATH`. (Issue #78)

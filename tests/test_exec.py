@@ -77,6 +77,23 @@ def test_mark_exited(workspace: Path) -> None:
     assert session.finished_at is not None
 
 
+def test_registry_can_be_replaced_for_injection(workspace: Path) -> None:
+    proc = MagicMock()
+    session = exec_registry.ProcessSession(
+        session_id="isolated",
+        command="echo isolated",
+        process=proc,
+        log_path=workspace / "isolated.log",
+    )
+    isolated_registry = exec_registry.ExecRegistry()
+    previous = exec_registry.set_registry(isolated_registry)
+    try:
+        exec_registry.add(session)
+        assert exec_registry.get("isolated") is session
+    finally:
+        exec_registry.set_registry(previous)
+
+
 def test_cleanup_exec_logs(workspace: Path) -> None:
     log_dir = workspace / ".tmp" / "exec"
     log_dir.mkdir(parents=True)
