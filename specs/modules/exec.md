@@ -46,3 +46,9 @@ Uses stdlib `pty.openpty()` — zero external dependencies. Enables interactive 
 
 - Issue: #24
 - OpenClaw: `bash-tools.exec-runtime.ts`, `bash-process-registry.ts`
+
+## Tool Descriptions
+
+All exec and process tools include comprehensive docstrings with usage guidance,
+parameter semantics, and cross-references. These docstrings are surfaced to the
+agent model as tool descriptions.
