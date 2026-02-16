@@ -1,4 +1,8 @@
-"""Thin typed wrapper around stdlib pty for async subprocess spawning."""
+"""Thin typed wrapper around stdlib pty for async subprocess spawning.
+
+Dependencies: (stdlib only)
+Wired in: tools/exec_tool.py → execute_pty()
+"""
 
 from __future__ import annotations
 

@@ -1,4 +1,8 @@
-"""In-memory registry for tracked subprocess sessions."""
+"""In-memory registry for tracked subprocess sessions.
+
+Dependencies: (stdlib only)
+Wired in: tools/exec_tool.py, tools/process_tool.py, toolset_builder.py → build_toolsets()
+"""
 
 from __future__ import annotations
 

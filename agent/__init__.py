@@ -1,4 +1,8 @@
-"""Agent runtime, worker, CLI, and context management."""
+"""Agent runtime, worker, CLI, and context management.
+
+Public API: Runtime, AgentOptions, build_agent, cli_chat_loop, enqueue_and_wait
+Internal: cli, context, runtime, truncation, worker
+"""
 
 from agent.cli import cli_chat_loop
 from agent.context import compact_history

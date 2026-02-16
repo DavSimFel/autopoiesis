@@ -1,4 +1,8 @@
-"""Process management tool for inspecting and controlling running sessions."""
+"""Process management tool for inspecting and controlling running sessions.
+
+Dependencies: infra.exec_registry, io_utils, models
+Wired in: toolset_builder.py → build_toolsets()
+"""
 
 from __future__ import annotations
 

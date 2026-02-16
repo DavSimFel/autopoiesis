@@ -3,6 +3,9 @@
 Provides structured memory entries stored in SQLite with full-text search via
 FTS5, plus unstructured workspace memory file searching. Zero external
 dependencies — uses only stdlib sqlite3.
+
+Dependencies: db
+Wired in: tools/memory_tools.py → create_memory_toolset(), infra/subscription_processor.py
 """
 
 from __future__ import annotations

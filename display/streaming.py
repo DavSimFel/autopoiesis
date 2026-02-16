@@ -8,6 +8,9 @@ Usage:
     handle = PrintStreamHandle()
     register_stream(work_item.id, handle)
     # ... worker picks up the handle, streams to it, unregisters when done
+
+Dependencies: display.rich_display (TYPE_CHECKING)
+Wired in: agent/cli.py, agent/worker.py, display/stream_formatting.py
 """
 
 from __future__ import annotations

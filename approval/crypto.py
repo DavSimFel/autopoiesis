@@ -1,4 +1,8 @@
-"""Cryptographic helpers for approval signing keys."""
+"""Cryptographic helpers for approval signing keys.
+
+Dependencies: approval.key_files
+Wired in: approval/keys.py → ApprovalKeyManager
+"""
 
 from __future__ import annotations
 

@@ -4,6 +4,10 @@ Subscriptions are references to files or memory queries that get
 automatically materialized (resolved to current content) before each
 agent turn.  Content is injected into the conversation so the agent
 always sees the freshest version of subscribed resources.
+
+Dependencies: db
+Wired in: toolset_builder.py → build_toolsets(),
+    tools/subscription_tools.py, infra/subscription_processor.py
 """
 
 from __future__ import annotations

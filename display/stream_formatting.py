@@ -2,6 +2,9 @@
 
 Extracts tool-call argument formatting, result summarisation, and the
 event-routing coroutine so that ``chat_worker`` stays under the line limit.
+
+Dependencies: display.streaming, models
+Wired in: agent/worker.py → run_agent_step()
 """
 
 from __future__ import annotations

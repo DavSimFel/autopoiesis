@@ -1,4 +1,8 @@
-"""Terminal UI and streaming display."""
+"""Terminal UI and streaming display.
+
+Public API: StreamHandle, RichStreamHandle, ToolAwareStreamHandle, register_stream, take_stream
+Internal: rich_display, stream_formatting, streaming
+"""
 
 from display.stream_formatting import forward_stream_events
 from display.streaming import (

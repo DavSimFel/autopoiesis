@@ -2,6 +2,9 @@
 
 Exposes subscribe_file, subscribe_memory, unsubscribe, unsubscribe_all,
 and list_subscriptions as agent tools backed by the SubscriptionRegistry.
+
+Dependencies: models, store.subscriptions
+Wired in: toolset_builder.py → build_toolsets()
 """
 
 from __future__ import annotations

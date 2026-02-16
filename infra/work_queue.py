@@ -1,4 +1,8 @@
-"""DBOS queue instances for background agent work."""
+"""DBOS queue instances for background agent work.
+
+Dependencies: dbos
+Wired in: agent/worker.py → enqueue()
+"""
 
 try:
     from dbos import Queue

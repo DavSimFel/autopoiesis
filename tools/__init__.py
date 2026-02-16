@@ -1,4 +1,8 @@
-"""Agent-facing tool definitions."""
+"""Agent-facing tool definitions.
+
+Public API: execute, execute_pty, create_memory_toolset, create_subscription_toolset, wrap_toolsets
+Internal: exec_tool, memory_tools, process_tool, subscription_tools, toolset_wrappers
+"""
 
 from tools.exec_tool import execute, execute_pty
 from tools.memory_tools import create_memory_toolset

@@ -1,4 +1,9 @@
-"""Agent construction and process runtime state for CLI chat."""
+"""Agent construction and process runtime state for CLI chat.
+
+Dependencies: approval.keys, approval.policy, approval.store,
+    model_resolution, models, store.subscriptions, toolset_builder
+Wired in: chat.py → main()
+"""
 
 from __future__ import annotations
 

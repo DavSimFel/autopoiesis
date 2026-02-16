@@ -1,4 +1,8 @@
-"""Cryptographic approval subsystem."""
+"""Cryptographic approval subsystem.
+
+Public API: ApprovalStore, ApprovalKeyManager, ToolPolicyRegistry
+Internal: crypto, key_files, store_schema, store_verify, chat_approval, types
+"""
 
 from approval.chat_approval import (
     build_approval_scope,

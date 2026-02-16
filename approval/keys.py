@@ -1,4 +1,8 @@
-"""Key management and signing for approval envelopes."""
+"""Key management and signing for approval envelopes.
+
+Dependencies: approval.crypto, approval.key_files
+Wired in: chat.py → main(), agent/runtime.py → Runtime
+"""
 
 from __future__ import annotations
 

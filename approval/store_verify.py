@@ -1,4 +1,8 @@
-"""Verification and parsing helpers for approval submissions."""
+"""Verification and parsing helpers for approval submissions.
+
+Dependencies: approval.keys, approval.types
+Wired in: approval/store.py → ApprovalStore.submit()
+"""
 
 from __future__ import annotations
 

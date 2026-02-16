@@ -2,6 +2,9 @@
 
 Wraps any ``AbstractToolset`` to intercept ``call_tool`` and log timing,
 success/failure, and tool metadata via the standard ``logging`` module.
+
+Dependencies: models
+Wired in: toolset_builder.py → build_toolsets()
 """
 
 from __future__ import annotations

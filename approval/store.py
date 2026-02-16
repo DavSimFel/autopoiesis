@@ -1,4 +1,8 @@
-"""SQLite approval envelope storage and verification workflow."""
+"""SQLite approval envelope storage and verification workflow.
+
+Dependencies: approval.keys, approval.store_schema, approval.store_verify, approval.types
+Wired in: chat.py → main(), agent/runtime.py → Runtime
+"""
 
 from __future__ import annotations
 

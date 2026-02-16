@@ -1,4 +1,8 @@
-"""Shared data models and canonicalization helpers for approval security."""
+"""Shared data models and canonicalization helpers for approval security.
+
+Dependencies: (stdlib only)
+Wired in: approval/policy.py, approval/store.py, approval/store_verify.py, agent/worker.py
+"""
 
 from __future__ import annotations
 

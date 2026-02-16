@@ -2,6 +2,9 @@
 
 Configures the OTEL SDK when ``OTEL_EXPORTER_OTLP_ENDPOINT`` is set and
 exposes a module-level tracer for manual span instrumentation.
+
+Dependencies: (stdlib only, optional opentelemetry)
+Wired in: agent/worker.py → run_agent_step()
 """
 
 from __future__ import annotations

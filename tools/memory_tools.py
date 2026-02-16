@@ -2,6 +2,9 @@
 
 Exposes memory_search, memory_get, and memory_save as agent tools backed
 by the SQLite FTS5 memory store and workspace memory files.
+
+Dependencies: models, store.memory
+Wired in: toolset_builder.py → build_toolsets()
 """
 
 from __future__ import annotations

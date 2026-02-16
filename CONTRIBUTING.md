@@ -39,27 +39,28 @@ uv run python chat.py
 
 ## Project Map
 
-All source lives flat in the repo root. No `src/` directory.
+Source is organized into subdirectory packages. Root-level files handle
+entry point wiring and shared utilities.
 
 | Area | Files |
 |------|-------|
 | Entry point | `chat.py` |
-| CLI loop | `chat_cli.py` |
-| Agent builder | `chat_runtime.py` |
-| Queue worker | `chat_worker.py` |
-| Tool wiring | `toolset_builder.py`, `toolset_wrappers.py` |
+| CLI loop | `agent/cli.py` |
+| Agent builder | `agent/runtime.py` |
+| Queue worker | `agent/worker.py` |
+| Context mgmt | `agent/context.py`, `agent/truncation.py` |
+| Tool wiring | `toolset_builder.py`, `tools/toolset_wrappers.py` |
 | System prompt | `prompts.py` |
-| Core types | `models.py`, `work_queue.py` |
-| Exec tools | `exec_tool.py`, `process_tool.py`, `exec_registry.py`, `pty_spawn.py` |
-| Memory tools | `memory_tools.py`, `memory_store.py` |
+| Core types | `models.py`, `infra/work_queue.py` |
+| Exec tools | `tools/exec_tool.py`, `tools/process_tool.py`, `infra/exec_registry.py`, `infra/pty_spawn.py` |
+| Memory tools | `tools/memory_tools.py`, `store/memory.py` |
 | Skills | `skills.py`, `skillmaker_tools.py` |
-| Subscriptions | `subscription_tools.py`, `subscriptions.py`, `subscription_processor.py` |
-| Approval system | `approval_*.py`, `chat_approval.py` |
-| Persistence | `history_store.py`, `db.py` |
-| Display | `streaming.py`, `rich_display.py`, `stream_formatting.py` |
-| Context mgmt | `context_manager.py`, `tool_result_truncation.py` |
+| Subscriptions | `tools/subscription_tools.py`, `store/subscriptions.py`, `infra/subscription_processor.py` |
+| Approval system | `approval/` (types, crypto, keys, key_files, policy, store, chat_approval) |
+| Persistence | `store/history.py`, `db.py` |
+| Display | `display/streaming.py`, `display/rich_display.py`, `display/stream_formatting.py` |
 | Model resolution | `model_resolution.py` |
-| Observability | `otel_tracing.py` |
+| Observability | `infra/otel_tracing.py` |
 | Specs | `specs/` (module specs, decisions, template) |
 | Tests | `tests/` |
 
