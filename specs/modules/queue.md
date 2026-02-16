@@ -98,7 +98,7 @@ either way.
 2. Optionally `register_stream(item.id, handle)` for real-time output
 3. `enqueue(item)` for fire-and-forget, or `enqueue_and_wait(item)` to block
 4. Worker calls `execute_work_item()` → `run_agent_step()`
-5. Worker checks for stream handle: if present → `run_stream()`, else → `run_sync()`
+5. Worker checks for stream handle: if present → `run_stream_sync()`, else → `run_sync()`
 6. Returns `WorkItemOutput` as durable result
 
 ## History Checkpointing
@@ -107,7 +107,7 @@ History checkpointing adds per-round persistence for in-flight work item
 execution so DBOS replay can resume with minimal repeated model work.
 
 - **How it works:** Agent `history_processors` persist serialized message
-  history to SQLite after each model round during `run_sync()` / `run_stream()`.
+  history to SQLite after each model round during `run_sync()` / `run_stream_sync()`.
 - **Recovery flow:** On `run_agent_step()` start, worker loads checkpoint by
   `work_item_id` and prefers it over `WorkItemInput.message_history_json`.
   After successful completion, checkpoint row is cleared.

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import os
 from collections.abc import AsyncIterable
@@ -135,37 +134,34 @@ def _run_streaming(
     """Execute an agent turn with real-time streaming output."""
     output_type: list[type[AgentOutput]] = [str, DeferredToolRequests]
 
-    async def _stream() -> WorkItemOutput:
-        async def _on_events(
-            ctx: RunContext[AgentDeps],
-            events: AsyncIterable[AgentStreamEvent],
-        ) -> None:
-            await forward_stream_events(stream_handle, ctx, events)
+    async def _on_events(
+        ctx: RunContext[AgentDeps],
+        events: AsyncIterable[AgentStreamEvent],
+    ) -> None:
+        await forward_stream_events(stream_handle, ctx, events)
 
+    try:
+        stream = rt.agent.run_stream_sync(
+            turn.prompt,
+            deps=turn.deps,
+            message_history=turn.history,
+            output_type=output_type,
+            deferred_tool_results=turn.deferred_results,
+            event_stream_handler=_on_events,
+        )
         try:
-            async with rt.agent.run_stream(
-                turn.prompt,
-                deps=turn.deps,
-                message_history=turn.history,
-                output_type=output_type,
-                deferred_tool_results=turn.deferred_results,
-                event_stream_handler=_on_events,
-            ) as stream:
-                try:
-                    async for chunk in stream.stream_text(delta=True):
-                        stream_handle.write(chunk)
-                except UserError:
-                    _log.debug("stream_text unavailable (non-text output); skipping")
-                if isinstance(stream_handle, ToolAwareStreamHandle):
-                    stream_handle.finish_thinking()
-                result_output: AgentOutput = await stream.get_output()
-                all_msgs = stream.all_messages()
-        finally:
-            stream_handle.close()
+            for chunk in stream.stream_text(delta=True):
+                stream_handle.write(chunk)
+        except UserError:
+            _log.debug("stream_text unavailable (non-text output); skipping")
+        if isinstance(stream_handle, ToolAwareStreamHandle):
+            stream_handle.finish_thinking()
+        result_output: AgentOutput = stream.get_output()
+        all_msgs = stream.all_messages()
+    finally:
+        stream_handle.close()
 
-        return _build_output(result_output, all_msgs, turn.scope, rt)
-
-    return asyncio.run(_stream())
+    return _build_output(result_output, all_msgs, turn.scope, rt)
 
 
 def _run_sync(

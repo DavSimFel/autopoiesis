@@ -97,7 +97,7 @@ split into focused companion modules.
 
 - `run_agent_step(work_item_dict)` — `@DBOS.step()`. Passes
   `output_type=[str, DeferredToolRequests]` to all agent calls. Checks for
-  stream handle: if present, uses `agent.run_stream()` for real-time output;
+  stream handle: if present, uses `agent.run_stream_sync()` for real-time output;
   otherwise `agent.run_sync()`. If input carries `deferred_tool_results_json`,
   passes reconstructed approvals to the agent. Returns `WorkItemOutput` as dict.
 - `execute_work_item(work_item_dict)` — `@DBOS.workflow()`. Delegates to
