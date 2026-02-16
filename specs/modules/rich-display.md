@@ -82,3 +82,5 @@ protocols. Routes:
 
 - 2026-02-16: Exposed test hooks in `rich_display.py` to eliminate `# pyright: ignore`
   suppressions in test files. (Issue #77)
+- 2026-02-16: Code smell cleanup — improved error messages, removed defensive checks,
+  narrowed exception handling, cached regex. (Issue #89)

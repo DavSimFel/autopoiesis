@@ -77,6 +77,7 @@ jobs:
             ["process_tool.py"]="specs/modules/exec.md"
             ["pty_spawn.py"]="specs/modules/exec.md"
             ["rich_display.py"]="specs/modules/rich-display.md"
+            ["run_simple.py"]="specs/modules/chat.md"
             ["skillmaker_tools.py"]="specs/modules/skillmaker-tools.md"
             ["skills.py"]="specs/modules/skills.md"
             ["stream_formatting.py"]="specs/modules/rich-display.md"

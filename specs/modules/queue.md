@@ -147,3 +147,6 @@ execution so DBOS replay can resume with minimal repeated model work.
   CLI signs decisions before re-enqueue; worker verifies signature/context/bijection
   before atomic nonce consumption. Transport schema remains `nonce + decisions`.
   (Issue #19)
+
+- 2026-02-16: Code smell cleanup — improved error messages, removed defensive checks,
+  narrowed exception handling, cached regex. (Issue #89)
