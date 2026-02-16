@@ -12,14 +12,23 @@ from approval_keys import ApprovalKeyManager
 from approval_policy import ToolPolicyRegistry
 from approval_store import ApprovalStore
 from chat_cli import cli_chat_loop
-from chat_runtime import Runtime, build_agent, build_backend, build_toolsets, set_runtime
+from chat_runtime import (
+    Runtime,
+    build_agent,
+    build_backend,
+    build_toolsets,
+    resolve_workspace_root,
+    set_runtime,
+)
 from chat_worker import checkpoint_history_processor
+from context_manager import compact_history
 from history_store import (
     cleanup_stale_checkpoints,
     init_history_store,
     resolve_history_db_path,
 )
 from memory_store import init_memory_store, resolve_memory_db_path
+from tool_result_truncation import truncate_tool_results
 
 try:
     from dbos import DBOS, DBOSConfig
@@ -76,8 +85,17 @@ def main() -> None:
         provider,
         agent_name,
         toolsets,
+<<<<<<< HEAD
         system_prompt,
         history_processors=[checkpoint_history_processor],
+=======
+        instructions,
+        history_processors=[
+            lambda msgs: truncate_tool_results(msgs, resolve_workspace_root()),
+            lambda msgs: compact_history(msgs),
+            checkpoint_history_processor,
+        ],
+>>>>>>> 2a033a4 (feat(context): sliding window with smart truncation (#27))
     )
     system_database_url = os.getenv(
         "DBOS_SYSTEM_DATABASE_URL",
