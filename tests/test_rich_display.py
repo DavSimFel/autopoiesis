@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 from rich_display import DisplayChannel, RichDisplayManager
 
 
-def _channels(mgr: RichDisplayManager) -> dict[str, Any]:
-    """Access internal channels dict (test helper)."""
-    return mgr._channels  # pyright: ignore[reportPrivateUsage]
+def _channels(mgr: RichDisplayManager) -> dict[str, DisplayChannel]:
+    """Expose channel snapshot via the public manager API."""
+    return mgr.channels_snapshot()
 
 
 def test_display_channel_defaults() -> None:

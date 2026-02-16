@@ -170,6 +170,11 @@ class RichDisplayManager:
                 return
         self._live.start()
 
+    def channels_snapshot(self) -> dict[str, DisplayChannel]:
+        """Return a shallow copy of channel state for diagnostics."""
+        with self._lock:
+            return dict(self._channels)
+
     # -- rendering -----------------------------------------------------------
 
     def _render_tree(self) -> Tree:

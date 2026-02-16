@@ -57,7 +57,7 @@ Startup order (sequence matters):
 ## Code Style
 - Strict typing (`pyright strict`), ruff enforced
 - Max file: 300 lines. Max function: 50 lines. Max complexity: 10.
-- No `# type: ignore`, no `# noqa`, no lint suppressions — fix the code
+- No `# noqa`, no Pyright ignore directives, and no type-ignore directives — fix the code
 - Comments explain WHY, never WHAT. No commented-out code.
 - No TODOs without issue numbers: `# TODO(#42): description`
 - One logical change per commit
@@ -96,7 +96,7 @@ Never merge the next PR until main is green.
 - Never log API keys or full auth headers
 
 ## Anti-Patterns (instant PR rejection)
-1. Lint/type suppressions (`# type: ignore`, `# noqa`, `# pyright: ignore`)
+1. Lint/type suppressions (`# noqa`, any Pyright ignore directive, any type-ignore directive)
 2. Weakening lint rules to pass CI
 3. Files >300 lines
 4. Functions >50 lines

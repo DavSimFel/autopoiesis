@@ -263,3 +263,6 @@ meaningless empty user message that can skew tool-call behavior.
 Capability text (exec, memory, skills) is generated conditionally based on what's
 actually enabled. No contradictory "disabled/enabled" text is emitted. Instructions
 describe actual enforcement honestly — cwd/path validation, not hard sandbox.
+
+- 2026-02-16: Exposed test hooks in `chat_runtime.py` to eliminate `# pyright: ignore`
+  suppressions in test files. (Issue #77)

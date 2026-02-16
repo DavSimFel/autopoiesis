@@ -79,3 +79,6 @@ protocols. Routes:
   per-tool summary channels, thinking/reasoning stream, approval
   pause/resume, non-TTY fallback, and plain-text final output.
   (Issue #25)
+
+- 2026-02-16: Exposed test hooks in `rich_display.py` to eliminate `# pyright: ignore`
+  suppressions in test files. (Issue #77)
