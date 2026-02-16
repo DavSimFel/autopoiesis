@@ -68,3 +68,5 @@ The processor chain order in `chat.py`:
 - `memory_store.py` — for memory subscription resolution (FTS5 search)
 - PydanticAI `HistoryProcessor` — for message injection
 - PydanticAI `ModelRequest.metadata` — for tagging materialization messages
+
+- 2026-02-16: Replaced inline WAL pragma with shared `open_db()` from `db.py`. (Issue #84)

@@ -18,6 +18,8 @@ from pathlib import Path
 from typing import Literal
 from uuid import uuid4
 
+from db import open_db
+
 logger = logging.getLogger(__name__)
 
 MAX_SUBSCRIPTIONS = 10
@@ -78,16 +80,12 @@ class SubscriptionRegistry:
 
     def _init_db(self) -> None:
         Path(self._db_path).parent.mkdir(parents=True, exist_ok=True)
-        with closing(sqlite3.connect(self._db_path)) as conn, conn:
-            conn.execute("PRAGMA journal_mode=WAL")
+        with closing(open_db(Path(self._db_path))) as conn, conn:
             conn.execute(_CREATE_TABLE_SQL)
             conn.commit()
 
     def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self._db_path)
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.row_factory = sqlite3.Row
-        return conn
+        return open_db(Path(self._db_path))
 
     def add(
         self,

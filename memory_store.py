@@ -9,11 +9,12 @@ from __future__ import annotations
 
 import logging
 import re
-import sqlite3
 from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
+
+from db import open_db
 
 logger = logging.getLogger(__name__)
 
@@ -74,8 +75,7 @@ def _ensure_parent_dir(db_path: str) -> None:
 def init_memory_store(db_path: str) -> None:
     """Create tables, FTS5 virtual table, and sync triggers."""
     _ensure_parent_dir(db_path)
-    with closing(sqlite3.connect(db_path)) as conn, conn:
-        conn.execute("PRAGMA journal_mode=WAL")
+    with closing(open_db(Path(db_path))) as conn, conn:
         conn.execute(_CREATE_ENTRIES_SQL)
         conn.execute(_CREATE_FTS_SQL)
         conn.executescript(_CREATE_TRIGGERS_SQL)
@@ -94,8 +94,7 @@ def save_memory(
     now = datetime.now(UTC).isoformat()
     topics_str = ",".join(topics)
     _ensure_parent_dir(db_path)
-    with closing(sqlite3.connect(db_path)) as conn, conn:
-        conn.execute("PRAGMA journal_mode=WAL")
+    with closing(open_db(Path(db_path))) as conn, conn:
         conn.execute(
             """
             INSERT INTO memory_entries
@@ -118,9 +117,7 @@ def search_memory(
     fts_query = _sanitize_fts_query(query)
     if not fts_query:
         return []
-    with closing(sqlite3.connect(db_path)) as conn, conn:
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.row_factory = sqlite3.Row
+    with closing(open_db(Path(db_path))) as conn, conn:
         rows = conn.execute(
             """
             SELECT e.id, e.timestamp, e.session_id, e.summary, e.topics

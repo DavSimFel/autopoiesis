@@ -52,3 +52,6 @@ Persistent chat memory with semantic search via SQLite FTS5. The agent retains k
 - Issue: #26
 - Reliability hardening: #44
 - Foundation for: #27 (sliding window context), #28 (subscriptions)
+
+- 2026-02-16: Extracted shared `db.py` connection factory (`open_db()`); replaced inline
+  WAL pragma in `history_store.py` and `memory_store.py`. (Issue #84)

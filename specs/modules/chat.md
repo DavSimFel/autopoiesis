@@ -266,3 +266,5 @@ describe actual enforcement honestly — cwd/path validation, not hard sandbox.
 
 - 2026-02-16: Exposed test hooks in `chat_runtime.py` to eliminate `# pyright: ignore`
   suppressions in test files. (Issue #77)
+- 2026-02-16: Replaced inline WAL pragma in `approval_store.py` with shared `open_db()`;
+  added proper `Row` typing in `approval_store_schema.py` migration. (Issues #84, #91)
