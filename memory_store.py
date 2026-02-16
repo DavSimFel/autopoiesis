@@ -208,7 +208,7 @@ def get_memory_file_snippet(
 ) -> str:
     """Read a snippet from a workspace memory file."""
     resolved = (workspace_root / path).resolve()
-    if not str(resolved).startswith(str(workspace_root.resolve())):
+    if not resolved.is_relative_to(workspace_root.resolve()):
         return "Error: path escapes workspace root."
     if not resolved.is_file():
         return f"Error: file not found: {path}"
