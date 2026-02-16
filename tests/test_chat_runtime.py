@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import cast
 from unittest.mock import patch
 
 import pytest
@@ -208,3 +209,36 @@ class TestBuildAgent:
             os.environ.pop("ANTHROPIC_API_KEY", None)
             with pytest.raises(SystemExit, match="Missing required"):
                 build_agent("anthropic", "test", [], "prompt")
+
+
+class TestRuntimeRegistry:
+    """Tests for lock-protected runtime registry injection and wrappers."""
+
+    def test_get_before_set_raises(self) -> None:
+        from chat_runtime import RuntimeRegistry
+
+        registry = RuntimeRegistry()
+        with pytest.raises(RuntimeError, match="Runtime not initialised"):
+            registry.get()
+
+    def test_wrappers_use_injected_registry(self) -> None:
+        from chat_runtime import (
+            Runtime,
+            RuntimeRegistry,
+            get_runtime,
+            reset_runtime,
+            set_runtime,
+            set_runtime_registry,
+        )
+
+        runtime = cast(Runtime, object())
+        injected = RuntimeRegistry()
+        previous = set_runtime_registry(injected)
+        try:
+            set_runtime(runtime)
+            assert get_runtime() is runtime
+            reset_runtime()
+            with pytest.raises(RuntimeError, match="Runtime not initialised"):
+                get_runtime()
+        finally:
+            set_runtime_registry(previous)

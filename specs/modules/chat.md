@@ -81,7 +81,10 @@ split into focused companion modules.
 ### Runtime State
 
 - `Runtime` dataclass holds agent + backend + approval store + unlocked key manager + tool policy for the process lifetime
-- `set_runtime()` / `get_runtime()` — set in `main()`, read by workers
+- `RuntimeRegistry` provides lock-protected runtime storage with
+  `set_runtime()` / `get_runtime()` wrappers for application code
+- `set_runtime_registry()` / `get_runtime_registry()` allow test injection
+  and `reset_runtime()` clears process runtime in tests
 - `_CheckpointContext` + `ContextVar` store active checkpoint metadata per
   execution context for history processor writes
 
@@ -180,12 +183,12 @@ split into focused companion modules.
 
 ## Change Log
 
-- 2026-02-16: Split runtime construction responsibilities into
-  `model_resolution.py` (provider/model/env resolution),
-  `toolset_builder.py` (workspace/backend/toolset assembly + strict tool
-  schema prep), and a slimmer `chat_runtime.py` (runtime singleton +
-  agent construction/instrumentation). Updated `chat.py` and tests to
-  import from the focused modules. (Issue #76)
+- 2026-02-16: Replaced mutable module-global runtime singleton with
+  `RuntimeRegistry` in `chat_runtime.py`. Runtime access now uses
+  lock-protected registry storage with injectable helpers
+  (`get_runtime_registry()` / `set_runtime_registry()`) and explicit
+  `reset_runtime()` support for tests. Existing `get_runtime()` /
+  `set_runtime()` call sites remain stable wrappers. (Issue #83)
 - 2026-02-16: FallbackModel for provider resilience. When both
   `ANTHROPIC_API_KEY` and `OPENROUTER_API_KEY` are set, wraps primary
   and alternate models in `FallbackModel` for automatic retry on provider

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import threading
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -42,20 +43,61 @@ class AgentOptions:
     model_settings: ModelSettings | None = None
 
 
-_runtime: Runtime | None = None
+class RuntimeRegistry:
+    """Thread-safe storage for process-wide runtime dependencies."""
+
+    def __init__(self) -> None:
+        self._runtime: Runtime | None = None
+        self._lock = threading.Lock()
+
+    def set(self, runtime: Runtime) -> None:
+        """Store runtime after startup wiring completes."""
+        with self._lock:
+            self._runtime = runtime
+
+    def get(self) -> Runtime:
+        """Return configured runtime, raising when startup has not run."""
+        with self._lock:
+            runtime = self._runtime
+        if runtime is None:
+            raise RuntimeError("Runtime not initialised. Start the app via main().")
+        return runtime
+
+    def reset(self) -> None:
+        """Clear configured runtime for tests."""
+        with self._lock:
+            self._runtime = None
+
+
+_runtime_registry = RuntimeRegistry()
+
+
+def get_runtime_registry() -> RuntimeRegistry:
+    """Return the active runtime registry."""
+    return _runtime_registry
+
+
+def set_runtime_registry(registry: RuntimeRegistry) -> RuntimeRegistry:
+    """Replace the active runtime registry and return the previous one."""
+    global _runtime_registry
+    previous = _runtime_registry
+    _runtime_registry = registry
+    return previous
 
 
 def set_runtime(runtime: Runtime) -> None:
     """Set process-wide runtime after startup wiring is complete."""
-    global _runtime
-    _runtime = runtime
+    _runtime_registry.set(runtime)
 
 
 def get_runtime() -> Runtime:
     """Fetch process-wide runtime or raise when uninitialized."""
-    if _runtime is None:
-        raise RuntimeError("Runtime not initialised. Start the app via main().")
-    return _runtime
+    return _runtime_registry.get()
+
+
+def reset_runtime() -> None:
+    """Clear process-wide runtime (testing only)."""
+    _runtime_registry.reset()
 
 
 def build_agent(
