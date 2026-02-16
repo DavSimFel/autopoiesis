@@ -1,0 +1,88 @@
+"""Integration tests for chat checkpoint recovery behavior."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, cast
+
+from _pytest.monkeypatch import MonkeyPatch
+
+import chat
+from history_store import init_history_store, load_checkpoint, save_checkpoint
+from models import WorkItem, WorkItemInput, WorkItemPriority, WorkItemType
+
+
+@dataclass
+class _FakeRunResult:
+    output: str
+
+    def all_messages(self) -> list[Any]:
+        return []
+
+
+@dataclass
+class _FakeAgent:
+    captured_message_history: list[Any] | None = None
+
+    def run_sync(
+        self,
+        prompt: str,
+        *,
+        deps: Any,
+        message_history: list[Any],
+        output_type: list[type[Any]],
+        deferred_tool_results: Any,
+    ) -> _FakeRunResult:
+        self.captured_message_history = message_history
+        return _FakeRunResult(output="ok")
+
+
+@dataclass
+class _FakeRuntime:
+    agent: Any
+    backend: Any
+    history_db_path: str
+
+
+def _fake_deserialize_history(history_json: str | None) -> list[str]:
+    if history_json is None:
+        return []
+    return [f"decoded:{history_json}"]
+
+
+def _fake_serialize_history(messages: list[Any]) -> str:
+    del messages
+    return "serialized-history"
+
+
+def test_run_agent_step_prefers_checkpoint_history_and_clears_checkpoint(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    history_db = tmp_path / "history.sqlite"
+    init_history_store(str(history_db))
+    save_checkpoint(str(history_db), "work-item-1", "checkpoint-history", 2)
+
+    fake_agent = _FakeAgent()
+    runtime = _FakeRuntime(
+        agent=cast(Any, fake_agent),
+        backend=cast(Any, object()),
+        history_db_path=str(history_db),
+    )
+    monkeypatch.setattr(chat, "_get_runtime", lambda: runtime)
+    monkeypatch.setattr(chat, "_deserialize_history", _fake_deserialize_history)
+    monkeypatch.setattr(chat, "_serialize_history", _fake_serialize_history)
+
+    item = WorkItem(
+        id="work-item-1",
+        type=WorkItemType.CHAT,
+        priority=WorkItemPriority.CRITICAL,
+        input=WorkItemInput(prompt="Hello", message_history_json="stale-history"),
+    )
+
+    output = chat.run_agent_step(item.model_dump(mode="json"))
+
+    assert fake_agent.captured_message_history == ["decoded:checkpoint-history"]
+    assert output["text"] == "ok"
+    assert load_checkpoint(str(history_db), "work-item-1") is None

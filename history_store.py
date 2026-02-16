@@ -69,13 +69,17 @@ def save_checkpoint(db_path: str, work_item_id: str, history_json: str, round_co
         conn.commit()
 
 
-def load_checkpoint(db_path: str, work_item_id: str) -> tuple[str, int] | None:
-    """Load one checkpoint row by work item id."""
+def load_checkpoint(db_path: str, work_item_id: str) -> str | None:
+    """Load one checkpoint row by work item id.
+
+    Returns ``None`` when the row is missing or when the checkpoint version
+    is stale compared to this process.
+    """
     _ensure_parent_dir(db_path)
     with sqlite3.connect(db_path) as conn:
         row = conn.execute(
             """
-            SELECT history_json, round_count
+            SELECT history_json, checkpoint_version
             FROM agent_history_checkpoints
             WHERE work_item_id = ?
             """,
@@ -83,7 +87,10 @@ def load_checkpoint(db_path: str, work_item_id: str) -> tuple[str, int] | None:
         ).fetchone()
     if row is None:
         return None
-    return str(row[0]), int(row[1])
+    checkpoint_version = int(row[1])
+    if checkpoint_version != _CHECKPOINT_VERSION:
+        return None
+    return str(row[0])
 
 
 def clear_checkpoint(db_path: str, work_item_id: str) -> None:

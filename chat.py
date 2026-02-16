@@ -12,13 +12,14 @@ import asyncio
 import json
 import os
 import sys
+from contextvars import ContextVar, Token
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast, get_type_hints
 
 from dotenv import load_dotenv
 from pydantic_ai import AbstractToolset, Agent, DeferredToolRequests
-from pydantic_ai.messages import ModelMessage, ModelMessagesTypeAdapter
+from pydantic_ai.messages import ModelMessage, ModelMessagesTypeAdapter, ModelResponse
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.tools import DeferredToolResults, ToolDenied
@@ -79,8 +80,19 @@ class _Runtime:
     history_db_path: str
 
 
+@dataclass(frozen=True)
+class _CheckpointContext:
+    """Per-run checkpoint metadata used by history processors."""
+
+    db_path: str
+    work_item_id: str
+
+
 _runtime: _Runtime | None = None
-_active_checkpoint: dict[str, str] | None = None
+_active_checkpoint_context: ContextVar[_CheckpointContext | None] = ContextVar(
+    "active_checkpoint_context",
+    default=None,
+)
 
 
 def _set_runtime(agent: Agent[AgentDeps, str], backend: LocalBackend, history_db_path: str) -> None:
@@ -326,20 +338,18 @@ def _serialize_history(messages: list[ModelMessage]) -> str:
 
 def _count_history_rounds(messages: list[ModelMessage]) -> int:
     """Count completed model rounds from serialized message history."""
-    model_responses = sum(
-        1 for message in messages if message.__class__.__name__ == "ModelResponse"
-    )
+    model_responses = sum(1 for message in messages if isinstance(message, ModelResponse))
     return model_responses if model_responses > 0 else len(messages)
 
 
 def _checkpoint_history_processor(messages: list[ModelMessage]) -> list[ModelMessage]:
     """Persist an in-flight checkpoint whenever the active work item updates history."""
-    checkpoint = _active_checkpoint
+    checkpoint = _active_checkpoint_context.get()
     if checkpoint is None:
         return messages
     save_checkpoint(
-        db_path=checkpoint["db_path"],
-        work_item_id=checkpoint["work_item_id"],
+        db_path=checkpoint.db_path,
+        work_item_id=checkpoint.work_item_id,
         history_json=_serialize_history(messages),
         round_count=_count_history_rounds(messages),
     )
@@ -360,8 +370,8 @@ def run_agent_step(work_item_dict: dict[str, Any]) -> dict[str, Any]:
     """
     rt = _get_runtime()
     item = WorkItem.model_validate(work_item_dict)
-    recovered = load_checkpoint(rt.history_db_path, item.id)
-    history_json = recovered[0] if recovered is not None else item.input.message_history_json
+    recovered_history_json = load_checkpoint(rt.history_db_path, item.id)
+    history_json = recovered_history_json or item.input.message_history_json
     history = _deserialize_history(history_json)
     deps = AgentDeps(backend=rt.backend)
 
@@ -376,8 +386,9 @@ def run_agent_step(work_item_dict: dict[str, Any]) -> dict[str, Any]:
 
     stream_handle = take_stream(item.id)
     output_type: list[type[AgentOutput]] = [str, DeferredToolRequests]
-    global _active_checkpoint
-    _active_checkpoint = {"db_path": rt.history_db_path, "work_item_id": item.id}
+    checkpoint_token: Token[_CheckpointContext | None] = _active_checkpoint_context.set(
+        _CheckpointContext(db_path=rt.history_db_path, work_item_id=item.id)
+    )
 
     try:
         if stream_handle is not None:
@@ -435,7 +446,7 @@ def run_agent_step(work_item_dict: dict[str, Any]) -> dict[str, Any]:
                     message_history_json=_serialize_history(result.all_messages()),
                 )
     finally:
-        _active_checkpoint = None
+        _active_checkpoint_context.reset(checkpoint_token)
 
     clear_checkpoint(rt.history_db_path, item.id)
     return output.model_dump()
