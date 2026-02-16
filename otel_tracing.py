@@ -70,7 +70,9 @@ def _try_configure_sdk() -> None:
     )
 
     tracer_provider = TracerProvider(resource=resource)
-    exporter = OTLPSpanExporter(endpoint=endpoint, insecure=True)
+    # Respect standard OTEL env var; default insecure for local dev.
+    insecure = os.getenv("OTEL_EXPORTER_OTLP_INSECURE", "true").lower() == "true"
+    exporter = OTLPSpanExporter(endpoint=endpoint, insecure=insecure)
     tracer_provider.add_span_processor(BatchSpanProcessor(exporter))
     trace_mod.set_tracer_provider(tracer_provider)
     _log.info("OTEL tracing enabled → %s (service=%s)", endpoint, service_name)
