@@ -16,8 +16,9 @@ between Anthropic and OpenRouter. Python 3.12+, `uv` only.
 - Lint all: `uv run ruff check .`
 - Format: `uv run ruff format path/to/file.py`
 - Typecheck: `uv run pyright path/to/file.py`
+- Test: `uv run pytest`
 - Compile check: `python3 -m py_compile chat.py`
-- No automated tests yet — do not claim tests passed.
+- Automated tests exist — ensure they pass before claiming completion.
 
 ## Architecture
 Entry point: `chat.py` (single file)

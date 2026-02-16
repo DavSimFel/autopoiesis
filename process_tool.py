@@ -14,6 +14,8 @@ from pydantic_ai.messages import ToolReturn
 import exec_registry
 from models import AgentDeps
 
+_TAIL_BYTES_PER_LINE: int = 256
+
 
 def _session_info(s: exec_registry.ProcessSession) -> dict[str, Any]:
     return {
@@ -75,21 +77,21 @@ async def process_log(
     """
     session = _require_session(session_id)
     try:
-        text = session.log_path.read_text(errors="replace")
+        total = _count_lines(session.log_path)
+        start, stop, _ = slice(offset, offset + limit).indices(total)
+        selected = _read_line_slice(session.log_path, start, stop)
     except OSError:
         return ToolReturn(
             return_value="(no log output)",
             metadata={"session_id": session_id, "log_path": str(session.log_path), "total": 0},
         )
-    all_lines = text.splitlines()
-    selected = all_lines[offset : offset + limit]
     content = "\n".join(selected) if selected else "(empty)"
     return ToolReturn(
         return_value=content,
         metadata={
             "session_id": session_id,
             "log_path": str(session.log_path),
-            "total": len(all_lines),
+            "total": total,
         },
     )
 
@@ -162,9 +164,44 @@ async def process_kill(
 
 
 def _read_tail(path: Path, n: int) -> list[str]:
-    try:
-        text = path.read_text(errors="replace")
-    except OSError:
+    if n <= 0:
         return []
-    lines = text.splitlines()
+    data = _read_tail_bytes(path, n * _TAIL_BYTES_PER_LINE)
+    if not data:
+        return []
+    lines = data.decode("utf-8", errors="replace").splitlines()
     return lines[-n:] if len(lines) > n else lines
+
+
+def _read_tail_bytes(path: Path, max_bytes: int) -> bytes:
+    if max_bytes <= 0:
+        return b""
+    try:
+        with path.open("rb") as log_file:
+            log_file.seek(0, os.SEEK_END)
+            size = log_file.tell()
+            if size == 0:
+                return b""
+            read_size = min(size, max_bytes)
+            log_file.seek(-read_size, os.SEEK_END)
+            return log_file.read(read_size)
+    except OSError:
+        return b""
+
+
+def _count_lines(path: Path) -> int:
+    with path.open("rb") as log_file:
+        return sum(1 for _ in log_file)
+
+
+def _read_line_slice(path: Path, start: int, stop: int) -> list[str]:
+    if stop <= start:
+        return []
+    selected: list[str] = []
+    with path.open("r", encoding="utf-8", errors="replace") as log_file:
+        for line_index, raw_line in enumerate(log_file):
+            if line_index >= stop:
+                break
+            if line_index >= start:
+                selected.append(raw_line.rstrip("\r\n"))
+    return selected

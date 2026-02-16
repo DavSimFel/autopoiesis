@@ -56,6 +56,10 @@ Uses stdlib `pty.openpty()` — zero external dependencies. Enables interactive 
 
 ## Change Log
 
+- 2026-02-16: Replaced full-file reads in `_tail_lines` and `_read_tail` with
+  seek-based bounded reads. `process_log` uses streaming line-slice instead of
+  loading entire log into memory. Deleted dead `approval_security.py` shim.
+  Guarded `dbos` import in `work_queue.py` with fail-fast `SystemExit`. (Issue #45)
 - 2026-02-16: Fixed `sandbox_cwd` path confinement to use `Path.is_relative_to()`
   instead of string prefix matching, preventing sibling-directory escape. (Issue #42)
 

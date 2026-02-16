@@ -1,6 +1,9 @@
 """DBOS queue instances for background agent work."""
 
-from dbos import Queue
+try:
+    from dbos import Queue
+except ImportError as exc:
+    raise SystemExit("DBOS not installed. Run: uv sync") from exc
 
 work_queue = Queue(
     "agent_work",
