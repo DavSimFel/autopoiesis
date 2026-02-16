@@ -126,18 +126,17 @@ def testsandbox_cwd_allows_subdir(workspace: Path) -> None:
 @pytest.mark.asyncio()
 async def test_execute_foreground(mock_ctx: MagicMock, workspace: Path) -> None:
     result = await execute(mock_ctx, "echo hello", timeout=10.0)
-    assert result["exit_code"] == 0
-    assert result["session_id"]
-    assert any("hello" in line for line in result["output_tail"])
+    assert result.metadata["exit_code"] == 0
+    assert result.metadata["session_id"]
+    assert "hello" in str(result.return_value)
 
 
 @pytest.mark.asyncio()
 async def test_execute_background(mock_ctx: MagicMock, workspace: Path) -> None:
     result = await execute(mock_ctx, "sleep 60", background=True, timeout=5.0)
-    assert result["background"] is True
-    assert result["exit_code"] is None
+    assert result.metadata["exit_code"] is None
     # Cleanup
-    session = exec_registry.get(result["session_id"])
+    session = exec_registry.get(result.metadata["session_id"])
     assert session is not None
     session.process.kill()
     await session.process.wait()
@@ -146,7 +145,7 @@ async def test_execute_background(mock_ctx: MagicMock, workspace: Path) -> None:
 @pytest.mark.asyncio()
 async def test_execute_timeout(mock_ctx: MagicMock, workspace: Path) -> None:
     result = await execute(mock_ctx, "sleep 60", timeout=1.0)
-    assert result["exit_code"] != 0  # killed
+    assert result.metadata["exit_code"] != 0  # killed
 
 
 # --- WorkItemType ---

@@ -34,8 +34,9 @@ def create_memory_toolset(
         docstring_format="google",
         require_parameter_descriptions=True,
     )
+    mem_meta: dict[str, str] = {"category": "memory"}
 
-    @toolset.tool
+    @toolset.tool(metadata=mem_meta)
     async def memory_search(
         ctx: RunContext[AgentDeps],
         query: str,
@@ -49,7 +50,7 @@ def create_memory_toolset(
         """
         return combined_search(db_path, workspace_root, query, max_results)
 
-    @toolset.tool
+    @toolset.tool(metadata=mem_meta)
     async def memory_get(
         ctx: RunContext[AgentDeps],
         path: str,
@@ -65,7 +66,7 @@ def create_memory_toolset(
         """
         return get_memory_file_snippet(workspace_root, path, from_line, lines)
 
-    @toolset.tool
+    @toolset.tool(metadata=mem_meta)
     async def memory_save(
         ctx: RunContext[AgentDeps],
         summary: str,
