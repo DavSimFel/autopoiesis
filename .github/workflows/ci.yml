@@ -67,6 +67,7 @@ jobs:
             ["context_manager.py"]="specs/modules/context.md"
             ["exec_registry.py"]="specs/modules/exec.md"
             ["exec_tool.py"]="specs/modules/exec.md"
+            ["io_utils.py"]="specs/modules/exec.md"
             ["history_store.py"]="specs/modules/memory.md"
             ["memory_store.py"]="specs/modules/memory.md"
             ["memory_tools.py"]="specs/modules/memory.md"
