@@ -64,6 +64,8 @@ jobs:
             ["chat_cli.py"]="specs/modules/chat.md"
             ["chat_runtime.py"]="specs/modules/chat.md"
             ["chat_worker.py"]="specs/modules/chat.md"
+            ["model_resolution.py"]="specs/modules/chat.md"
+            ["toolset_builder.py"]="specs/modules/chat.md"
             ["db.py"]="specs/modules/memory.md"
             ["approval_store.py"]="specs/modules/chat.md"
             ["approval_store_schema.py"]="specs/modules/chat.md"

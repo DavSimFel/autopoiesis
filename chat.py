@@ -18,10 +18,7 @@ from chat_runtime import (
     AgentOptions,
     Runtime,
     build_agent,
-    build_backend,
-    build_toolsets,
     instrument_agent,
-    resolve_workspace_root,
     set_runtime,
 )
 from chat_worker import checkpoint_history_processor
@@ -32,9 +29,11 @@ from history_store import (
     resolve_history_db_path,
 )
 from memory_store import init_memory_store, resolve_memory_db_path
+from model_resolution import resolve_provider
 from subscription_processor import materialize_subscriptions
 from subscriptions import SubscriptionRegistry
 from tool_result_truncation import truncate_tool_results
+from toolset_builder import build_backend, build_toolsets, resolve_workspace_root
 
 try:
     from dbos import DBOS, DBOSConfig
@@ -86,7 +85,7 @@ def main() -> None:
     if _handle_subcommand(base_dir):
         return
 
-    provider = os.getenv("AI_PROVIDER", "anthropic").lower()
+    provider = resolve_provider(os.getenv("AI_PROVIDER"))
     agent_name = os.getenv("DBOS_AGENT_NAME", "chat")
 
     backend = build_backend()
