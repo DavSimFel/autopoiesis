@@ -27,12 +27,17 @@ def verify_api_key(request: Request) -> None:
 
 
 async def verify_ws_api_key(websocket: WebSocket) -> bool:
-    """Verify API key for WebSocket connections. Returns True if valid."""
+    """Verify API key for WebSocket connections via X-API-Key header only.
+
+    Query-parameter auth is intentionally not supported to avoid leaking
+    credentials in server logs and Referer headers.  Browser clients should
+    authenticate via a token in the first WebSocket message or use a
+    one-time upgrade token (future work).
+
+    Returns True if valid.
+    """
     expected = get_api_key()
     if expected is None:
         return True
     provided = websocket.headers.get("X-API-Key", "")
-    # Also check query param for browser clients
-    if not provided:
-        provided = websocket.query_params.get("api_key", "")
     return secrets.compare_digest(provided, expected) if provided else False

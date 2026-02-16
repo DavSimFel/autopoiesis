@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from datetime import UTC, datetime
 from unittest.mock import patch
 
 import pytest
@@ -170,6 +171,25 @@ class TestSessionStore:
         assert store.get_history_json("s1") is None
         store.set_history_json("s1", "[]")
         assert store.get_history_json("s1") == "[]"
+
+    def test_remove_stale_respects_ttl(self) -> None:
+        store = SessionStore()
+        store.create("active")
+        store.create("stale")
+        # Backdate the stale session
+        store.backdate_last_active("stale", datetime(2020, 1, 1, tzinfo=UTC))
+        removed = store.remove_stale(ttl_seconds=60, active_sessions=set())
+        assert "stale" in removed
+        assert not store.exists("stale")
+        assert store.exists("active")
+
+    def test_remove_stale_skips_active_websocket(self) -> None:
+        store = SessionStore()
+        store.create("ws-active")
+        store.backdate_last_active("ws-active", datetime(2020, 1, 1, tzinfo=UTC))
+        removed = store.remove_stale(ttl_seconds=60, active_sessions={"ws-active"})
+        assert removed == []
+        assert store.exists("ws-active")
 
 
 class TestWSModels:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import logging
 from typing import TYPE_CHECKING
 
@@ -19,6 +20,10 @@ class WebSocketStreamHandle:
 
     Implements the same interface as RichStreamHandle but broadcasts
     over WebSocket to all connected clients in a session.
+
+    .. note::
+        Sequence numbers for ordered delivery are future work — see the
+        realtime research doc.
     """
 
     def __init__(
@@ -33,13 +38,31 @@ class WebSocketStreamHandle:
         self._closed = False
 
     def _send(self, message: WSOutgoing) -> None:
-        """Schedule a broadcast on the event loop (thread-safe)."""
+        """Schedule a broadcast on the event loop (thread-safe).
+
+        Errors are logged and the handle is marked closed on failure so
+        subsequent calls become no-ops.
+        """
         if self._closed:
             return
-        asyncio.run_coroutine_threadsafe(
+        future = asyncio.run_coroutine_threadsafe(
             self._manager.broadcast(self._session_id, message),
             self._loop,
         )
+        # Add a callback to catch and log errors instead of swallowing them.
+        future.add_done_callback(self._on_send_done)
+
+    def _on_send_done(self, future: concurrent.futures.Future[None]) -> None:
+        """Handle completed broadcast futures — log errors, mark dead."""
+        exc = future.exception()
+        if exc is not None:
+            _log.error(
+                "WebSocket broadcast failed for session %s: %s",
+                self._session_id,
+                exc,
+            )
+            # Mark handle as dead so we stop trying to send.
+            self._closed = True
 
     def write(self, chunk: str) -> None:
         """Send a token chunk to all connected clients."""
