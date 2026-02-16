@@ -8,15 +8,17 @@ split into focused companion modules.
 
 ## Status
 
-- **Last updated:** 2026-02-16 (Issue #19)
-- **Source:** `chat.py`, `chat_runtime.py`, `chat_worker.py`, `chat_approval.py`, `chat_cli.py`
+- **Last updated:** 2026-02-16 (Issue #76)
+- **Source:** `chat.py`, `chat_runtime.py`, `model_resolution.py`, `toolset_builder.py`, `chat_worker.py`, `chat_approval.py`, `chat_cli.py`
 
 ## File Structure
 
 | File | Responsibility |
 |------|---------------|
 | `chat.py` | Entrypoint, rotate-key command, DBOS launch, runtime wiring |
-| `chat_runtime.py` | Runtime dataclass, env loading helpers, backend/toolset/agent builders |
+| `chat_runtime.py` | Runtime singleton state, `AgentOptions`, agent assembly, instrumentation toggle |
+| `model_resolution.py` | Provider detection, required env access, model settings/env parsing, fallback model resolution |
+| `toolset_builder.py` | Workspace/backend creation, console+skills+exec+memory/subscription toolset composition, strict tool schema preparation |
 | `chat_worker.py` | DBOS workflow/step functions, enqueue helpers, history serialization |
 | `chat_approval.py` | Approval scope, request/result serialization, CLI approval collection |
 | `chat_cli.py` | Interactive CLI loop and approval re-enqueue flow |
@@ -30,14 +32,14 @@ split into focused companion modules.
 | Var | Required | Default | Used in | Notes |
 |-----|----------|---------|---------|-------|
 | `AI_PROVIDER` | No | `anthropic` | `main()` | Provider selection |
-| `ANTHROPIC_API_KEY` | If anthropic | — | `build_agent()` | API key |
-| `ANTHROPIC_MODEL` | No | `anthropic:claude-3-5-sonnet-latest` | `build_agent()` | Model string |
-| `OPENROUTER_API_KEY` | If openrouter | — | `build_agent()` | API key |
-| `OPENROUTER_MODEL` | No | `openai/gpt-4o-mini` | `build_agent()` | Model id |
-| `AI_TEMPERATURE` | No | — | `build_model_settings()` | LLM sampling temperature |
-| `AI_MAX_TOKENS` | No | — | `build_model_settings()` | Max generation tokens |
-| `AI_TOP_P` | No | — | `build_model_settings()` | Nucleus sampling top-p |
-| `AGENT_WORKSPACE_ROOT` | No | `data/agent-workspace` | `resolve_workspace_root()` | Resolves from `chat.py` dir |
+| `ANTHROPIC_API_KEY` | If anthropic | — | `model_resolution.resolve_model()` | API key |
+| `ANTHROPIC_MODEL` | No | `anthropic:claude-3-5-sonnet-latest` | `model_resolution.resolve_model()` | Model string |
+| `OPENROUTER_API_KEY` | If openrouter | — | `model_resolution.resolve_model()` | API key |
+| `OPENROUTER_MODEL` | No | `openai/gpt-4o-mini` | `model_resolution.resolve_model()` | Model id |
+| `AI_TEMPERATURE` | No | — | `model_resolution.build_model_settings()` | LLM sampling temperature |
+| `AI_MAX_TOKENS` | No | — | `model_resolution.build_model_settings()` | Max generation tokens |
+| `AI_TOP_P` | No | — | `model_resolution.build_model_settings()` | Nucleus sampling top-p |
+| `AGENT_WORKSPACE_ROOT` | No | `data/agent-workspace` | `toolset_builder.resolve_workspace_root()` | Resolves from `chat.py` dir |
 | `DBOS_APP_NAME` | No | `pydantic_dbos_agent` | `main()` | DBOS app name |
 | `DBOS_AGENT_NAME` | No | `chat` | `main()` | Agent name |
 | `DBOS_SYSTEM_DATABASE_URL` | No | `sqlite:///dbostest.sqlite` | `main()` | DBOS database URL |
@@ -49,34 +51,37 @@ split into focused companion modules.
 | `APPROVAL_KEYRING_PATH` | No | `$APPROVAL_KEY_DIR/keyring.json` | `ApprovalKeyManager.from_env(base_dir=...)` | Active/retired verification keyring |
 | `NONCE_RETENTION_PERIOD_SECONDS` | No | `604800` | `ApprovalStore.from_env(base_dir=...)` | Expired envelope pruning horizon |
 | `APPROVAL_CLOCK_SKEW_SECONDS` | No | `60` | `ApprovalStore.from_env(base_dir=...)` | Startup invariant with retention + TTL |
-| `SKILLS_DIR` | No | `skills` | `_resolve_shipped_skills_dir()` | Shipped skills path, resolves from `chat.py` dir |
-| `CUSTOM_SKILLS_DIR` | No | `skills` | `_resolve_custom_skills_dir()` | Custom skills path, resolves inside `AGENT_WORKSPACE_ROOT` when relative |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | No | — | `instrument_agent()` | When set, enables OpenTelemetry trace export via `agent.instrument()` |
+| `SKILLS_DIR` | No | `skills` | `toolset_builder._resolve_shipped_skills_dir()` | Shipped skills path, resolves from `chat.py` dir |
+| `CUSTOM_SKILLS_DIR` | No | `skills` | `toolset_builder._resolve_custom_skills_dir()` | Custom skills path, resolves inside `AGENT_WORKSPACE_ROOT` when relative |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | No | — | `chat_runtime.instrument_agent()` | When set, enables OpenTelemetry trace export via `agent.instrument()` |
 
 ## Functions
 
 ### Startup
 
-- `required_env(name)` — fail-fast env var read
-- `resolve_workspace_root()` — resolve + create workspace dir
-- `_resolve_shipped_skills_dir()` — resolve shipped skills directory (default: `skills/`)
-- `_resolve_custom_skills_dir()` — resolve custom skills directory inside workspace (default: `skills/`)
-- `_build_skill_directories()` — build skill directory list in precedence order (shipped first, custom second)
-- `build_backend()` — `LocalBackend` with execute disabled
-- `validate_console_deps_contract()` — structural typing guard
-- `build_toolsets()` — returns `(toolsets, instructions)`. Console toolset
+- `model_resolution.required_env(name)` — fail-fast env var read
+- `model_resolution.resolve_provider(provider)` — validated provider selection (`anthropic` or `openrouter`)
+- `model_resolution.build_model_settings()` — parses optional `AI_*` generation settings
+- `model_resolution.resolve_model(provider)` — primary/fallback model resolution
+- `toolset_builder.resolve_workspace_root()` — resolve + create workspace dir
+- `toolset_builder._resolve_shipped_skills_dir()` — resolve shipped skills directory (default: `skills/`)
+- `toolset_builder._resolve_custom_skills_dir()` — resolve custom skills directory inside workspace (default: `skills/`)
+- `toolset_builder._build_skill_directories()` — build skill directory list in precedence order (shipped first, custom second)
+- `toolset_builder.build_backend()` — `LocalBackend` with execute disabled
+- `toolset_builder.validate_console_deps_contract()` — structural typing guard
+- `toolset_builder.build_toolsets()` — returns `(toolsets, instructions)`. Console toolset
   (write approval) + skills toolset from shipped and custom directories.
   Custom skills override shipped skills when names collide.
-- `build_agent(provider, name, toolsets, instructions)` — Anthropic or
-  OpenRouter factory. Passes instructions to PydanticAI's `instructions`
-  parameter for automatic system prompt composition.
-- `instrument_agent(agent)` — Enables OpenTelemetry instrumentation when
+- `chat_runtime.build_agent(provider, name, toolsets, system_prompt, options)` — Anthropic/OpenRouter factory
+  that resolves model fallback, strict tool preparation, history processors, and model settings.
+- `toolset_builder.strict_tool_definitions(...)` — marks all tools `strict=True` for OpenAI-compatible providers
+- `chat_runtime.instrument_agent(agent)` — Enables OpenTelemetry instrumentation when
   `OTEL_EXPORTER_OTLP_ENDPOINT` is set. Returns `True` if applied.
 
 ### Runtime State
 
-- `_Runtime` dataclass holds agent + backend + approval store + unlocked key manager + tool policy for the process lifetime
-- `_set_runtime()` / `_get_runtime()` — set in `main()`, read by workers
+- `Runtime` dataclass holds agent + backend + approval store + unlocked key manager + tool policy for the process lifetime
+- `set_runtime()` / `get_runtime()` — set in `main()`, read by workers
 - `_CheckpointContext` + `ContextVar` store active checkpoint metadata per
   execution context for history processor writes
 
@@ -175,6 +180,12 @@ split into focused companion modules.
 
 ## Change Log
 
+- 2026-02-16: Split runtime construction responsibilities into
+  `model_resolution.py` (provider/model/env resolution),
+  `toolset_builder.py` (workspace/backend/toolset assembly + strict tool
+  schema prep), and a slimmer `chat_runtime.py` (runtime singleton +
+  agent construction/instrumentation). Updated `chat.py` and tests to
+  import from the focused modules. (Issue #76)
 - 2026-02-16: FallbackModel for provider resilience. When both
   `ANTHROPIC_API_KEY` and `OPENROUTER_API_KEY` are set, wraps primary
   and alternate models in `FallbackModel` for automatic retry on provider

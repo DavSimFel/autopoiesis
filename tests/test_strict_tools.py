@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 from pydantic_ai.tools import ToolDefinition
 
-from chat_runtime import strict_tool_definitions
+from toolset_builder import strict_tool_definitions
 
 
 def _make_tool(name: str, *, strict: bool | None = None) -> ToolDefinition:

@@ -7,7 +7,7 @@ from pydantic_ai.models.anthropic import AnthropicModel
 from pydantic_ai.models.fallback import FallbackModel
 from pydantic_ai.models.openai import OpenAIChatModel
 
-from chat_runtime import resolve_model
+from model_resolution import resolve_model
 
 
 def test_anthropic_only_no_fallback(monkeypatch: MonkeyPatch) -> None:
