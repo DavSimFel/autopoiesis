@@ -174,8 +174,8 @@ async def test_execute_omitted_env_filters_dangerous_vars(
     cmd = (
         "python3 -c "
         "'import os; "
-        "print(os.getenv(\"OPENAI_API_KEY\", \"<missing>\")); "
-        "print(os.getenv(\"PYTHONPATH\", \"<missing>\"))'"
+        'print(os.getenv("OPENAI_API_KEY", "<missing>")); '
+        'print(os.getenv("PYTHONPATH", "<missing>"))\''
     )
     result = await execute(mock_ctx, cmd, timeout=10.0)
     output = str(result.return_value)
