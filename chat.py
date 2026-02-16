@@ -103,9 +103,14 @@ def parse_cli_args(repo_root: Path, argv: list[str] | None = None) -> argparse.N
         action="store_true",
         help="Skip approval key unlock (dev mode)",
     )
-    parser.add_argument("command", nargs="?", help="Subcommand: rotate-key | serve")
+    parser.add_argument("command", nargs="?", help="Subcommand: rotate-key | serve | run")
     parser.add_argument("--host", default=None, help="Server bind host (serve mode)")
     parser.add_argument("--port", type=int, default=None, help="Server bind port (serve mode)")
+    parser.add_argument("--task", default=None, help="Task string for batch run mode")
+    parser.add_argument("--output", default=None, help="Output JSON file path (batch run mode)")
+    parser.add_argument(
+        "--timeout", type=int, default=None, help="Timeout in seconds (batch run mode)"
+    )
     return parser.parse_args(argv if argv is not None else sys.argv[1:])
 
 
@@ -126,13 +131,15 @@ def main() -> None:
         run_server(host=args.host, port=args.port)
         return
 
+    is_batch = args.command == "run"
+
     provider = resolve_provider(os.getenv("AI_PROVIDER"))
     agent_name = os.getenv("DBOS_AGENT_NAME", "chat")
 
     backend = build_backend()
     approval_store = ApprovalStore.from_env(base_dir=base_dir)
     key_manager = ApprovalKeyManager.from_env(base_dir=base_dir)
-    if not args.no_approval:
+    if not args.no_approval and not is_batch:
         key_manager.ensure_unlocked_interactive()
     tool_policy = ToolPolicyRegistry.default()
     memory_db_path = resolve_memory_db_path(
@@ -206,6 +213,12 @@ def main() -> None:
             tool_policy=tool_policy,
         )
     )
+
+    if is_batch:
+        from agent.batch import run_batch
+
+        run_batch(args.task, output_path=args.output, timeout=args.timeout)
+        return
 
     dbos_config: DBOSConfig = {
         "name": os.getenv("DBOS_APP_NAME", "pydantic_dbos_agent"),
