@@ -108,9 +108,14 @@ jobs:
 
           missing_specs=()
           for src_path in "${changed_sources[@]}"; do
-            # Look up by full relative path; unmapped files are ignored
+            # Look up by full relative path
             expected_spec="${source_to_spec[$src_path]-}"
             if [ -z "$expected_spec" ]; then
+              # Warn about unmapped source files (skip __init__.py and conftest.py)
+              base="$(basename "$src_path")"
+              if [ "$base" != "__init__.py" ] && [ "$base" != "conftest.py" ]; then
+                echo "::warning::Changed source file has no spec mapping: $src_path"
+              fi
               continue
             fi
 
