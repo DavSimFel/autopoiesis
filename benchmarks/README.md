@@ -87,6 +87,50 @@ The batch mode (`agent/batch.py`) outputs:
 }
 ```
 
+## End-to-end test harness
+
+The `run.sh` script provides a local e2e test runner that exercises autopoiesis capabilities through the same batch-mode interface the Harbor adapter uses.
+
+### Quick start
+
+```bash
+cd benchmarks
+export ANTHROPIC_API_KEY="..."  # or OPENAI_API_KEY, OPENROUTER_API_KEY
+./run.sh
+```
+
+### Test cases
+
+| Name | Category | What it tests |
+|------|----------|---------------|
+| `basic_greeting` | chat | Simple instruction following |
+| `reasoning` | chat | Basic arithmetic reasoning |
+| `file_create` | file_ops | Creating and writing files |
+| `file_read` | file_ops | Reading existing files |
+| `memory_store` | memory | Storing data in memory |
+| `knowledge_search` | knowledge | Querying the knowledge base |
+| `topic_activation` | topics | Listing/activating topics |
+| `forced_timeout` | timeout | Timeout handling (5s limit) |
+
+### Run a single test
+
+```bash
+./run.sh --task basic_greeting
+```
+
+### Run via Harbor (requires Docker)
+
+```bash
+./run.sh --harbor
+```
+
+### Run with pytest directly
+
+```bash
+cd benchmarks
+python -m pytest tests/test_e2e.py -v -k "file_ops"
+```
+
 ## Known limitations
 
 - Token usage and cost are not yet reported (autopoiesis batch mode doesn't emit them). `AgentContext.n_input_tokens` etc. remain `None`.
