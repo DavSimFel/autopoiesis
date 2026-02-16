@@ -9,10 +9,10 @@ from typing import Any
 
 import pytest
 
-from approval_keys import ApprovalKeyManager, KeyPaths
-from approval_policy import ToolClassification, ToolPolicyRegistry
-from approval_store import ApprovalStore
-from approval_types import (
+from approval.keys import ApprovalKeyManager, KeyPaths
+from approval.policy import ToolClassification, ToolPolicyRegistry
+from approval.store import ApprovalStore
+from approval.types import (
     ApprovalScope,
     ApprovalVerificationError,
     DeferredToolCall,

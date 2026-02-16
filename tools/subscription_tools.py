@@ -10,7 +10,7 @@ from pydantic_ai import RunContext
 from pydantic_ai.toolsets import FunctionToolset
 
 from models import AgentDeps
-from subscriptions import SubscriptionKind, SubscriptionRegistry
+from store.subscriptions import SubscriptionKind, SubscriptionRegistry
 
 _LINE_RANGE_PARTS = 2
 
@@ -38,7 +38,7 @@ def _parse_line_range(lines: str | None) -> tuple[int, int] | None:
 
 def _format_subscription(sub: object) -> str:
     """Format a single subscription for display."""
-    from subscriptions import Subscription
+    from store.subscriptions import Subscription
 
     assert isinstance(sub, Subscription)
     desc = f"- **{sub.id}** [{sub.kind}] `{sub.target}`"

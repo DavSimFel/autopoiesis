@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from rich_display import DisplayChannel, RichDisplayManager
+from display.rich_display import DisplayChannel, RichDisplayManager
 
 
 def _channels(mgr: RichDisplayManager) -> dict[str, DisplayChannel]:

@@ -11,8 +11,8 @@ from pathlib import Path
 from pydantic_ai import RunContext
 from pydantic_ai.toolsets import FunctionToolset
 
-from memory_store import combined_search, get_memory_file_snippet, save_memory
 from models import AgentDeps
+from store.memory import combined_search, get_memory_file_snippet, save_memory
 
 _MEMORY_INSTRUCTIONS = """\
 ## Persistent memory

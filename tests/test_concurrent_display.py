@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import threading
 
-from rich_display import RichDisplayManager
+from display.rich_display import RichDisplayManager
 
 _THREAD_COUNT = 8
 _WRITES_PER_THREAD = 30

@@ -19,19 +19,19 @@ from pydantic_ai.messages import (
 )
 from pydantic_ai.tools import DeferredToolResults, RunContext
 
-import otel_tracing
-from approval_types import ApprovalScope
-from chat_approval import (
+from agent.runtime import Runtime, get_runtime
+from approval.chat_approval import (
     build_approval_scope,
     deserialize_deferred_results,
     serialize_deferred_requests,
 )
-from chat_runtime import Runtime, get_runtime
-from history_store import clear_checkpoint, load_checkpoint, save_checkpoint
+from approval.types import ApprovalScope
+from display.stream_formatting import forward_stream_events
+from display.streaming import StreamHandle, ToolAwareStreamHandle, take_stream
+from infra import otel_tracing
+from infra.work_queue import work_queue
 from models import AgentDeps, WorkItem, WorkItemOutput
-from stream_formatting import forward_stream_events
-from streaming import StreamHandle, ToolAwareStreamHandle, take_stream
-from work_queue import work_queue
+from store.history import clear_checkpoint, load_checkpoint, save_checkpoint
 
 try:
     from dbos import DBOS, SetEnqueueOptions

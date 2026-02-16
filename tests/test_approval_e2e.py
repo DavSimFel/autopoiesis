@@ -13,13 +13,13 @@ from pydantic_ai import DeferredToolRequests
 from pydantic_ai.messages import ToolCallPart
 from pydantic_ai_backends import LocalBackend
 
-import chat_cli
-import chat_worker
-from approval_keys import ApprovalKeyManager
-from approval_policy import ToolPolicyRegistry
-from approval_store import ApprovalStore
-from history_store import init_history_store
+import agent.cli as chat_cli
+import agent.worker as chat_worker
+from approval.keys import ApprovalKeyManager
+from approval.policy import ToolPolicyRegistry
+from approval.store import ApprovalStore
 from models import WorkItem, WorkItemOutput
+from store.history import init_history_store
 
 _TOOL_CALL_ID = "call-1"
 _EXPECTED_ENQUEUE_CALLS = 2

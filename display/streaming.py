@@ -16,7 +16,7 @@ import sys
 from typing import TYPE_CHECKING, Literal, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
-    from rich_display import RichDisplayManager
+    from display.rich_display import RichDisplayManager
 
 ChannelStatus = Literal["running", "done", "error"]
 
@@ -118,7 +118,7 @@ class RichStreamHandle:
                 self._display = display
                 self._owns_display = False
             else:
-                from rich_display import RichDisplayManager
+                from display.rich_display import RichDisplayManager
 
                 self._display = RichDisplayManager()
                 self._owns_display = True

@@ -10,30 +10,30 @@ from pathlib import Path
 from dotenv import load_dotenv
 from pydantic_ai.messages import ModelMessage
 
-import otel_tracing
-from approval_keys import ApprovalKeyManager
-from approval_policy import ToolPolicyRegistry
-from approval_store import ApprovalStore
-from chat_cli import cli_chat_loop
-from chat_runtime import (
+from agent.cli import cli_chat_loop
+from agent.context import compact_history
+from agent.runtime import (
     AgentOptions,
     Runtime,
     build_agent,
     instrument_agent,
     set_runtime,
 )
-from chat_worker import checkpoint_history_processor
-from context_manager import compact_history
-from history_store import (
+from agent.truncation import truncate_tool_results
+from agent.worker import checkpoint_history_processor
+from approval.keys import ApprovalKeyManager
+from approval.policy import ToolPolicyRegistry
+from approval.store import ApprovalStore
+from infra import otel_tracing
+from infra.subscription_processor import materialize_subscriptions
+from model_resolution import resolve_provider
+from store.history import (
     cleanup_stale_checkpoints,
     init_history_store,
     resolve_history_db_path,
 )
-from memory_store import init_memory_store, resolve_memory_db_path
-from model_resolution import resolve_provider
-from subscription_processor import materialize_subscriptions
-from subscriptions import SubscriptionRegistry
-from tool_result_truncation import truncate_tool_results
+from store.memory import init_memory_store, resolve_memory_db_path
+from store.subscriptions import SubscriptionRegistry
 from toolset_builder import build_backend, build_toolsets, resolve_workspace_root
 
 try:

@@ -10,7 +10,6 @@ from typing import Any, get_type_hints
 from pydantic_ai import AbstractToolset, RunContext
 from pydantic_ai.tools import ToolDefinition
 
-from memory_tools import create_memory_toolset
 from models import AgentDeps
 from prompts import (
     BASE_SYSTEM_PROMPT,
@@ -19,9 +18,10 @@ from prompts import (
     compose_system_prompt,
 )
 from skills import SkillDirectory, create_skills_toolset
-from subscription_tools import create_subscription_toolset
-from subscriptions import SubscriptionRegistry
-from toolset_wrappers import wrap_toolsets
+from store.subscriptions import SubscriptionRegistry
+from tools.memory_tools import create_memory_toolset
+from tools.subscription_tools import create_subscription_toolset
+from tools.toolset_wrappers import wrap_toolsets
 
 try:
     from pydantic_ai_backends import LocalBackend, create_console_toolset
@@ -126,8 +126,8 @@ def _build_exec_toolset() -> AbstractToolset[AgentDeps]:
     """Build the exec/process toolset with dynamic visibility and approval."""
     from pydantic_ai import FunctionToolset, Tool
 
-    from exec_tool import execute, execute_pty
-    from process_tool import (
+    from tools.exec_tool import execute, execute_pty
+    from tools.process_tool import (
         process_kill,
         process_list,
         process_log,
@@ -154,7 +154,7 @@ def _build_exec_toolset() -> AbstractToolset[AgentDeps]:
     )
 
     # Startup cleanup avoids stale logs from prior runs polluting process views.
-    from exec_registry import cleanup_exec_logs
+    from infra.exec_registry import cleanup_exec_logs
 
     cleanup_exec_logs(resolve_workspace_root())
     return toolset.prepared(_prepare_exec_tools).approval_required(_needs_exec_approval)

@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 
 from pydantic_ai.messages import RetryPromptPart, ToolReturnPart
 
-from stream_formatting import format_tool_args, format_tool_result
+from display.stream_formatting import format_tool_args, format_tool_result
 
 # -- format_tool_args --------------------------------------------------------
 
@@ -76,7 +76,7 @@ def test_forward_drain_non_tool_handle() -> None:
 
     from pydantic_ai.messages import AgentStreamEvent
 
-    from stream_formatting import forward_stream_events
+    from display.stream_formatting import forward_stream_events
 
     class PlainHandle:
         def write(self, chunk: str) -> None:

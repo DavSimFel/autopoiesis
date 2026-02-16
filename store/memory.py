@@ -18,7 +18,7 @@ from db import open_db
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_MEMORY_DB_PATH = Path(__file__).resolve().parent / "data" / "memory.sqlite"
+_DEFAULT_MEMORY_DB_PATH = Path(__file__).resolve().parent.parent / "data" / "memory.sqlite"
 
 _CREATE_ENTRIES_SQL = """
 CREATE TABLE IF NOT EXISTS memory_entries (

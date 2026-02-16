@@ -9,7 +9,7 @@ from pathlib import Path
 from db import open_db
 
 _CHECKPOINT_VERSION = 1
-_DEFAULT_HISTORY_DB_PATH = Path(__file__).resolve().parent / "data" / "history.sqlite"
+_DEFAULT_HISTORY_DB_PATH = Path(__file__).resolve().parent.parent / "data" / "history.sqlite"
 
 _CREATE_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS agent_history_checkpoints (

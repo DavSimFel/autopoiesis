@@ -10,15 +10,15 @@ from pathlib import Path
 from typing import Any, cast
 from uuid import uuid4
 
-from approval_keys import ApprovalKeyManager
-from approval_store_schema import init_schema, utc_now_epoch
-from approval_store_verify import (
+from approval.keys import ApprovalKeyManager
+from approval.store_schema import init_schema, utc_now_epoch
+from approval.store_verify import (
     parse_submission,
     verify_bijection,
     verify_signature_stage,
     verify_signed_decisions,
 )
-from approval_types import (
+from approval.types import (
     ApprovalScope,
     ApprovalVerificationError,
     DeferredToolCall,

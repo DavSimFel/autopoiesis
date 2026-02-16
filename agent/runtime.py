@@ -11,12 +11,12 @@ from pydantic_ai import AbstractToolset, Agent
 from pydantic_ai._agent_graph import HistoryProcessor
 from pydantic_ai.settings import ModelSettings
 
-from approval_keys import ApprovalKeyManager
-from approval_policy import ToolPolicyRegistry
-from approval_store import ApprovalStore
+from approval.keys import ApprovalKeyManager
+from approval.policy import ToolPolicyRegistry
+from approval.store import ApprovalStore
 from model_resolution import build_model_settings, resolve_model
 from models import AgentDeps
-from subscriptions import SubscriptionRegistry
+from store.subscriptions import SubscriptionRegistry
 from toolset_builder import LocalBackend, strict_tool_definitions
 
 

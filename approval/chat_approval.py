@@ -10,10 +10,10 @@ from pydantic_ai import DeferredToolRequests
 from pydantic_ai.tools import DeferredToolResults, ToolDenied
 from pydantic_ai_backends import LocalBackend
 
-from approval_keys import ApprovalKeyManager
-from approval_policy import ToolPolicyRegistry
-from approval_store import ApprovalStore
-from approval_types import ApprovalScope, DeferredToolCall, SignedDecision
+from approval.keys import ApprovalKeyManager
+from approval.policy import ToolPolicyRegistry
+from approval.store import ApprovalStore
+from approval.types import ApprovalScope, DeferredToolCall, SignedDecision
 
 _APPROVE_CHOICES = ("", "y", "yes")
 _DENY_CHOICES = ("n", "no")

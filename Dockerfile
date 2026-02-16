@@ -10,6 +10,12 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev
 
 COPY *.py ./
+COPY agent/ ./agent/
+COPY approval/ ./approval/
+COPY tools/ ./tools/
+COPY store/ ./store/
+COPY display/ ./display/
+COPY infra/ ./infra/
 COPY skills/ ./skills/
 RUN useradd --create-home --shell /usr/sbin/nologin appuser && chown -R appuser:appuser /app
 USER appuser

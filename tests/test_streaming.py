@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pytest import MonkeyPatch
 
-from streaming import PrintStreamHandle, register_stream, take_stream
+from display.streaming import PrintStreamHandle, register_stream, take_stream
 
 
 def test_register_and_take_stream() -> None:
@@ -42,7 +42,7 @@ def test_rich_stream_handle_fallback_on_non_tty(monkeypatch: MonkeyPatch) -> Non
     import io
     import sys
 
-    import streaming
+    from display import streaming
 
     monkeypatch.setattr(streaming, "_is_tty", lambda: False)
 
@@ -60,7 +60,7 @@ def test_rich_stream_handle_fallback_on_non_tty(monkeypatch: MonkeyPatch) -> Non
 
 
 def test_rich_stream_handle_close_idempotent() -> None:
-    from streaming import RichStreamHandle
+    from display.streaming import RichStreamHandle
 
     handle = RichStreamHandle()
     handle.close()
