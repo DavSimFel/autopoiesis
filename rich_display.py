@@ -118,7 +118,9 @@ class RichDisplayManager:
             ch = self._channels.get(channel_id)
             if ch is None:
                 ch = DisplayChannel(
-                    id=channel_id, label=channel_id, order=self._order_counter,
+                    id=channel_id,
+                    label=channel_id,
+                    order=self._order_counter,
                 )
                 self._order_counter += 1
                 self._channels[channel_id] = ch
@@ -198,7 +200,7 @@ class RichDisplayManager:
         if not content:
             return ""
         lines = content.splitlines()
-        return "\n".join(lines[-self._tail:]) if lines else ""
+        return "\n".join(lines[-self._tail :]) if lines else ""
 
     def _auto_summary(self, content: str) -> str:
         if not content:

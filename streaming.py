@@ -119,6 +119,7 @@ class RichStreamHandle:
                 self._owns_display = False
             else:
                 from rich_display import RichDisplayManager
+
                 self._display = RichDisplayManager()
                 self._owns_display = True
         self._main_id = "assistant"
