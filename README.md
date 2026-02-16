@@ -21,6 +21,7 @@ Edit `.env`:
 - `APPROVAL_PRIVATE_KEY_PATH` sets encrypted private key path (default: `$APPROVAL_KEY_DIR/approval.key`)
 - `APPROVAL_PUBLIC_KEY_PATH` sets public key path (default: `$APPROVAL_KEY_DIR/approval.pub`)
 - `APPROVAL_KEYRING_PATH` sets keyring path for active/retired verification keys (default: `$APPROVAL_KEY_DIR/keyring.json`)
+- `APPROVAL_KEY_PASSPHRASE` (optional) unlocks the signing key non-interactively for headless runs; prefer a secret manager because env vars can be visible to other local processes.
 - `NONCE_RETENTION_PERIOD_SECONDS` sets expired envelope retention (default: `604800`)
 - `APPROVAL_CLOCK_SKEW_SECONDS` sets startup skew margin for retention invariant checks (default: `60`)
 - `APPROVAL_DB_PATH` (optional) overrides where deferred approval envelopes are stored. If unset, uses `data/approvals.sqlite`.

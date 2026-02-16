@@ -6,6 +6,7 @@ import json
 import sqlite3
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 
@@ -367,6 +368,31 @@ def test_unlock_rejects_wrong_passphrase(tmp_path: Path) -> None:
     with pytest.raises(SystemExit) as exc:
         manager.unlock("wrong-passphrase")
     assert "Invalid approval passphrase." in str(exc.value)
+
+
+def test_unlock_uses_env_passphrase_without_prompt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manager = ApprovalKeyManager(_paths(tmp_path))
+    manager.create_initial_key("env-passphrase")
+    monkeypatch.setenv("APPROVAL_KEY_PASSPHRASE", "env-passphrase")
+
+    with patch("approval_keys.getpass.getpass") as getpass_mock:
+        manager.ensure_unlocked_interactive()
+
+    getpass_mock.assert_not_called()
+    assert manager.current_key_id()
+
+
+def test_unlock_prompts_when_env_passphrase_missing(tmp_path: Path) -> None:
+    manager = ApprovalKeyManager(_paths(tmp_path))
+    manager.create_initial_key("prompt-passphrase")
+
+    with patch("approval_keys.getpass.getpass", return_value="prompt-passphrase") as getpass_mock:
+        manager.ensure_unlocked_interactive()
+
+    getpass_mock.assert_called_once_with("Approval signing key passphrase: ")
+    assert manager.current_key_id()
 
 
 def test_create_key_rejects_short_passphrase(tmp_path: Path) -> None:

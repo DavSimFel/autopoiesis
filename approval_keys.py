@@ -78,7 +78,11 @@ class ApprovalKeyManager:
     def ensure_unlocked_interactive(self) -> None:
         if not self._paths.private_key_path.exists() or not self._paths.public_key_path.exists():
             self._create_initial_key_interactive()
-        passphrase = getpass.getpass("Approval signing key passphrase: ")
+        # Env vars are convenient for headless unlock, but `/proc/<pid>/environ`
+        # can expose them to same-host users/processes on permissive systems.
+        passphrase = os.getenv("APPROVAL_KEY_PASSPHRASE")
+        if passphrase is None:
+            passphrase = getpass.getpass("Approval signing key passphrase: ")
         self.unlock(passphrase)
 
     def create_initial_key(self, passphrase: str) -> None:

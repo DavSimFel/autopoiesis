@@ -47,6 +47,7 @@ split into focused companion modules.
 | `APPROVAL_PRIVATE_KEY_PATH` | No | `$APPROVAL_KEY_DIR/approval.key` | `ApprovalKeyManager.from_env(base_dir=...)` | Encrypted Ed25519 private key path |
 | `APPROVAL_PUBLIC_KEY_PATH` | No | `$APPROVAL_KEY_DIR/approval.pub` | `ApprovalKeyManager.from_env(base_dir=...)` | Active public key path |
 | `APPROVAL_KEYRING_PATH` | No | `$APPROVAL_KEY_DIR/keyring.json` | `ApprovalKeyManager.from_env(base_dir=...)` | Active/retired verification keyring |
+| `APPROVAL_KEY_PASSPHRASE` | No | — | `ApprovalKeyManager.ensure_unlocked_interactive()` | Optional non-interactive passphrase source for headless startup |
 | `NONCE_RETENTION_PERIOD_SECONDS` | No | `604800` | `ApprovalStore.from_env(base_dir=...)` | Expired envelope pruning horizon |
 | `APPROVAL_CLOCK_SKEW_SECONDS` | No | `60` | `ApprovalStore.from_env(base_dir=...)` | Startup invariant with retention + TTL |
 | `SKILLS_DIR` | No | `skills` | `_resolve_shipped_skills_dir()` | Shipped skills path, resolves from `chat.py` dir |
@@ -176,6 +177,9 @@ split into focused companion modules.
 
 ## Change Log
 
+- 2026-02-16: Approval key unlock now checks optional
+  `APPROVAL_KEY_PASSPHRASE` before prompting, enabling headless startup
+  while preserving interactive fallback. (Issue #86)
 - 2026-02-16: `otel_tracing.py` now reads `OTEL_EXPORTER_OTLP_INSECURE`
   (default `true`) so OTLP exporter TLS behavior is env-configurable
   instead of hardcoded insecure mode. (Issue #82)
