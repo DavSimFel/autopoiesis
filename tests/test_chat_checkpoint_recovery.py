@@ -8,7 +8,7 @@ from typing import Any, cast
 
 from _pytest.monkeypatch import MonkeyPatch
 
-import chat
+import chat_worker
 from history_store import init_history_store, load_checkpoint, save_checkpoint
 from models import WorkItem, WorkItemInput, WorkItemPriority, WorkItemType
 
@@ -23,6 +23,7 @@ class _FakeRunResult:
 
 @dataclass
 class _FakeAgent:
+    name: str | None = "test-agent"
     captured_message_history: list[Any] | None = None
 
     def run_sync(
@@ -43,6 +44,9 @@ class _FakeRuntime:
     agent: Any
     backend: Any
     history_db_path: str
+    approval_store: Any = None
+    key_manager: Any = None
+    tool_policy: Any = None
 
 
 def _fake_deserialize_history(history_json: str | None) -> list[str]:
@@ -65,14 +69,15 @@ def test_run_agent_step_prefers_checkpoint_history_and_clears_checkpoint(
     save_checkpoint(str(history_db), "work-item-1", "checkpoint-history", 2)
 
     fake_agent = _FakeAgent()
+    fake_backend = type("FakeBackend", (), {"root_dir": str(tmp_path)})()
     runtime = _FakeRuntime(
         agent=cast(Any, fake_agent),
-        backend=cast(Any, object()),
+        backend=cast(Any, fake_backend),
         history_db_path=str(history_db),
     )
-    monkeypatch.setattr(chat, "_get_runtime", lambda: runtime)
-    monkeypatch.setattr(chat, "_deserialize_history", _fake_deserialize_history)
-    monkeypatch.setattr(chat, "_serialize_history", _fake_serialize_history)
+    monkeypatch.setattr(chat_worker, "get_runtime", lambda: runtime)
+    monkeypatch.setattr(chat_worker, "_deserialize_history", _fake_deserialize_history)
+    monkeypatch.setattr(chat_worker, "_serialize_history", _fake_serialize_history)
 
     item = WorkItem(
         id="work-item-1",
@@ -81,7 +86,7 @@ def test_run_agent_step_prefers_checkpoint_history_and_clears_checkpoint(
         input=WorkItemInput(prompt="Hello", message_history_json="stale-history"),
     )
 
-    output = chat.run_agent_step(item.model_dump(mode="json"))
+    output = chat_worker.run_agent_step(item.model_dump(mode="json"))
 
     assert fake_agent.captured_message_history == ["decoded:checkpoint-history"]
     assert output["text"] == "ok"

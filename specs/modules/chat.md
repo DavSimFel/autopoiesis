@@ -3,19 +3,23 @@
 ## Purpose
 
 `chat.py` is the runtime entrypoint. It builds the agent stack, launches DBOS,
-and enters the CLI chat loop. It also hosts the DBOS workflow/step functions
-that execute work items from the queue.
+and enters the CLI chat loop. Worker, runtime, and approval helpers are
+split into focused companion modules.
 
 ## Status
 
-- **Last updated:** 2026-02-15 (Issue #9)
-- **Source:** `chat.py`
+- **Last updated:** 2026-02-16 (Issue #19)
+- **Source:** `chat.py`, `chat_runtime.py`, `chat_worker.py`, `chat_approval.py`, `chat_cli.py`
 
 ## File Structure
 
 | File | Responsibility |
 |------|---------------|
-| `chat.py` | Startup, agent wiring, DBOS workflow/step, enqueue helpers, approval UI, CLI loop |
+| `chat.py` | Entrypoint, rotate-key command, DBOS launch, runtime wiring |
+| `chat_runtime.py` | Runtime dataclass, env loading helpers, backend/toolset/agent builders |
+| `chat_worker.py` | DBOS workflow/step functions, enqueue helpers, history serialization |
+| `chat_approval.py` | Approval scope, request/result serialization, CLI approval collection |
+| `chat_cli.py` | Interactive CLI loop and approval re-enqueue flow |
 | `models.py` | `AgentDeps`, `WorkItem`, `WorkItemInput`, `WorkItemOutput`, priority/type enums |
 | `skills.py` | Skill discovery, progressive loading, skills toolset |
 | `work_queue.py` | Queue instance only (no functions importing from `chat.py`) |
@@ -34,6 +38,14 @@ that execute work items from the queue.
 | `DBOS_APP_NAME` | No | `pydantic_dbos_agent` | `main()` | DBOS app name |
 | `DBOS_AGENT_NAME` | No | `chat` | `main()` | Agent name |
 | `DBOS_SYSTEM_DATABASE_URL` | No | `sqlite:///dbostest.sqlite` | `main()` | DBOS database URL |
+| `APPROVAL_DB_PATH` | No | `data/approvals.sqlite` | `ApprovalStore.from_env(base_dir=...)` | Optional SQLite override for approval envelopes |
+| `APPROVAL_TTL_SECONDS` | No | `3600` | `ApprovalStore.from_env(base_dir=...)` | Approval expiry window in seconds |
+| `APPROVAL_KEY_DIR` | No | `data/keys` | `ApprovalKeyManager.from_env(base_dir=...)` | Base directory for approval key material |
+| `APPROVAL_PRIVATE_KEY_PATH` | No | `$APPROVAL_KEY_DIR/approval.key` | `ApprovalKeyManager.from_env(base_dir=...)` | Encrypted Ed25519 private key path |
+| `APPROVAL_PUBLIC_KEY_PATH` | No | `$APPROVAL_KEY_DIR/approval.pub` | `ApprovalKeyManager.from_env(base_dir=...)` | Active public key path |
+| `APPROVAL_KEYRING_PATH` | No | `$APPROVAL_KEY_DIR/keyring.json` | `ApprovalKeyManager.from_env(base_dir=...)` | Active/retired verification keyring |
+| `NONCE_RETENTION_PERIOD_SECONDS` | No | `604800` | `ApprovalStore.from_env(base_dir=...)` | Expired envelope pruning horizon |
+| `APPROVAL_CLOCK_SKEW_SECONDS` | No | `60` | `ApprovalStore.from_env(base_dir=...)` | Startup invariant with retention + TTL |
 | `SKILLS_DIR` | No | `skills` | `_resolve_shipped_skills_dir()` | Shipped skills path, resolves from `chat.py` dir |
 | `CUSTOM_SKILLS_DIR` | No | `skills` | `_resolve_custom_skills_dir()` | Custom skills path, resolves inside `AGENT_WORKSPACE_ROOT` when relative |
 
@@ -57,17 +69,21 @@ that execute work items from the queue.
 
 ### Runtime State
 
-- `_Runtime` dataclass holds agent + backend for the process lifetime
+- `_Runtime` dataclass holds agent + backend + approval store + unlocked key manager + tool policy for the process lifetime
 - `_set_runtime()` / `_get_runtime()` — set in `main()`, read by workers
 - `_CheckpointContext` + `ContextVar` store active checkpoint metadata per
   execution context for history processor writes
 
 ### Deferred Tool Serialization
 
-- `_serialize_deferred_requests(requests)` — extract tool_call_id, tool_name,
-  args from `DeferredToolRequests` to JSON for transport through the queue
-- `_deserialize_deferred_results(results_json)` — reconstruct
-  `DeferredToolResults` from JSON approval decisions
+- `_build_approval_scope(approval_context_id, backend, agent_name)` — build live
+  execution scope for approval hashing/verification
+- `_serialize_deferred_requests(requests, scope, approval_store, key_manager, tool_policy)` —
+  validate deferred calls against immutable tool policy, persist a nonce-bound
+  envelope with `key_id`, and serialize nonce + plan hash prefix + tool calls
+- `_deserialize_deferred_results(results_json, scope, approval_store, key_manager)` —
+  verify signature-first + context drift + bijection + atomic nonce consume, then reconstruct
+  `DeferredToolResults`
 
 ### Queue Workers
 
@@ -87,8 +103,10 @@ that execute work items from the queue.
 ### CLI Approval Display
 
 - `_display_approval_requests(requests_json)` — display pending tool calls
-  with tool name and arguments; returns parsed request list
-- `_gather_approvals(requests)` — prompt user for y/n on each tool call
+  with tool name and full arguments; returns parsed approval payload
+- `_gather_approvals(payload, approval_store, key_manager)` — prompt user for y/n on each tool call,
+  persist signed approval object + signature on the envelope, then return
+  serialized submission (`nonce` + per-call decisions)
   (supports approve-all, deny-all, or pick individually); returns serialized
   approval decisions
 
@@ -99,22 +117,29 @@ that execute work items from the queue.
   `enqueue_and_wait()`. If output contains `deferred_tool_requests_json`,
   displays pending tool calls, gathers user approval, and re-enqueues with
   `deferred_tool_results_json` until a final text response is received.
-  History flows through `WorkItemInput.message_history_json`.
+  History flows through `WorkItemInput.message_history_json`. Approval scope
+  continuity flows through `WorkItemInput.approval_context_id`.
 
 ### Entrypoint
 
-- `main()` — load .env → build stack → set runtime → DBOS launch → chat loop
+- `main()` — load .env → optional `rotate-key` command path → unlock approval key
+  (required) → build stack → set runtime → DBOS launch → chat loop
+- `_rotate_key(base_dir)` — interactive key rotation; invalidates pending envelopes
 
 ## Deferred Tool Approval Flow
 
 1. Agent calls a tool with `require_write_approval=True`
 2. PydanticAI returns `DeferredToolRequests` instead of executing the tool
-3. Worker serializes the requests into `WorkItemOutput.deferred_tool_requests_json`
-4. CLI displays tool name + args, prompts user for approval (Y/n/pick)
-5. CLI re-enqueues a new `WorkItem` with same history + approval decisions
-6. Worker reconstructs `DeferredToolResults` and passes to next agent run
-7. Agent executes approved tools, gets denial messages for denied ones
-8. Loop repeats until agent returns a final `str` response
+3. Worker validates deferred tool classifications (read-only tools in deferred requests are rejected)
+4. Worker serializes requests into `WorkItemOutput.deferred_tool_requests_json`
+5. Worker stores an approval envelope (nonce + scope + tool calls + plan hash + key_id)
+6. CLI displays full tool args + plan hash prefix, prompts user for approval
+7. CLI signs canonical signed object and persists signature on the envelope
+8. CLI re-enqueues a new `WorkItem` with nonce + approval decisions
+9. Worker verifies signature/key first, then context hash and decision bijection,
+   then atomically consumes nonce and reconstructs `DeferredToolResults`
+10. Agent executes approved tools, gets denial messages for denied ones
+11. Loop repeats until agent returns a final `str` response
 
 ## Invariants
 
@@ -127,8 +152,13 @@ that execute work items from the queue.
   `<AGENT_WORKSPACE_ROOT>/skills`.
 - Backend execute always disabled. Write approval always required.
 - Console deps contract validated at startup.
-- Workflow/step functions live in `chat.py` to avoid circular imports.
+- Workflow/step functions live in `chat_worker.py` and are imported by entrypoint flow.
 - Stream handles are in-process only — not durable, not serialised.
+- Deferred approvals are nonce-bound and single-use (atomic consume in SQLite).
+- Agent execution is blocked unless approval signing key is unlocked at startup.
+- No approval execution path exists without a persisted envelope signature.
+- Invalid/tampered approval submissions are rejected before nonce consumption.
+- Unknown tool names default to side-effecting in deferred tool classification.
 - Deferred tool requests/results are serialized as JSON for queue transport.
 
 ## Dependencies
@@ -142,11 +172,29 @@ that execute work items from the queue.
 - 2026-02-16: Replaced module-global active checkpoint state with
   context-local `ContextVar` storage for safer worker execution.
   (Issue #21, PR #23)
+- 2026-02-16: Refactored chat runtime into `chat_runtime.py`,
+  `chat_worker.py`, `chat_approval.py`, and `chat_cli.py` to reduce file
+  size and isolate responsibilities while preserving queue-based behavior.
+  (Issue #19, PR #20)
 - 2026-02-15: Skills now load from two places: shipped skills (`SKILLS_DIR`,
   repo-relative by default) and custom workspace skills (`CUSTOM_SKILLS_DIR`,
   workspace-relative by default). Custom skills override shipped skills by name.
   Added shipped `skillmaker` skill and quality tools for skill lint/validation.
   (Issue #9)
+- 2026-02-15: Deferred approval envelopes now persist in SQLite with canonical
+  plan hashing, context-drift verification, bijection checks, and atomic
+  nonce consumption. Added `APPROVAL_TTL_SECONDS` and optional
+  `APPROVAL_DB_PATH` override; default storage follows DBOS SQLite.
+  Approval context now uses a stable `approval_context_id` across
+  re-enqueued work items, and malformed submissions are rejected before
+  nonce consumption.
+  (Issue #19)
+- 2026-02-15: Phase 1 security completion wiring. Approval flow now requires
+  unlocked Ed25519 signing key at startup, stores envelope `key_id`, signs
+  approval decisions before re-enqueue, verifies signature before consume, and
+  enforces immutable tool classification defaults. Added key rotation command
+  (`python chat.py rotate-key`) that expires pending envelopes.
+  (Issue #19)
 - 2026-02-15: Skill system integration. `AgentDeps` moved to `models.py`.
   `build_toolsets()` returns `(toolsets, instructions)`. `build_agent()`
   accepts instructions list, passes to PydanticAI `instructions` param.
