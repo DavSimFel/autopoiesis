@@ -135,10 +135,13 @@ def search_memory(
 def _sanitize_fts_query(query: str) -> str:
     """Sanitize user input into a safe FTS5 query string.
 
-    Strips FTS5 operators and wraps each token as a prefix search term.
+    Strips FTS5 operators/special chars and wraps each token as a prefix
+    search term.  FTS5 keywords (AND, OR, NOT, NEAR) are dropped because
+    they alter query semantics even when suffixed with ``*``.
     """
+    fts5_keywords = {"AND", "OR", "NOT", "NEAR"}
     cleaned = re.sub(r"[^\w\s]", " ", query)
-    tokens = cleaned.split()
+    tokens = [t for t in cleaned.split() if t.upper() not in fts5_keywords]
     if not tokens:
         return ""
     return " OR ".join(f"{token}*" for token in tokens)

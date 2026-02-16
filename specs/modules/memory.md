@@ -55,3 +55,6 @@ Persistent chat memory with semantic search via SQLite FTS5. The agent retains k
 
 - 2026-02-16: Extracted shared `db.py` connection factory (`open_db()`); replaced inline
   WAL pragma in `history_store.py` and `memory_store.py`. (Issue #84)
+- 2026-02-16: FTS5 sanitizer bugfix — `_sanitize_fts_query` now strips FTS5 keywords
+  (AND, OR, NOT, NEAR) from user input to prevent them from altering query semantics.
+  (Issue #88, PR #111)
