@@ -41,3 +41,14 @@ Run any shell command in the workspace. Use this for:
 def compose_system_prompt(fragments: Sequence[str]) -> str:
     """Join non-empty prompt fragments into a single system prompt string."""
     return "\n\n".join(fragment for fragment in fragments if fragment)
+
+
+def inject_topic_context(base_prompt: str, topic_instructions: str) -> str:
+    """Append active topic instructions to the system prompt."""
+    section = (
+        "\n\n## Active Topics\n\n"
+        "The following topic instructions are active for this session. "
+        "Follow them in addition to your base instructions.\n\n"
+        f"{topic_instructions}"
+    )
+    return base_prompt + section
