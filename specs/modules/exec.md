@@ -54,6 +54,11 @@ Uses stdlib `pty.openpty()` — zero external dependencies. Enables interactive 
 - `execute` and `execute_pty` return `ToolReturn` (not raw dicts) with structured metadata (`session_id`, `log_path`, `exit_code`).
 - `process_log` returns `ToolReturn` with log content as `return_value` and metadata (`session_id`, `log_path`, `total` line count).
 
+## Change Log
+
+- 2026-02-16: Fixed `sandbox_cwd` path confinement to use `Path.is_relative_to()`
+  instead of string prefix matching, preventing sibling-directory escape. (Issue #42)
+
 ## References
 
 - Issue: #24
