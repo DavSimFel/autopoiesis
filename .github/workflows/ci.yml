@@ -42,7 +42,7 @@ jobs:
       - name: pip-audit
         run: uv run pip-audit
       - name: Bandit
-        run: uv run bandit -s B101 *.py
+        run: uv run bandit -r . -s B101 --exclude .venv
 
   spec-check:
     runs-on: ubuntu-latest
@@ -69,6 +69,9 @@ jobs:
             changed_spec_set["$spec_path"]=1
           done
 
+          # Map source files (full relative paths) to their spec files.
+          # Works with flat layout (e.g. "chat.py") and nested layout
+          # (e.g. "approval/store.py") — keys are the paths git reports.
           declare -A source_to_spec=(
             ["chat.py"]="specs/modules/chat.md"
             ["approval_keys.py"]="specs/modules/chat.md"
@@ -106,8 +109,8 @@ jobs:
           missing_specs=()
           unmapped_sources=()
           for src_path in "${changed_sources[@]}"; do
-            src_file=${src_path##*/}
-            expected_spec="${source_to_spec[$src_file]-}"
+            # Look up by full relative path (not basename)
+            expected_spec="${source_to_spec[$src_path]-}"
             if [ -z "$expected_spec" ]; then
               unmapped_sources+=("$src_path")
               continue
@@ -123,12 +126,12 @@ jobs:
             fi
           done
 
-          # Convention for unmapped modules:
-          # if <filename>.py has a module spec at specs/modules/<filename>.md,
+          # Fallback convention for unmapped modules:
+          # if <basename>.py has a spec at specs/modules/<basename>.md,
           # that spec must be updated in the same PR.
           for src_path in "${unmapped_sources[@]}"; do
-            src_file=${src_path##*/}
-            fallback_spec="specs/modules/${src_file%.py}.md"
+            base_name="${src_path##*/}"
+            fallback_spec="specs/modules/${base_name%.py}.md"
 
             if [ -f "$fallback_spec" ] && [ -z "${changed_spec_set[$fallback_spec]+x}" ]; then
               missing_specs+=("$src_path -> $fallback_spec")
