@@ -125,6 +125,10 @@ Detailed instructions the agent follows when this skill is loaded...
 - Name collisions are resolved by last-write-wins in cache construction,
   meaning custom skills override shipped skills.
 
+## Observability
+
+- All skill tools carry `metadata={"category": "skills"}` for toolset-level observability.
+
 ## Dependencies
 
 - `pyyaml>=6.0` (90KB, zero transitive deps)

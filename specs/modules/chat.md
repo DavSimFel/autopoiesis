@@ -20,6 +20,7 @@ split into focused companion modules.
 | `chat_worker.py` | DBOS workflow/step functions, enqueue helpers, history serialization |
 | `chat_approval.py` | Approval scope, request/result serialization, CLI approval collection |
 | `chat_cli.py` | Interactive CLI loop and approval re-enqueue flow |
+| `toolset_wrappers.py` | `ObservableToolset` wrapper for logging tool call metrics (name, duration, outcome) |
 | `models.py` | `AgentDeps`, `WorkItem`, `WorkItemInput`, `WorkItemOutput`, priority/type enums |
 | `skills.py` | Skill discovery, progressive loading, skills toolset |
 | `work_queue.py` | Queue instance only (no functions importing from `chat.py`) |
@@ -66,6 +67,13 @@ split into focused companion modules.
 - `build_agent(provider, name, toolsets, instructions)` — Anthropic or
   OpenRouter factory. Passes instructions to PydanticAI's `instructions`
   parameter for automatic system prompt composition.
+
+### Observability
+
+- `build_toolsets()` wraps all toolsets in `ObservableToolset` via
+  `wrap_toolsets()` from `toolset_wrappers.py` before returning them.
+  This logs tool call name, duration, and success/failure for every
+  tool invocation.
 
 ### Runtime State
 
@@ -169,6 +177,12 @@ split into focused companion modules.
 
 ## Change Log
 
+- 2026-02-16: Added `ObservableToolset` wrapper (`toolset_wrappers.py`) that
+  intercepts all tool calls to log name, duration, and outcome. All toolsets
+  returned by `build_toolsets()` are now wrapped for observability. Tool
+  metadata categories added across exec, process, memory, and skill tools.
+  Exec/process tools return `ToolReturn` with structured metadata instead of
+  raw dicts. (Issue #38, PR #39)
 - 2026-02-16: Replaced module-global active checkpoint state with
   context-local `ContextVar` storage for safer worker execution.
   (Issue #21, PR #23)
