@@ -197,6 +197,12 @@ split into focused companion modules.
   `instrument_agent()`. When `OTEL_EXPORTER_OTLP_ENDPOINT` is set,
   `agent.instrument()` exports traces to the configured OTLP collector.
   Complementary to existing `ObservableToolset`. (Issue #60)
+- 2026-02-16: Added ``run_simple`` convenience module (``run_simple.py``) that
+  wraps ``agent.run_sync()`` with automatic deferred-tool approval for testing
+  and scripting use cases.  Calling ``run_sync()`` directly without
+  ``output_type=[str, DeferredToolRequests]`` crashes with a ``UserError``;
+  ``run_simple()`` handles this transparently.
+  (Issue #61)
 - 2026-02-16: Replaced module-global active checkpoint state with
   context-local `ContextVar` storage for safer worker execution.
   (Issue #21, PR #23)
