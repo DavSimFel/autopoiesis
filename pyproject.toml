@@ -12,6 +12,9 @@ dependencies = [
   "opentelemetry-api>=1.20",
   "opentelemetry-sdk>=1.20",
   "opentelemetry-exporter-otlp-proto-grpc>=1.20",
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.34",
+  "websockets>=14.0",
 ]
 
 [dependency-groups]
@@ -45,6 +48,9 @@ select = [
   "C901", # complexity
 ]
 ignore = []
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["PLR2004"]
 
 [tool.ruff.lint.pylint]
 max-args = 6
