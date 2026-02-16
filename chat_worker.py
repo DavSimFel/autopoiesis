@@ -54,7 +54,7 @@ _active_checkpoint_context: ContextVar[_CheckpointContext | None] = ContextVar(
 class _TurnInput:
     """Bundled arguments for a single agent turn."""
 
-    prompt: str
+    prompt: str | None
     deps: AgentDeps
     history: list[ModelMessage]
     deferred_results: DeferredToolResults | None
@@ -182,9 +182,8 @@ def run_agent_step(work_item_dict: dict[str, Any]) -> dict[str, Any]:
             key_manager=rt.key_manager,
         )
 
-    prompt = item.input.prompt or ""
     turn = _TurnInput(
-        prompt=prompt,
+        prompt=item.input.prompt,
         deps=deps,
         history=history,
         deferred_results=deferred_results,

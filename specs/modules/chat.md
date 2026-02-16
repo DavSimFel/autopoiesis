@@ -206,3 +206,17 @@ split into focused companion modules.
 - 2026-02-15: Unified all work through priority queue. WorkItem model with
   structured input/output. Stream handles for real-time CLI output. Removed
   `to_cli_sync()` / `DBOSAgent`. (Issue #8)
+
+## Prompt Semantics
+
+### Approval Resume
+
+When resuming after an approval decision, the prompt is `None` (not empty string).
+PydanticAI treats `None` as a follow-up turn with no new user input, while `""` adds a
+meaningless empty user message that can skew tool-call behavior.
+
+### Capability Instructions
+
+Capability text (exec, memory, skills) is generated conditionally based on what's
+actually enabled. No contradictory "disabled/enabled" text is emitted. Instructions
+describe actual enforcement honestly — cwd/path validation, not hard sandbox.
