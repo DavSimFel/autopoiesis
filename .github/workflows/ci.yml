@@ -31,7 +31,7 @@ jobs:
       - uses: astral-sh/setup-uv@v4
       - run: uv sync
       - name: Run tests
-        run: uv run pytest -v --tb=short || [ $? -eq 5 ]
+        run: uv run pytest -v --tb=short
 
   spec-check:
     runs-on: ubuntu-latest
