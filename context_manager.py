@@ -133,7 +133,7 @@ def compact_history(
     if len(messages) <= keep_recent:
         return messages
 
-    older = messages[: -keep_recent]
+    older = messages[:-keep_recent]
     recent = messages[-keep_recent:]
     summary_text = _summarize_older(older)
     summary_msg = ModelRequest(parts=[UserPromptPart(content=summary_text)])

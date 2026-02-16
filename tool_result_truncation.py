@@ -34,10 +34,7 @@ def _truncate_part(
     log_path.write_text(content, encoding="utf-8")
 
     truncated = content[:max_chars]
-    suffix = (
-        f"\n\n[Truncated — full output ({len(content)} chars) saved to "
-        f"{log_path}]"
-    )
+    suffix = f"\n\n[Truncated — full output ({len(content)} chars) saved to {log_path}]"
     new_content = truncated + suffix
     return dataclasses.replace(part, content=new_content)
 
@@ -83,9 +80,7 @@ def truncate_tool_results(
             log_dir = _ensure_log_dir(workspace_root)
 
         new_parts = [
-            _truncate_part(p, log_dir, max_chars)
-            if isinstance(p, ToolReturnPart)
-            else p
+            _truncate_part(p, log_dir, max_chars) if isinstance(p, ToolReturnPart) else p
             for p in msg.parts
         ]
         result.append(dataclasses.replace(msg, parts=new_parts))

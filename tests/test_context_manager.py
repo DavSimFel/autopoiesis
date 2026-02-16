@@ -46,9 +46,7 @@ class TestCompactHistory:
 
     def test_over_threshold_compacts(self) -> None:
         big = "x" * 4000
-        msgs: list[ModelMessage] = [
-            _make_request(big) for _ in range(20)
-        ]
+        msgs: list[ModelMessage] = [_make_request(big) for _ in range(20)]
         keep = 5
         result = compact_history(msgs, max_tokens=5000, keep_recent=keep)
         expected_len = keep + 1  # 1 summary + keep_recent
@@ -67,18 +65,14 @@ class TestCompactHistory:
 
 class TestTruncateToolResults:
     def test_small_results_unchanged(self, tmp_path: Path) -> None:
-        part = ToolReturnPart(
-            tool_name="test", content="short", tool_call_id="c1"
-        )
+        part = ToolReturnPart(tool_name="test", content="short", tool_call_id="c1")
         msgs: list[ModelMessage] = [ModelRequest(parts=[part])]
         result = truncate_tool_results(msgs, tmp_path, max_chars=100)
         assert result == msgs
 
     def test_large_result_truncated(self, tmp_path: Path) -> None:
         big_content = "x" * 200
-        part = ToolReturnPart(
-            tool_name="test", content=big_content, tool_call_id="c2"
-        )
+        part = ToolReturnPart(tool_name="test", content=big_content, tool_call_id="c2")
         msgs: list[ModelMessage] = [ModelRequest(parts=[part])]
         result = truncate_tool_results(msgs, tmp_path, max_chars=50)
 
@@ -96,9 +90,7 @@ class TestTruncateToolResults:
         assert log_file.read_text() == big_content
 
     def test_non_string_content_unchanged(self, tmp_path: Path) -> None:
-        part = ToolReturnPart(
-            tool_name="test", content={"key": "value"}, tool_call_id="c3"
-        )
+        part = ToolReturnPart(tool_name="test", content={"key": "value"}, tool_call_id="c3")
         msgs: list[ModelMessage] = [ModelRequest(parts=[part])]
         result = truncate_tool_results(msgs, tmp_path, max_chars=5)
         assert result == msgs
