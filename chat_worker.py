@@ -17,10 +17,10 @@ from chat_approval import (
     deserialize_deferred_results,
     serialize_deferred_requests,
 )
-from chat_runtime import get_runtime
+from chat_runtime import Runtime, get_runtime
 from history_store import clear_checkpoint, load_checkpoint, save_checkpoint
 from models import AgentDeps, WorkItem, WorkItemOutput
-from streaming import take_stream
+from streaming import StreamHandle, take_stream
 from work_queue import work_queue
 
 try:
@@ -82,13 +82,10 @@ def checkpoint_history_processor(messages: list[ModelMessage]) -> list[ModelMess
 def _build_output(
     result_output: AgentOutput,
     all_msgs: list[ModelMessage],
-    scope: object,
-    rt: object,
+    scope: str,
+    rt: Runtime,
 ) -> WorkItemOutput:
-    """Build WorkItemOutput from agent result."""
-    from chat_runtime import Runtime
-
-    assert isinstance(rt, Runtime)
+    """Convert agent output to a WorkItemOutput, handling deferred approvals."""
     if isinstance(result_output, DeferredToolRequests):
         return WorkItemOutput(
             deferred_tool_requests_json=serialize_deferred_requests(
@@ -104,6 +101,59 @@ def _build_output(
         text=result_output,
         message_history_json=_serialize_history(all_msgs),
     )
+
+
+def _run_streaming(
+    rt: Runtime,
+    prompt: str,
+    deps: AgentDeps,
+    history: list[ModelMessage],
+    deferred_results: DeferredToolResults | None,
+    scope: str,
+    stream_handle: StreamHandle,
+) -> WorkItemOutput:
+    """Execute an agent turn with real-time streaming output."""
+    output_type: list[type[AgentOutput]] = [str, DeferredToolRequests]
+
+    async def _stream() -> WorkItemOutput:
+        try:
+            async with rt.agent.run_stream(
+                prompt,
+                deps=deps,
+                message_history=history,
+                output_type=output_type,
+                deferred_tool_results=deferred_results,
+            ) as stream:
+                async for chunk in stream.stream_text(delta=True):
+                    stream_handle.write(chunk)
+                result_output: AgentOutput = await stream.get_output()
+                all_msgs = stream.all_messages()
+        finally:
+            stream_handle.close()
+
+        return _build_output(result_output, all_msgs, scope, rt)
+
+    return asyncio.run(_stream())
+
+
+def _run_sync(
+    rt: Runtime,
+    prompt: str,
+    deps: AgentDeps,
+    history: list[ModelMessage],
+    deferred_results: DeferredToolResults | None,
+    scope: str,
+) -> WorkItemOutput:
+    """Execute an agent turn synchronously without streaming."""
+    output_type: list[type[AgentOutput]] = [str, DeferredToolRequests]
+    result = rt.agent.run_sync(
+        prompt,
+        deps=deps,
+        message_history=history,
+        output_type=output_type,
+        deferred_tool_results=deferred_results,
+    )
+    return _build_output(result.output, result.all_messages(), scope, rt)
 
 
 @DBOS.step()
@@ -130,41 +180,17 @@ def run_agent_step(work_item_dict: dict[str, Any]) -> dict[str, Any]:
 
     prompt = item.input.prompt or ""
     stream_handle = take_stream(item.id)
-    output_type: list[type[AgentOutput]] = [str, DeferredToolRequests]
     checkpoint_token: Token[_CheckpointContext | None] = _active_checkpoint_context.set(
         _CheckpointContext(db_path=rt.history_db_path, work_item_id=item.id)
     )
 
     try:
         if stream_handle is not None:
-            async def _stream() -> WorkItemOutput:
-                try:
-                    async with rt.agent.run_stream(
-                        prompt,
-                        deps=deps,
-                        message_history=history,
-                        output_type=output_type,
-                        deferred_tool_results=deferred_results,
-                    ) as stream:
-                        async for chunk in stream.stream_text(delta=True):
-                            stream_handle.write(chunk)
-                        result_output: AgentOutput = await stream.get_output()
-                        all_msgs = stream.all_messages()
-                finally:
-                    stream_handle.close()
-
-                return _build_output(result_output, all_msgs, scope, rt)
-
-            output = asyncio.run(_stream())
-        else:
-            result = rt.agent.run_sync(
-                prompt,
-                deps=deps,
-                message_history=history,
-                output_type=output_type,
-                deferred_tool_results=deferred_results,
+            output = _run_streaming(
+                rt, prompt, deps, history, deferred_results, scope, stream_handle
             )
-            output = _build_output(result.output, result.all_messages(), scope, rt)
+        else:
+            output = _run_sync(rt, prompt, deps, history, deferred_results, scope)
     finally:
         _active_checkpoint_context.reset(checkpoint_token)
 
