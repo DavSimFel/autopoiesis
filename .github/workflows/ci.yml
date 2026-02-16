@@ -42,7 +42,7 @@ jobs:
       - name: pip-audit
         run: uv run pip-audit
       - name: Bandit
-        run: uv run bandit -r . -s B101 --exclude .venv,tests
+        run: uv run bandit -r . -s B101 --exclude ./.venv,./tests
 
   spec-check:
     runs-on: ubuntu-latest
