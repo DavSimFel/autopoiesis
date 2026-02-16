@@ -39,17 +39,24 @@ def _rotate_key(base_dir: Path) -> None:
     print("Approval signing key rotated. Pending approvals were expired.")
 
 
+def _handle_subcommand(base_dir: Path) -> bool:
+    """Handle CLI subcommands. Returns True if a subcommand ran."""
+    args = sys.argv[1:]
+    if not args:
+        return False
+    if len(args) == 1 and args[0] == "rotate-key":
+        _rotate_key(base_dir)
+        return True
+    raise SystemExit("Usage: python chat.py [rotate-key]")
+
+
 def main() -> None:
     """Load config, assemble runtime components, and launch DBOS + CLI chat."""
     base_dir = Path(__file__).resolve().parent
     load_dotenv(dotenv_path=base_dir / ".env")
 
-    args = sys.argv[1:]
-    if args:
-        if len(args) == 1 and args[0] == "rotate-key":
-            _rotate_key(base_dir)
-            return
-        raise SystemExit("Usage: python chat.py [rotate-key]")
+    if _handle_subcommand(base_dir):
+        return
 
     provider = os.getenv("AI_PROVIDER", "anthropic").lower()
     agent_name = os.getenv("DBOS_AGENT_NAME", "chat")
