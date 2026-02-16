@@ -35,12 +35,20 @@ Edit `.env`:
 ```bash
 uv sync
 uv run python chat.py
+uv run python chat.py --help
+uv run python chat.py --version
 ```
 
 Rotate approval signing key (expires all pending approvals):
 
 ```bash
 uv run python chat.py rotate-key
+```
+
+Disable deferred write/shell approval prompts for local trusted runs:
+
+```bash
+uv run python chat.py --no-approval
 ```
 
 ## Shipped Skills

@@ -59,6 +59,8 @@ split into focused companion modules.
 
 ### Startup
 
+- `parse_cli_args(base_dir, argv=None)` — argparse-based CLI parsing with
+  `--help`, `--version`, `--no-approval`, and `rotate-key` subcommand
 - `required_env(name)` — fail-fast env var read
 - `resolve_workspace_root()` — resolve + create workspace dir
 - `_resolve_shipped_skills_dir()` — resolve shipped skills directory (default: `skills/`)
@@ -130,8 +132,9 @@ split into focused companion modules.
 
 ### Entrypoint
 
-- `main()` — load .env → optional `rotate-key` command path → unlock approval key
-  (required) → build stack → set runtime → DBOS launch → chat loop
+- `main()` — load .env → parse CLI args (`--help` / `--version` /
+  `--no-approval` / `rotate-key`) → unlock approval key (unless `--no-approval`) →
+  build stack → set runtime → DBOS launch → chat loop
 - `_rotate_key(base_dir)` — interactive key rotation; invalidates pending envelopes
 
 ## Deferred Tool Approval Flow
@@ -158,7 +161,8 @@ split into focused companion modules.
 - Workspace root resolves relative to `chat.py` when not absolute.
 - Skills load from shipped + custom locations; custom directory defaults to
   `<AGENT_WORKSPACE_ROOT>/skills`.
-- Backend execute always disabled. Write approval always required.
+- Backend execute always disabled. Write approval is enabled by default and can
+  be disabled with `--no-approval`.
 - Console deps contract validated at startup.
 - Workflow/step functions live in `chat_worker.py` and are imported by entrypoint flow.
 - Stream handles are in-process only — not durable, not serialised.
@@ -177,6 +181,9 @@ split into focused companion modules.
 
 ## Change Log
 
+- 2026-02-16: Replaced manual `sys.argv` parsing with `argparse` in `chat.py`.
+  Added `--help`, `--version` (from `pyproject.toml`), and `--no-approval`
+  while keeping `rotate-key` as a subcommand. (Issue #87)
 - 2026-02-16: Approval key unlock now checks optional
   `APPROVAL_KEY_PASSPHRASE` before prompting, enabling headless startup
   while preserving interactive fallback. (Issue #86)

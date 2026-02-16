@@ -168,7 +168,7 @@ async def _prepare_exec_tools(
     return tool_defs
 
 
-def _build_exec_toolset() -> AbstractToolset[AgentDeps]:
+def _build_exec_toolset(*, require_write_approval: bool) -> AbstractToolset[AgentDeps]:
     """Build the exec/process toolset with dynamic visibility and approval."""
     from pydantic_ai import FunctionToolset, Tool
 
@@ -205,16 +205,24 @@ def _build_exec_toolset() -> AbstractToolset[AgentDeps]:
 
     cleanup_exec_logs(workspace)
 
-    return ts.prepared(_prepare_exec_tools).approval_required(_needs_exec_approval)
+    prepared = ts.prepared(_prepare_exec_tools)
+    if require_write_approval:
+        return prepared.approval_required(_needs_exec_approval)
+    return prepared
 
 
 def build_toolsets(
     memory_db_path: str | None = None,
     subscription_registry: SubscriptionRegistry | None = None,
+    *,
+    require_write_approval: bool = True,
 ) -> tuple[list[AbstractToolset[AgentDeps]], str]:
     """Build all toolsets and return their static capability system prompt."""
     validate_console_deps_contract()
-    console = create_console_toolset(include_execute=False, require_write_approval=True)
+    console = create_console_toolset(
+        include_execute=False,
+        require_write_approval=require_write_approval,
+    )
     skills_toolset, skills_instr = create_skills_toolset(_build_skill_directories())
     toolsets: list[AbstractToolset[AgentDeps]] = [console, skills_toolset]
     system_prompt_fragments: list[str] = [
@@ -224,7 +232,7 @@ def build_toolsets(
     ]
 
     exec_enabled = os.getenv("ENABLE_EXECUTE", "").lower() in ("1", "true", "yes")
-    toolsets.append(_build_exec_toolset())
+    toolsets.append(_build_exec_toolset(require_write_approval=require_write_approval))
     if exec_enabled:
         system_prompt_fragments.append(EXEC_INSTRUCTIONS)
 

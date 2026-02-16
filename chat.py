@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import argparse
 import os
-import sys
+import tomllib
+from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -66,15 +69,53 @@ def _rotate_key(base_dir: Path) -> None:
     print("Approval signing key rotated. Pending approvals were expired.")
 
 
-def _handle_subcommand(base_dir: Path) -> bool:
-    """Handle CLI subcommands. Returns True if a subcommand ran."""
-    args = sys.argv[1:]
-    if not args:
-        return False
-    if len(args) == 1 and args[0] == "rotate-key":
-        _rotate_key(base_dir)
-        return True
-    raise SystemExit("Usage: python chat.py [rotate-key]")
+@dataclass(frozen=True)
+class CliArgs:
+    """Parsed command-line arguments."""
+
+    command: str | None
+    no_approval: bool
+
+
+def _project_version(base_dir: Path) -> str:
+    """Read package version from pyproject.toml with a stable fallback."""
+    pyproject_path = base_dir / "pyproject.toml"
+    try:
+        pyproject_data = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError):
+        return "0.1.0"
+    project_data = pyproject_data.get("project")
+    if isinstance(project_data, dict):
+        version = project_data.get("version")
+        if isinstance(version, str) and version:
+            return version
+    return "0.1.0"
+
+
+def parse_cli_args(base_dir: Path, argv: Sequence[str] | None = None) -> CliArgs:
+    """Parse CLI flags and subcommands."""
+    parser = argparse.ArgumentParser(
+        prog="chat.py",
+        description="Durable CLI chat with DBOS-backed execution.",
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {_project_version(base_dir)}",
+    )
+    parser.add_argument(
+        "--no-approval",
+        action="store_true",
+        help="Disable deferred tool approvals for write/shell tool calls.",
+    )
+    subcommands = parser.add_subparsers(dest="command")
+    subcommands.add_parser(
+        "rotate-key",
+        help="Rotate the approval signing key and expire pending approvals.",
+    )
+    parsed = parser.parse_args(argv)
+    command = parsed.command if isinstance(parsed.command, str) else None
+    return CliArgs(command=command, no_approval=bool(parsed.no_approval))
 
 
 def main() -> None:
@@ -83,7 +124,9 @@ def main() -> None:
     load_dotenv(dotenv_path=base_dir / ".env")
     otel_tracing.configure()
 
-    if _handle_subcommand(base_dir):
+    cli_args = parse_cli_args(base_dir)
+    if cli_args.command == "rotate-key":
+        _rotate_key(base_dir)
         return
 
     provider = os.getenv("AI_PROVIDER", "anthropic").lower()
@@ -92,7 +135,8 @@ def main() -> None:
     backend = build_backend()
     approval_store = ApprovalStore.from_env(base_dir=base_dir)
     key_manager = ApprovalKeyManager.from_env(base_dir=base_dir)
-    key_manager.ensure_unlocked_interactive()
+    if not cli_args.no_approval:
+        key_manager.ensure_unlocked_interactive()
     tool_policy = ToolPolicyRegistry.default()
     memory_db_path = resolve_memory_db_path(
         os.getenv("DBOS_SYSTEM_DATABASE_URL", "sqlite:///dbostest.sqlite")
@@ -104,6 +148,7 @@ def main() -> None:
     toolsets, system_prompt = build_toolsets(
         memory_db_path=memory_db_path,
         subscription_registry=subscription_registry,
+        require_write_approval=not cli_args.no_approval,
     )
 
     def _subscription_processor(msgs: list[ModelMessage]) -> list[ModelMessage]:
