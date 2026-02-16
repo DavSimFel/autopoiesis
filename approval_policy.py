@@ -26,6 +26,9 @@ _DEFAULT_READ_ONLY_TOOLS = frozenset(
         "glob_info",
         "grep",
         "grep_raw",
+        "process_list",
+        "process_poll",
+        "process_log",
     }
 )
 

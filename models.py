@@ -47,6 +47,7 @@ class WorkItemType(StrEnum):
     REVIEW = "review"
     MERGE = "merge"
     CUSTOM = "custom"
+    EXEC_CALLBACK = "exec_callback"
 
 
 class WorkItemInput(BaseModel):
