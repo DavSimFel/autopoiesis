@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from pydantic_ai import AbstractToolset, Agent
 from pydantic_ai._agent_graph import HistoryProcessor
 from pydantic_ai.settings import ModelSettings
+from pydantic_ai.tools import ToolsPrepareFunc
 
 from approval.keys import ApprovalKeyManager
 from approval.policy import ToolPolicyRegistry
@@ -105,6 +106,15 @@ def reset_runtime() -> None:
     _runtime_registry.reset()
 
 
+def prepare_tools_for_provider(
+    provider: str,
+) -> ToolsPrepareFunc[AgentDeps] | None:
+    """Return provider-specific tool preparation callback."""
+    if provider == "openrouter":
+        return strict_tool_definitions
+    return None
+
+
 def build_agent(
     provider: str,
     agent_name: str,
@@ -116,6 +126,7 @@ def build_agent(
     opts = options or AgentOptions()
     model = resolve_model(provider)
     effective_settings = opts.model_settings or build_model_settings()
+    prepare_tools = prepare_tools_for_provider(provider)
 
     return Agent(
         model,
@@ -125,7 +136,7 @@ def build_agent(
         instructions=opts.instructions,
         history_processors=list(opts.history_processors),
         name=agent_name,
-        prepare_tools=strict_tool_definitions,
+        prepare_tools=prepare_tools,
         model_settings=effective_settings,
         end_strategy="exhaustive",
     )
