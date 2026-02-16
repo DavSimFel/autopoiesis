@@ -235,7 +235,10 @@ def build_agent(
 ) -> Agent[AgentDeps, str]:
     """Create the configured agent from explicit provider/name/toolset/instructions."""
     all_instructions: list[str] = [
-        "You are a helpful coding assistant with filesystem and skill tools.",
+        "You are a helpful coding assistant with filesystem, execution, and skill tools. "
+        "Always use your tools to accomplish tasks — do not describe what you would do, "
+        "just do it. If a task requires running code, write the file and execute it. "
+        "If a task requires reading something, read it. Act, don't narrate.",
         *instructions,
     ]
     hp = history_processors or []
