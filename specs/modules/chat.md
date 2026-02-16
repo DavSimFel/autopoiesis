@@ -175,6 +175,10 @@ split into focused companion modules.
 
 ## Change Log
 
+- 2026-02-16: FallbackModel for provider resilience. When both
+  `ANTHROPIC_API_KEY` and `OPENROUTER_API_KEY` are set, wraps primary
+  and alternate models in `FallbackModel` for automatic retry on provider
+  failure. `AI_PROVIDER` controls which is primary. (Issue #57)
 - 2026-02-16: Added sliding-window context compaction and tool-result truncation
   as history processors. New modules: `context_manager.py`,
   `tool_result_truncation.py`. See `specs/modules/context.md`. (Issue #27)

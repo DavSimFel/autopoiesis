@@ -10,6 +10,8 @@ from typing import Any, get_type_hints
 
 from pydantic_ai import AbstractToolset, Agent, RunContext
 from pydantic_ai._agent_graph import HistoryProcessor
+from pydantic_ai.models import Model
+from pydantic_ai.models.fallback import FallbackModel
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.settings import ModelSettings
@@ -271,6 +273,48 @@ class AgentOptions:
     model_settings: ModelSettings | None = None
 
 
+def _build_anthropic_model() -> str:
+    """Build Anthropic model string. Requires ANTHROPIC_API_KEY."""
+    required_env("ANTHROPIC_API_KEY")
+    return os.getenv("ANTHROPIC_MODEL", "anthropic:claude-3-5-sonnet-latest")
+
+
+def _build_openrouter_model() -> OpenAIChatModel:
+    """Build OpenRouter model instance. Requires OPENROUTER_API_KEY."""
+    return OpenAIChatModel(
+        os.getenv("OPENROUTER_MODEL", "openai/gpt-4o-mini"),
+        provider=OpenAIProvider(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=required_env("OPENROUTER_API_KEY"),
+        ),
+    )
+
+
+def resolve_model(provider: str) -> Model | str:
+    """Resolve primary model with optional fallback for provider resilience.
+
+    When both ANTHROPIC_API_KEY and OPENROUTER_API_KEY are set, wraps the
+    primary model (selected by AI_PROVIDER) and the alternate in a
+    FallbackModel so requests automatically retry on the other provider.
+    """
+    has_anthropic = bool(os.getenv("ANTHROPIC_API_KEY"))
+    has_openrouter = bool(os.getenv("OPENROUTER_API_KEY"))
+
+    if provider == "anthropic":
+        primary: Model | str = _build_anthropic_model()
+        if has_openrouter:
+            return FallbackModel(primary, _build_openrouter_model())
+        return primary
+
+    if provider == "openrouter":
+        primary = _build_openrouter_model()
+        if has_anthropic:
+            return FallbackModel(primary, _build_anthropic_model())
+        return primary
+
+    raise SystemExit("Unsupported AI_PROVIDER. Use 'openrouter' or 'anthropic'.")
+
+
 def build_agent(
     provider: str,
     agent_name: str,
@@ -283,40 +327,19 @@ def build_agent(
     hp = list(opts.history_processors)
     dynamic_instructions = opts.instructions if opts.instructions is not None else None
     effective_settings = opts.model_settings or build_model_settings()
-    if provider == "anthropic":
-        required_env("ANTHROPIC_API_KEY")
-        return Agent(
-            os.getenv("ANTHROPIC_MODEL", "anthropic:claude-3-5-sonnet-latest"),
-            deps_type=AgentDeps,
-            toolsets=toolsets,
-            system_prompt=system_prompt,
-            instructions=dynamic_instructions,
-            history_processors=hp,
-            name=agent_name,
-            model_settings=effective_settings,
-            end_strategy="exhaustive",
-        )
-    if provider == "openrouter":
-        model = OpenAIChatModel(
-            os.getenv("OPENROUTER_MODEL", "openai/gpt-4o-mini"),
-            provider=OpenAIProvider(
-                base_url="https://openrouter.ai/api/v1",
-                api_key=required_env("OPENROUTER_API_KEY"),
-            ),
-        )
-        return Agent(
-            model,
-            deps_type=AgentDeps,
-            toolsets=toolsets,
-            system_prompt=system_prompt,
-            instructions=dynamic_instructions,
-            history_processors=hp,
-            name=agent_name,
-            prepare_tools=_strict_tool_definitions,
-            model_settings=effective_settings,
-            end_strategy="exhaustive",
-        )
-    raise SystemExit("Unsupported AI_PROVIDER. Use 'openrouter' or 'anthropic'.")
+    model = resolve_model(provider)
+    return Agent(
+        model,
+        deps_type=AgentDeps,
+        toolsets=toolsets,
+        system_prompt=system_prompt,
+        instructions=dynamic_instructions,
+        history_processors=hp,
+        name=agent_name,
+        prepare_tools=_strict_tool_definitions,
+        model_settings=effective_settings,
+        end_strategy="exhaustive",
+    )
 
 
 def instrument_agent(agent: Agent[AgentDeps, str]) -> bool:
