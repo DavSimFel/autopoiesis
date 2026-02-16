@@ -287,3 +287,22 @@ def build_agent(
             prepare_tools=_strict_tool_definitions,
         )
     raise SystemExit("Unsupported AI_PROVIDER. Use 'openrouter' or 'anthropic'.")
+
+
+def instrument_agent(agent: Agent[AgentDeps, str]) -> bool:
+    """Enable OpenTelemetry instrumentation on the agent if configured.
+
+    Activates ``Agent.instrument_all()`` when the ``OTEL_EXPORTER_OTLP_ENDPOINT``
+    environment variable is set, allowing trace export to any OTLP-compatible
+    collector.  Returns ``True`` when instrumentation was applied.
+
+    Uses the class-level ``instrument_all`` so all agents (including any
+    created later) inherit the setting.  The *agent* parameter is accepted
+    for call-site clarity but is not strictly required.
+    """
+    _ = agent  # kept for call-site readability
+    endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+    if not endpoint:
+        return False
+    Agent.instrument_all()
+    return True

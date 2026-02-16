@@ -49,6 +49,7 @@ split into focused companion modules.
 | `APPROVAL_CLOCK_SKEW_SECONDS` | No | `60` | `ApprovalStore.from_env(base_dir=...)` | Startup invariant with retention + TTL |
 | `SKILLS_DIR` | No | `skills` | `_resolve_shipped_skills_dir()` | Shipped skills path, resolves from `chat.py` dir |
 | `CUSTOM_SKILLS_DIR` | No | `skills` | `_resolve_custom_skills_dir()` | Custom skills path, resolves inside `AGENT_WORKSPACE_ROOT` when relative |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | No | — | `instrument_agent()` | When set, enables OpenTelemetry trace export via `agent.instrument()` |
 
 ## Functions
 
@@ -67,6 +68,8 @@ split into focused companion modules.
 - `build_agent(provider, name, toolsets, instructions)` — Anthropic or
   OpenRouter factory. Passes instructions to PydanticAI's `instructions`
   parameter for automatic system prompt composition.
+- `instrument_agent(agent)` — Enables OpenTelemetry instrumentation when
+  `OTEL_EXPORTER_OTLP_ENDPOINT` is set. Returns `True` if applied.
 
 ### Observability
 
@@ -190,6 +193,10 @@ split into focused companion modules.
   metadata categories added across exec, process, memory, and skill tools.
   Exec/process tools return `ToolReturn` with structured metadata instead of
   raw dicts. (Issue #38, PR #39)
+- 2026-02-16: Added optional OpenTelemetry instrumentation via
+  `instrument_agent()`. When `OTEL_EXPORTER_OTLP_ENDPOINT` is set,
+  `agent.instrument()` exports traces to the configured OTLP collector.
+  Complementary to existing `ObservableToolset`. (Issue #60)
 - 2026-02-16: Replaced module-global active checkpoint state with
   context-local `ContextVar` storage for safer worker execution.
   (Issue #21, PR #23)

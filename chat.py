@@ -18,6 +18,7 @@ from chat_runtime import (
     build_agent,
     build_backend,
     build_toolsets,
+    instrument_agent,
     resolve_workspace_root,
     set_runtime,
 )
@@ -103,6 +104,7 @@ def main() -> None:
             checkpoint_history_processor,
         ],
     )
+    instrument_agent(agent)
     system_database_url = os.getenv(
         "DBOS_SYSTEM_DATABASE_URL",
         "sqlite:///dbostest.sqlite",
