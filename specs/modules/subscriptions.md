@@ -70,3 +70,5 @@ The processor chain order in `chat.py`:
 - PydanticAI `ModelRequest.metadata` — for tagging materialization messages
 
 - 2026-02-16: Replaced inline WAL pragma with shared `open_db()` from `db.py`. (Issue #84)
+- 2026-02-16: Code smell cleanup — improved error messages, removed defensive checks,
+  narrowed exception handling, cached regex. (Issue #89)

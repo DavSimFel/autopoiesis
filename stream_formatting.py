@@ -74,8 +74,14 @@ async def forward_stream_events(
     """
     if not isinstance(handle, ToolAwareStreamHandle):
         # Drain the async iterator to avoid a stalled stream.
+        drained_events = 0
         async for _ in events:
-            pass
+            drained_events += 1
+        _log.debug(
+            "Dropped %d stream event(s): %s does not implement ToolAwareStreamHandle",
+            drained_events,
+            type(handle).__name__,
+        )
         return
 
     async for event in events:

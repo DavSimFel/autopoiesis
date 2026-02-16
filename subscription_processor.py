@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import re
+from functools import lru_cache
 from pathlib import Path
 
 from pydantic_ai.messages import (
@@ -30,6 +31,12 @@ from subscriptions import (
 logger = logging.getLogger(__name__)
 
 _MATERIALIZATION_TAG = "materialized_subscriptions"
+_PATTERN_CACHE_SIZE = 128
+
+
+@lru_cache(maxsize=_PATTERN_CACHE_SIZE)
+def _compile_pattern(pattern: str) -> re.Pattern[str]:
+    return re.compile(pattern)
 
 
 def is_materialization(msg: ModelMessage) -> bool:
@@ -59,7 +66,7 @@ def _read_file(target: str, workspace_root: Path, sub: Subscription) -> str:
         lines = lines[start:end]
     if sub.pattern is not None:
         try:
-            regex = re.compile(sub.pattern)
+            regex = _compile_pattern(sub.pattern)
         except re.error:
             return f"Error: invalid pattern: {sub.pattern}"
         lines = [ln for ln in lines if regex.search(ln)]

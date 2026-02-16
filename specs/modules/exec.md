@@ -70,3 +70,6 @@ Uses stdlib `pty.openpty()` — zero external dependencies. Enables interactive 
 
 - Issue: #24
 - OpenClaw: `bash-tools.exec-runtime.ts`, `bash-process-registry.ts`
+
+- 2026-02-16: Code smell cleanup — improved error messages, removed defensive checks,
+  narrowed exception handling, cached regex. (Issue #89)

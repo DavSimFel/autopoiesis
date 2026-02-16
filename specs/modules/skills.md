@@ -149,3 +149,6 @@ Detailed instructions the agent follows when this skill is loaded...
   graceful invalid-resource error handling. (Issue #9)
 - 2026-02-15: Initial skill system with progressive disclosure. Instructions
   callable for system prompt integration via PydanticAI `instructions`. (Issue #9)
+
+- 2026-02-16: Code smell cleanup — improved error messages, removed defensive checks,
+  narrowed exception handling, cached regex. (Issue #89)

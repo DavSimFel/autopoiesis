@@ -12,7 +12,7 @@ from dataclasses import dataclass
 
 from pydantic_ai import Agent, DeferredToolRequests
 from pydantic_ai.messages import ModelMessage
-from pydantic_ai.tools import DeferredToolResults
+from pydantic_ai.tools import DeferredToolApprovalResult, DeferredToolResults
 
 from models import AgentDeps
 
@@ -86,8 +86,6 @@ def run_simple(
 
 def _auto_approve(requests: DeferredToolRequests) -> DeferredToolResults:
     """Build a ``DeferredToolResults`` that approves every requested tool."""
-    from pydantic_ai.tools import DeferredToolApprovalResult
-
     approvals: dict[str, DeferredToolApprovalResult | bool] = {}
     for call in requests.approvals:
         approvals[call.tool_call_id] = True

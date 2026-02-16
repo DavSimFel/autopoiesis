@@ -39,8 +39,9 @@ from tool_result_truncation import truncate_tool_results
 try:
     from dbos import DBOS, DBOSConfig
 except ModuleNotFoundError as exc:
+    missing_package = exc.name or "unknown package"
     raise SystemExit(
-        "Missing DBOS dependencies. Run `uv sync` so "
+        f"Missing DBOS dependency package `{missing_package}`. Run `uv sync` so "
         "`pydantic-ai-slim[dbos,mcp]` and `dbos` are installed."
     ) from exc
 
