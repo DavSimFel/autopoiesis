@@ -142,7 +142,7 @@ def main() -> None:
     workspace_root = resolve_workspace_root()
     sub_db_path = str(Path(memory_db_path).with_name("subscriptions.sqlite"))
     subscription_registry = SubscriptionRegistry(sub_db_path)
-# Knowledge system: index files and load context
+    # Knowledge system: index files and load context
     knowledge_root = workspace_root / "knowledge"
     knowledge_db_path = str(Path(memory_db_path).with_name("knowledge.sqlite"))
     init_knowledge_index(knowledge_db_path)
