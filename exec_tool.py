@@ -191,17 +191,28 @@ async def execute(
     timeout: float = _DEFAULT_TIMEOUT,
     background: bool = False,
 ) -> dict[str, Any]:
-    """Execute a shell command.
+    """Run a shell command as a plain subprocess (no TTY).
+
+    When to use: For any non-interactive shell command — running scripts, installing
+    packages, git operations, file manipulation, builds, tests, linters, etc. Use
+    execute_pty instead if the program requires a terminal (e.g. vim, top, interactive
+    REPLs). Set background=True for long-running servers or watch commands.
+    Returns: Dict with session_id, command, exit_code (null if background), log_path,
+    output_tail (last 5 lines of stdout+stderr), and background flag.
+    Related: execute_pty (interactive/TTY programs), process_list (find running sessions),
+    process_log (read full output), process_kill (stop background processes).
 
     Args:
-        command: Shell command to run.
-        cwd: Working directory (relative to workspace root).
-        env: Extra environment variables (dangerous keys blocked).
-        timeout: Seconds before the process is killed (foreground only).
-        background: If True, return immediately with session id.
-
-    Returns:
-        Summary dict with session_id, exit_code, log_path, output_tail.
+        command: Shell command string (passed to /bin/sh -c). Pipe, redirect, && all work.
+        cwd: Working directory relative to workspace root. Must stay inside workspace.
+            Omit to use workspace root.
+        env: Extra environment variables as key-value pairs. Security-sensitive keys
+            (API keys, passwords, tokens) are blocked and will raise an error.
+        timeout: Maximum seconds to wait before killing the process (foreground only).
+            Default 30. Ignored when background=True.
+        background: If True, start the process and return immediately with session_id.
+            Use process_poll/process_log to check on it later. A notification is
+            enqueued automatically when the background process exits.
     """
     workspace_root = Path(ctx.deps.backend.root_dir)
     safe_cwd = sandbox_cwd(cwd, workspace_root)
@@ -238,9 +249,23 @@ async def execute_pty(
     timeout: float = _DEFAULT_TIMEOUT,
     background: bool = False,
 ) -> dict[str, Any]:
-    """Execute a shell command under a pseudo-terminal.
+    """Run a shell command under a pseudo-terminal (PTY) for interactive programs.
 
-    Same as ``execute`` but allocates a PTY for interactive programs.
+    When to use: When the program requires a TTY — interactive REPLs (python, node),
+    terminal UIs (vim, htop, less), or commands that detect terminal absence and change
+    behavior (e.g. colored output, progress bars). For simple non-interactive commands,
+    prefer execute (lower overhead).
+    Returns: Same dict as execute: session_id, command, exit_code, log_path, output_tail.
+    Related: execute (non-interactive commands), process_send_keys (type into PTY session),
+    process_poll (check session status), process_log (read PTY output).
+
+    Args:
+        command: Shell command string to run under a PTY.
+        cwd: Working directory relative to workspace root. Must stay inside workspace.
+        env: Extra environment variables (security-sensitive keys blocked).
+        timeout: Max seconds before killing (foreground only). Default 30.
+        background: If True, return immediately. Use process_send_keys to interact
+            and process_log to read output.
     """
     workspace_root = Path(ctx.deps.backend.root_dir)
     safe_cwd = sandbox_cwd(cwd, workspace_root)

@@ -38,7 +38,19 @@ def create_memory_toolset(
         query: str,
         max_results: int = 5,
     ) -> str:
-        """Search persistent memory (database + files) for past context."""
+        """Search past conversations and memory files for relevant context.
+
+        When to use: Before answering questions about prior work, decisions, preferences,
+        or anything that might have been discussed in previous sessions. Also use when
+        the user references something you don't have in current context.
+        Returns: Ranked list of matching memory entries and file snippets with timestamps.
+        Related: memory_save (to persist new knowledge), memory_get (to read full file content).
+
+        Args:
+            query: Natural language search query. FTS5 full-text search — use key terms
+                rather than full sentences for best results.
+            max_results: Number of results to return. Default 5.
+        """
         return combined_search(db_path, workspace_root, query, max_results)
 
     @toolset.tool
@@ -48,7 +60,18 @@ def create_memory_toolset(
         from_line: int | None = None,
         lines: int | None = None,
     ) -> str:
-        """Read a snippet from a workspace memory file."""
+        """Read lines from a memory file (MEMORY.md or memory/YYYY-MM-DD.md).
+
+        When to use: After memory_search returns a file match and you need the full
+        content, or when loading specific sections of long-term memory at session start.
+        Returns: The requested lines from the file, or an error if the path is outside workspace.
+        Related: memory_search (find relevant files first), memory_save (persist new entries).
+
+        Args:
+            path: Relative path within workspace (e.g., "MEMORY.md", "memory/2026-02-16.md").
+            from_line: Starting line number (1-indexed). Omit to start from beginning.
+            lines: Number of lines to read. Omit to read entire file.
+        """
         return get_memory_file_snippet(workspace_root, path, from_line, lines)
 
     @toolset.tool
@@ -57,7 +80,20 @@ def create_memory_toolset(
         summary: str,
         topics: list[str],
     ) -> str:
-        """Save a memory entry for future retrieval."""
+        """Persist a piece of knowledge to the memory database for future sessions.
+
+        When to use: When you learn something important that should survive across sessions —
+        key decisions, user preferences, project context, lessons learned. Don't save
+        routine or easily re-fetched information.
+        Returns: Confirmation message with the new memory entry ID.
+        Related: memory_search (retrieve saved memories later), memory_get (read memory files).
+
+        Args:
+            summary: The content to remember. Write it as a clear, self-contained statement
+                that future-you can understand without additional context.
+            topics: List of topic tags for categorization and search (e.g., ["project-x",
+                "architecture", "decision"]). Use consistent, lowercase tag names.
+        """
         entry_id = save_memory(db_path, summary, topics)
         return f"Memory saved (id: {entry_id})."
 

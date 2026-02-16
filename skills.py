@@ -267,12 +267,30 @@ def create_skills_toolset(
 
     @toolset.tool
     async def list_skills(ctx: RunContext[AgentDeps]) -> str:
-        """List available skills with name, description, and tags."""
+        """List all available skills with their name, version, description, and tags.
+
+        When to use: To discover what skills are available before loading one. Call this
+        first when you need a capability you don't have in your base toolset, or when the
+        user asks about available skills.
+        Returns: Formatted list of skills with name, version, description, and tags.
+        Related: load_skill (get full instructions for a specific skill).
+        """
         return _format_skill_list(cache)
 
     @toolset.tool
     async def load_skill(ctx: RunContext[AgentDeps], skill_name: str) -> str:
-        """Load full instructions for a skill by name (progressive disclosure)."""
+        """Load full instructions for a skill, enabling you to use its capabilities.
+
+        When to use: After identifying a relevant skill via list_skills. Loading a skill
+        gives you detailed instructions on how to perform that skill's task — protocols,
+        formats, APIs, workflows. Load before attempting the skill's domain.
+        Returns: Full markdown instructions from the skill's SKILL.md file.
+        Related: list_skills (discover available skills), read_skill_resource (access
+        supporting files like templates or configs).
+
+        Args:
+            skill_name: Exact skill name as shown by list_skills (case-sensitive).
+        """
         return _load_skill_instructions(cache, skill_name)
 
     @toolset.tool
@@ -281,17 +299,51 @@ def create_skills_toolset(
         skill_name: str,
         resource_name: str,
     ) -> str:
-        """Read a resource file from a skill directory."""
+        """Read a supporting resource file bundled with a skill.
+
+        When to use: When a skill's instructions reference additional files — templates,
+        config examples, schemas, or sample data. The skill's resource list is shown in
+        list_skills output.
+        Returns: The file content as text, or an error if the resource doesn't exist or
+        the path escapes the skill directory.
+        Related: load_skill (get instructions that reference these resources),
+        list_skills (see which resources each skill has).
+
+        Args:
+            skill_name: The skill that owns the resource (case-sensitive).
+            resource_name: Filename relative to the skill directory (e.g., "template.md",
+                "config.yaml"). Must be a listed resource — no path traversal allowed.
+        """
         return _read_resource(cache, skill_name, resource_name)
 
     @toolset.tool
     async def validate_skill(ctx: RunContext[AgentDeps], skill_name: str) -> str:
-        """Validate SKILL.md frontmatter and required structure."""
+        """Validate a skill's SKILL.md frontmatter and required structure.
+
+        When to use: After creating or editing a skill definition. Checks that
+        frontmatter has all required fields, types are correct, and structure follows
+        the skill specification. Run before committing skill changes.
+        Returns: Validation result — either "valid" or a list of specific errors.
+        Related: lint_skill (style checks), load_skill (test that instructions load).
+
+        Args:
+            skill_name: The skill to validate (case-sensitive, must be discovered).
+        """
         return _validate_skill(cache, skill_name)
 
     @toolset.tool
     async def lint_skill(ctx: RunContext[AgentDeps], skill_name: str) -> str:
-        """Lint SKILL.md for common style issues."""
+        """Lint a skill's SKILL.md instructions for common style issues.
+
+        When to use: After creating or editing a skill to catch style problems —
+        missing sections, unclear instructions, formatting issues. Complements
+        validate_skill which checks structure; this checks quality.
+        Returns: List of style warnings/suggestions, or confirmation that no issues found.
+        Related: validate_skill (structural validation), load_skill (preview instructions).
+
+        Args:
+            skill_name: The skill to lint (case-sensitive, must be discovered).
+        """
         return _lint_skill(cache, skill_name)
 
     # Ensure pyright recognizes decorator-registered functions as used
