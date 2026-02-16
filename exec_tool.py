@@ -7,6 +7,7 @@ Full output is written to a log file; only a summary is returned.
 from __future__ import annotations
 
 import asyncio
+import os
 from pathlib import Path
 from typing import Any
 
@@ -36,6 +37,7 @@ _DANGEROUS_ENV_VARS: frozenset[str] = frozenset(
 
 _DEFAULT_TIMEOUT: float = 30.0
 _MAX_SUMMARY_LINES: int = 5
+_TAIL_BYTES_PER_LINE: int = 256
 
 
 def validate_env(env: dict[str, str] | None) -> dict[str, str] | None:
@@ -61,12 +63,29 @@ def sandbox_cwd(cwd: str | None, workspace_root: Path) -> str:
 
 def _tail_lines(path: Path, n: int) -> list[str]:
     """Return the last *n* lines from a file."""
-    try:
-        text = path.read_text(errors="replace")
-    except OSError:
+    if n <= 0:
         return []
-    lines = text.splitlines()
+    data = _read_tail_bytes(path, n * _TAIL_BYTES_PER_LINE)
+    if not data:
+        return []
+    lines = data.decode("utf-8", errors="replace").splitlines()
     return lines[-n:] if len(lines) > n else lines
+
+
+def _read_tail_bytes(path: Path, max_bytes: int) -> bytes:
+    if max_bytes <= 0:
+        return b""
+    try:
+        with path.open("rb") as log_file:
+            log_file.seek(0, os.SEEK_END)
+            size = log_file.tell()
+            if size == 0:
+                return b""
+            read_size = min(size, max_bytes)
+            log_file.seek(-read_size, os.SEEK_END)
+            return log_file.read(read_size)
+    except OSError:
+        return b""
 
 
 async def _read_pty_output(pty_proc: PtyProcess, log_path: Path) -> None:
