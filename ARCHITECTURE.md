@@ -5,7 +5,9 @@
 Autopoiesis is a durable CLI chat agent built on **PydanticAI** + **DBOS**.
 User messages become work items on a priority queue. A DBOS worker executes
 each item by running a PydanticAI agent with filesystem, shell, memory, and
-subscription tools. Cryptographic approval gates all write/exec operations.
+subscription tools. Cryptographic approval gates shell execution and filesystem
+operations (exec_tool, process_tool); memory and subscription DB operations do
+not require approval.
 Responses stream back to a Rich terminal UI in real time.
 
 ## System Diagram
@@ -127,7 +129,9 @@ ordering. This keeps the execution model simple and durable — DBOS handles
 retries and persistence.
 
 ### Cryptographic Approval
-Write operations and shell commands require Ed25519-signed approval envelopes.
+Shell execution and filesystem operations (via `exec_tool` and `process_tool`)
+require Ed25519-signed approval envelopes. Memory and subscription tools
+operate on local SQLite databases and are wired without approval predicates.
 The user unlocks their signing key at startup; the CLI prompts per-tool-call.
 Approvals are stored in SQLite with nonce-based replay protection. This is a
 real security boundary, not just a confirmation dialog.

@@ -5,7 +5,7 @@ set -euo pipefail
 echo "| Module | Description | Lines |"
 echo "|--------|-------------|-------|"
 for f in *.py; do
-  desc=$(head -5 "$f" | grep -oP '"""\K[^"]*' | head -1 || true)
+  desc=$(sed -n 's/^"""\(.*\)/\1/p' "$f" | head -1 | sed 's/"""$//; s/``/`/g')
   lines=$(wc -l < "$f")
   echo "| \`$f\` | $desc | $lines |"
 done

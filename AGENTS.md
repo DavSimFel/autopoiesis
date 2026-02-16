@@ -168,7 +168,7 @@ Don't read everything. Start here:
 | `prompts.py` | Static system prompt constants for the agent runtime. | 43 |
 | `pty_spawn.py` | Thin typed wrapper around stdlib pty for async subprocess spawning. | 59 |
 | `rich_display.py` | Rich live display manager with per-section streaming channels. | 240 |
-| `run_simple.py` | Convenience wrapper for agent.run_sync() that auto-approves deferred tools. | 92 |
+| `run_simple.py` | Convenience wrapper for `agent.run_sync()` that auto-approves deferred tools. | 92 |
 | `skillmaker_tools.py` | Linting and validation helpers for SKILL.md files. | 165 |
 | `skills.py` | Filesystem-based skill system with progressive disclosure. | 294 |
 | `stream_formatting.py` | Stream event formatting and forwarding helpers. | 100 |
