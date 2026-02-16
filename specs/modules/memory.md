@@ -19,6 +19,8 @@ Persistent chat memory with semantic search via SQLite FTS5. The agent retains k
 - `memory_entries` table with FTS5 virtual table over `summary` + `topics`
 - Entries have: id, timestamp, session_id, summary, topics, raw_history_json
 - Search via FTS5 MATCH with BM25 ranking
+- Connections use explicit close semantics (`contextlib.closing` + transaction context)
+- Each SQLite connection enables `PRAGMA journal_mode=WAL`
 
 **Layer 2: Unstructured (workspace files)**
 - `MEMORY.md` — curated long-term knowledge
@@ -48,4 +50,5 @@ Persistent chat memory with semantic search via SQLite FTS5. The agent retains k
 ## References
 
 - Issue: #26
+- Reliability hardening: #44
 - Foundation for: #27 (sliding window context), #28 (subscriptions)

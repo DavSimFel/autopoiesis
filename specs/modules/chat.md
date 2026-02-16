@@ -177,6 +177,10 @@ split into focused companion modules.
 
 ## Change Log
 
+- 2026-02-16: Hardened SQLite reliability in approval, memory, and history stores.
+  Connections now use explicit close semantics (`contextlib.closing` with
+  transactional context), and each connection sets `PRAGMA journal_mode=WAL`
+  on open. (Issue #44)
 - 2026-02-16: Added `ObservableToolset` wrapper (`toolset_wrappers.py`) that
   intercepts all tool calls to log name, duration, and outcome. All toolsets
   returned by `build_toolsets()` are now wrapped for observability. Tool
