@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-import sqlite3
 from contextlib import closing
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+
+from db import open_db
 
 _CHECKPOINT_VERSION = 1
 _DEFAULT_HISTORY_DB_PATH = Path(__file__).resolve().parent / "data" / "history.sqlite"
@@ -40,8 +41,7 @@ def resolve_history_db_path(dbos_db_url: str) -> str:
 def init_history_store(db_path: str) -> None:
     """Create the checkpoint table if it does not already exist."""
     _ensure_parent_dir(db_path)
-    with closing(sqlite3.connect(db_path)) as conn, conn:
-        conn.execute("PRAGMA journal_mode=WAL")
+    with closing(open_db(Path(db_path))) as conn, conn:
         conn.execute(_CREATE_TABLE_SQL)
         conn.commit()
 
@@ -50,8 +50,7 @@ def save_checkpoint(db_path: str, work_item_id: str, history_json: str, round_co
     """Upsert a checkpoint row for one work item id."""
     _ensure_parent_dir(db_path)
     now = datetime.now(UTC).isoformat()
-    with closing(sqlite3.connect(db_path)) as conn, conn:
-        conn.execute("PRAGMA journal_mode=WAL")
+    with closing(open_db(Path(db_path))) as conn, conn:
         conn.execute(
             """
             INSERT INTO agent_history_checkpoints (
@@ -79,8 +78,7 @@ def load_checkpoint(db_path: str, work_item_id: str) -> str | None:
     is stale compared to this process.
     """
     _ensure_parent_dir(db_path)
-    with closing(sqlite3.connect(db_path)) as conn, conn:
-        conn.execute("PRAGMA journal_mode=WAL")
+    with closing(open_db(Path(db_path))) as conn, conn:
         row = conn.execute(
             """
             SELECT history_json, checkpoint_version
@@ -100,8 +98,7 @@ def load_checkpoint(db_path: str, work_item_id: str) -> str | None:
 def clear_checkpoint(db_path: str, work_item_id: str) -> None:
     """Delete one checkpoint row after successful completion."""
     _ensure_parent_dir(db_path)
-    with closing(sqlite3.connect(db_path)) as conn, conn:
-        conn.execute("PRAGMA journal_mode=WAL")
+    with closing(open_db(Path(db_path))) as conn, conn:
         conn.execute(
             "DELETE FROM agent_history_checkpoints WHERE work_item_id = ?",
             (work_item_id,),
@@ -113,8 +110,7 @@ def cleanup_stale_checkpoints(db_path: str, max_age_hours: int = 24) -> int:
     """Delete checkpoints older than ``max_age_hours`` and return rows deleted."""
     _ensure_parent_dir(db_path)
     cutoff = (datetime.now(UTC) - timedelta(hours=max_age_hours)).isoformat()
-    with closing(sqlite3.connect(db_path)) as conn, conn:
-        conn.execute("PRAGMA journal_mode=WAL")
+    with closing(open_db(Path(db_path))) as conn, conn:
         cursor = conn.execute(
             "DELETE FROM agent_history_checkpoints WHERE updated_at < ?",
             (cutoff,),

@@ -28,6 +28,7 @@ from approval_types import (
     compute_plan_hash,
     signed_decisions_from_submitted,
 )
+from db import open_db
 
 _DEFAULT_APPROVAL_TTL_SECONDS = 3600
 _DEFAULT_NONCE_RETENTION_SECONDS = 7 * 24 * 3600
@@ -242,10 +243,7 @@ class ApprovalStore:
             )
 
     def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self._db_path)
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.row_factory = sqlite3.Row
-        return conn
+        return open_db(self._db_path)
 
 
 def _read_positive_int(name: str, default: int) -> int:
