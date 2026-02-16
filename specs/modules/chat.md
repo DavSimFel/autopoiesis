@@ -25,7 +25,7 @@ split into focused companion modules.
 | `models.py` | `AgentDeps`, `WorkItem`, `WorkItemInput`, `WorkItemOutput`, priority/type enums |
 | `skills.py` | Skill discovery, progressive loading, skills toolset |
 | `work_queue.py` | Queue instance only (no functions importing from `chat.py`) |
-| `streaming.py` | `StreamHandle` protocol, `PrintStreamHandle`, registry |
+| `streaming.py` | `StreamHandle` protocol, `RichStreamHandle`, registry |
 
 ## Environment Variables
 
@@ -90,12 +90,12 @@ split into focused companion modules.
 
 ### Deferred Tool Serialization
 
-- `_build_approval_scope(approval_context_id, backend, agent_name)` — build live
+- `build_approval_scope(approval_context_id, backend, agent_name)` — build live
   execution scope for approval hashing/verification
-- `_serialize_deferred_requests(requests, scope, approval_store, key_manager, tool_policy)` —
+- `serialize_deferred_requests(requests, scope, approval_store, key_manager, tool_policy)` —
   validate deferred calls against immutable tool policy, persist a nonce-bound
   envelope with `key_id`, and serialize nonce + plan hash prefix + tool calls
-- `_deserialize_deferred_results(results_json, scope, approval_store, key_manager)` —
+- `deserialize_deferred_results(results_json, scope, approval_store, key_manager)` —
   verify signature-first + context drift + bijection + atomic nonce consume, then reconstruct
   `DeferredToolResults`
 
@@ -127,7 +127,7 @@ split into focused companion modules.
 ### CLI
 
 - `cli_chat_loop()` — interactive loop with approval flow. Each message →
-  `WorkItem` with CRITICAL priority + `PrintStreamHandle` →
+  `WorkItem` with CRITICAL priority + `RichStreamHandle` →
   `enqueue_and_wait()`. If output contains `deferred_tool_requests_json`,
   displays pending tool calls, gathers user approval, and re-enqueues with
   `deferred_tool_results_json` until a final text response is received.
@@ -182,6 +182,15 @@ split into focused companion modules.
 - `python-dotenv>=1.2,<2`
 
 ## Change Log
+
+- 2026-02-16: OTEL insecure flag made configurable via
+  `OTEL_EXPORTER_OTLP_INSECURE` env var (Issue #82)
+- 2026-02-16: Headless passphrase support via `APPROVAL_KEY_PASSPHRASE`
+  env var in `approval_keys.py` (Issue #86)
+- 2026-02-16: CLI argparse with `--help`, `--version`, `--no-approval`
+  flags in `chat.py` (Issue #87)
+- 2026-02-16: Fixed spec drift — function references, class names,
+  OVERVIEW.md module index (Issue #81)
 
 - 2026-02-16: Replaced mutable module-global runtime singleton with
   `RuntimeRegistry` in `chat_runtime.py`. Runtime access now uses

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import os
 import sys
 from pathlib import Path
@@ -65,15 +66,37 @@ def _rotate_key(base_dir: Path) -> None:
     print("Approval signing key rotated. Pending approvals were expired.")
 
 
-def _handle_subcommand(base_dir: Path) -> bool:
-    """Handle CLI subcommands. Returns True if a subcommand ran."""
-    args = sys.argv[1:]
-    if not args:
-        return False
-    if len(args) == 1 and args[0] == "rotate-key":
-        _rotate_key(base_dir)
-        return True
-    raise SystemExit("Usage: python chat.py [rotate-key]")
+def _project_version(repo_root: Path) -> str:
+    """Read project version from pyproject.toml, falling back to 0.1.0."""
+    toml_path = repo_root / "pyproject.toml"
+    if not toml_path.exists():
+        return "0.1.0"
+    try:
+        import tomllib
+    except ModuleNotFoundError:  # Python <3.11
+        return "0.1.0"
+    with open(toml_path, "rb") as fh:
+        data = tomllib.load(fh)
+    project_data: dict[str, object] = data.get("project", {})
+    raw_version: object = project_data.get("version")
+    return str(raw_version) if raw_version is not None else "0.1.0"
+
+
+def parse_cli_args(repo_root: Path, argv: list[str] | None = None) -> argparse.Namespace:
+    """Parse CLI arguments."""
+    parser = argparse.ArgumentParser(prog="chat", description="Autopoiesis CLI chat")
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=_project_version(repo_root),
+    )
+    parser.add_argument(
+        "--no-approval",
+        action="store_true",
+        help="Skip approval key unlock (dev mode)",
+    )
+    parser.add_argument("command", nargs="?", help="Subcommand: rotate-key")
+    return parser.parse_args(argv if argv is not None else sys.argv[1:])
 
 
 def main() -> None:
@@ -82,7 +105,9 @@ def main() -> None:
     load_dotenv(dotenv_path=base_dir / ".env")
     otel_tracing.configure()
 
-    if _handle_subcommand(base_dir):
+    args = parse_cli_args(base_dir)
+    if args.command == "rotate-key":
+        _rotate_key(base_dir)
         return
 
     provider = resolve_provider(os.getenv("AI_PROVIDER"))
@@ -91,7 +116,8 @@ def main() -> None:
     backend = build_backend()
     approval_store = ApprovalStore.from_env(base_dir=base_dir)
     key_manager = ApprovalKeyManager.from_env(base_dir=base_dir)
-    key_manager.ensure_unlocked_interactive()
+    if not args.no_approval:
+        key_manager.ensure_unlocked_interactive()
     tool_policy = ToolPolicyRegistry.default()
     memory_db_path = resolve_memory_db_path(
         os.getenv("DBOS_SYSTEM_DATABASE_URL", "sqlite:///dbostest.sqlite")

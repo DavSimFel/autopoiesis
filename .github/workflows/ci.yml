@@ -33,6 +33,17 @@ jobs:
       - name: Run tests
         run: uv run pytest -v --tb=short
 
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+      - run: uv sync
+      - name: pip-audit
+        run: uv run pip-audit
+      - name: Bandit
+        run: uv run bandit -r . -x tests/
+
   spec-check:
     runs-on: ubuntu-latest
     steps:
@@ -60,6 +71,8 @@ jobs:
 
           declare -A source_to_spec=(
             ["chat.py"]="specs/modules/chat.md"
+            ["approval_keys.py"]="specs/modules/chat.md"
+            ["otel_tracing.py"]="specs/modules/chat.md"
             ["chat_approval.py"]="specs/modules/chat.md"
             ["chat_cli.py"]="specs/modules/chat.md"
             ["chat_runtime.py"]="specs/modules/chat.md"
@@ -91,11 +104,13 @@ jobs:
           )
 
           missing_specs=()
+          unmapped_sources=()
           for src_path in "${changed_sources[@]}"; do
             src_file=${src_path##*/}
             expected_spec="${source_to_spec[$src_file]-}"
             if [ -z "$expected_spec" ]; then
-              expected_spec="specs/modules/${src_file%.py}.md"
+              unmapped_sources+=("$src_path")
+              continue
             fi
 
             if [ ! -f "$expected_spec" ]; then
@@ -105,6 +120,18 @@ jobs:
 
             if [ -z "${changed_spec_set[$expected_spec]+x}" ]; then
               missing_specs+=("$src_path -> $expected_spec")
+            fi
+          done
+
+          # Convention for unmapped modules:
+          # if <filename>.py has a module spec at specs/modules/<filename>.md,
+          # that spec must be updated in the same PR.
+          for src_path in "${unmapped_sources[@]}"; do
+            src_file=${src_path##*/}
+            fallback_spec="specs/modules/${src_file%.py}.md"
+
+            if [ -f "$fallback_spec" ] && [ -z "${changed_spec_set[$fallback_spec]+x}" ]; then
+              missing_specs+=("$src_path -> $fallback_spec")
             fi
           done
 
