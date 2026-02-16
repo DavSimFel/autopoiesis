@@ -181,6 +181,9 @@ split into focused companion modules.
 
 ## Change Log
 
+- 2026-02-16: Minor nits cleanup: `.coverage` remains gitignored, and
+  approval legacy-schema migration now enforces `sqlite3.Row` typing
+  explicitly before row-key access. (Issue #91)
 - 2026-02-16: Replaced manual `sys.argv` parsing with `argparse` in `chat.py`.
   Added `--help`, `--version` (from `pyproject.toml`), and `--no-approval`
   while keeping `rotate-key` as a subcommand. (Issue #87)
