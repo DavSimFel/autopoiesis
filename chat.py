@@ -96,17 +96,12 @@ def main() -> None:
         provider,
         agent_name,
         toolsets,
-<<<<<<< HEAD
         system_prompt,
-        history_processors=[checkpoint_history_processor],
-=======
-        instructions,
         history_processors=[
             _truncate_processor,
             _compact_processor,
             checkpoint_history_processor,
         ],
->>>>>>> 2a033a4 (feat(context): sliding window with smart truncation (#27))
     )
     system_database_url = os.getenv(
         "DBOS_SYSTEM_DATABASE_URL",
