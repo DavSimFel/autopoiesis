@@ -54,7 +54,7 @@ def truncate_tool_results(
     truncated version plus a file-path reference.
 
     Args:
-        messages: Conversation history (modified in-place where needed).
+        messages: Conversation history (a new list is returned).
         workspace_root: Root directory for persisting full results.
         max_chars: Maximum characters per tool result before truncation.
 

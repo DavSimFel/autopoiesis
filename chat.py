@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
+from pydantic_ai.messages import ModelMessage
 
 from approval_keys import ApprovalKeyManager
 from approval_policy import ToolPolicyRegistry
@@ -37,6 +38,16 @@ except ModuleNotFoundError as exc:
         "Missing DBOS dependencies. Run `uv sync` so "
         "`pydantic-ai-slim[dbos,mcp]` and `dbos` are installed."
     ) from exc
+
+
+def _truncate_processor(msgs: list[ModelMessage]) -> list[ModelMessage]:
+    """Truncate oversized tool results in message history."""
+    return truncate_tool_results(msgs, resolve_workspace_root())
+
+
+def _compact_processor(msgs: list[ModelMessage]) -> list[ModelMessage]:
+    """Compact older messages when token usage exceeds threshold."""
+    return compact_history(msgs)
 
 
 def _rotate_key(base_dir: Path) -> None:
@@ -91,8 +102,8 @@ def main() -> None:
 =======
         instructions,
         history_processors=[
-            lambda msgs: truncate_tool_results(msgs, resolve_workspace_root()),
-            lambda msgs: compact_history(msgs),
+            _truncate_processor,
+            _compact_processor,
             checkpoint_history_processor,
         ],
 >>>>>>> 2a033a4 (feat(context): sliding window with smart truncation (#27))
