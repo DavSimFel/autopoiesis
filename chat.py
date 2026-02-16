@@ -19,6 +19,7 @@ from history_store import (
     init_history_store,
     resolve_history_db_path,
 )
+from memory_store import init_memory_store, resolve_memory_db_path
 
 try:
     from dbos import DBOS, DBOSConfig
@@ -66,7 +67,11 @@ def main() -> None:
     key_manager = ApprovalKeyManager.from_env(base_dir=base_dir)
     key_manager.ensure_unlocked_interactive()
     tool_policy = ToolPolicyRegistry.default()
-    toolsets, instructions = build_toolsets()
+    memory_db_path = resolve_memory_db_path(
+        os.getenv("DBOS_SYSTEM_DATABASE_URL", "sqlite:///dbostest.sqlite")
+    )
+    init_memory_store(memory_db_path)
+    toolsets, instructions = build_toolsets(memory_db_path=memory_db_path)
     agent = build_agent(
         provider,
         agent_name,
@@ -86,6 +91,7 @@ def main() -> None:
             agent=agent,
             backend=backend,
             history_db_path=history_db_path,
+            memory_db_path=memory_db_path,
             approval_store=approval_store,
             key_manager=key_manager,
             tool_policy=tool_policy,

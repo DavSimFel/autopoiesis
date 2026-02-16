@@ -16,6 +16,7 @@ from pydantic_ai.providers.openai import OpenAIProvider
 from approval_keys import ApprovalKeyManager
 from approval_policy import ToolPolicyRegistry
 from approval_store import ApprovalStore
+from memory_tools import create_memory_toolset
 from models import AgentDeps
 from skills import SkillDirectory, create_skills_toolset
 
@@ -34,6 +35,7 @@ class Runtime:
     agent: Agent[AgentDeps, str]
     backend: LocalBackend
     history_db_path: str
+    memory_db_path: str
     approval_store: ApprovalStore
     key_manager: ApprovalKeyManager
     tool_policy: ToolPolicyRegistry
@@ -185,7 +187,9 @@ def _build_exec_toolset() -> tuple[AbstractToolset[AgentDeps] | None, str | None
     return ts, _EXEC_INSTRUCTIONS
 
 
-def build_toolsets() -> tuple[list[AbstractToolset[AgentDeps]], list[str]]:
+def build_toolsets(
+    memory_db_path: str | None = None,
+) -> tuple[list[AbstractToolset[AgentDeps]], list[str]]:
     """Build all toolsets and collect their system prompt instructions."""
     validate_console_deps_contract()
     console = create_console_toolset(include_execute=False, require_write_approval=True)
@@ -198,6 +202,12 @@ def build_toolsets() -> tuple[list[AbstractToolset[AgentDeps]], list[str]]:
         toolsets.append(exec_toolset)
     if exec_instr:
         instructions.append(exec_instr)
+
+    if memory_db_path is not None:
+        workspace_root = resolve_workspace_root()
+        memory_toolset, memory_instr = create_memory_toolset(memory_db_path, workspace_root)
+        toolsets.append(memory_toolset)
+        instructions.append(memory_instr)
 
     return toolsets, instructions
 
