@@ -7,8 +7,8 @@ chat, background research, code generation, reviews. One queue, one path.
 
 ## Status
 
-- **Last updated:** 2026-02-15 (Issue #19, #21)
-- **Source:** `models.py`, `work_queue.py`, `streaming.py`, `chat.py`
+- **Last updated:** 2026-02-16 (Issue #19, #21)
+- **Source:** `models.py`, `work_queue.py`, `streaming.py`, `chat_worker.py`, `chat_cli.py`
 
 ## Core Concept: WorkItem
 
@@ -136,6 +136,9 @@ execution so DBOS replay can resume with minimal repeated model work.
   back to input history on mismatch. Active checkpoint state in workers is
   context-local (`ContextVar`) instead of module-global mutable state.
   (Issue #21, PR #23)
+- 2026-02-16: Moved queue worker/execution helpers from `chat.py` into
+  `chat_worker.py`; queue contract and transport schema unchanged.
+  (Issue #19, PR #20)
 - 2026-02-15: Created. WorkItem model, stream handles, unified queue path. (Issue #8)
 - 2026-02-15: Added history checkpoint persistence + crash recovery resume flow. (Issue #21)
 - 2026-02-15: Added deferred-approval transport fields to WorkItem input/output

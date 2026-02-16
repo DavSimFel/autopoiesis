@@ -3,19 +3,23 @@
 ## Purpose
 
 `chat.py` is the runtime entrypoint. It builds the agent stack, launches DBOS,
-and enters the CLI chat loop. It also hosts the DBOS workflow/step functions
-that execute work items from the queue.
+and enters the CLI chat loop. Worker, runtime, and approval helpers are
+split into focused companion modules.
 
 ## Status
 
-- **Last updated:** 2026-02-15 (Issue #19)
-- **Source:** `chat.py`
+- **Last updated:** 2026-02-16 (Issue #19)
+- **Source:** `chat.py`, `chat_runtime.py`, `chat_worker.py`, `chat_approval.py`, `chat_cli.py`
 
 ## File Structure
 
 | File | Responsibility |
 |------|---------------|
-| `chat.py` | Startup, agent wiring, DBOS workflow/step, enqueue helpers, approval UI, CLI loop |
+| `chat.py` | Entrypoint, rotate-key command, DBOS launch, runtime wiring |
+| `chat_runtime.py` | Runtime dataclass, env loading helpers, backend/toolset/agent builders |
+| `chat_worker.py` | DBOS workflow/step functions, enqueue helpers, history serialization |
+| `chat_approval.py` | Approval scope, request/result serialization, CLI approval collection |
+| `chat_cli.py` | Interactive CLI loop and approval re-enqueue flow |
 | `models.py` | `AgentDeps`, `WorkItem`, `WorkItemInput`, `WorkItemOutput`, priority/type enums |
 | `skills.py` | Skill discovery, progressive loading, skills toolset |
 | `work_queue.py` | Queue instance only (no functions importing from `chat.py`) |
@@ -148,7 +152,7 @@ that execute work items from the queue.
   `<AGENT_WORKSPACE_ROOT>/skills`.
 - Backend execute always disabled. Write approval always required.
 - Console deps contract validated at startup.
-- Workflow/step functions live in `chat.py` to avoid circular imports.
+- Workflow/step functions live in `chat_worker.py` and are imported by entrypoint flow.
 - Stream handles are in-process only — not durable, not serialised.
 - Deferred approvals are nonce-bound and single-use (atomic consume in SQLite).
 - Agent execution is blocked unless approval signing key is unlocked at startup.
@@ -168,6 +172,10 @@ that execute work items from the queue.
 - 2026-02-16: Replaced module-global active checkpoint state with
   context-local `ContextVar` storage for safer worker execution.
   (Issue #21, PR #23)
+- 2026-02-16: Refactored chat runtime into `chat_runtime.py`,
+  `chat_worker.py`, `chat_approval.py`, and `chat_cli.py` to reduce file
+  size and isolate responsibilities while preserving queue-based behavior.
+  (Issue #19, PR #20)
 - 2026-02-15: Skills now load from two places: shipped skills (`SKILLS_DIR`,
   repo-relative by default) and custom workspace skills (`CUSTOM_SKILLS_DIR`,
   workspace-relative by default). Custom skills override shipped skills by name.
