@@ -26,6 +26,7 @@ from approval.policy import ToolPolicyRegistry
 from approval.store import ApprovalStore
 from infra import otel_tracing
 from infra.subscription_processor import materialize_subscriptions
+from infra.topic_processor import inject_topic_context
 from model_resolution import resolve_provider
 from store.history import (
     cleanup_stale_checkpoints,
@@ -41,6 +42,7 @@ from store.knowledge import (
 from store.memory import init_memory_store, resolve_memory_db_path
 from store.subscriptions import SubscriptionRegistry
 from toolset_builder import build_backend, build_toolsets, resolve_workspace_root
+from topic_manager import TopicRegistry
 
 try:
     from dbos import DBOS, DBOSConfig
@@ -148,11 +150,14 @@ def main() -> None:
     ensure_journal_entry(knowledge_root)
     knowledge_context = load_knowledge_context(knowledge_root)
 
+    topics_dir = workspace_root / "topics"
+    topic_registry = TopicRegistry(topics_dir)
     toolsets, system_prompt = build_toolsets(
         memory_db_path=memory_db_path,
         subscription_registry=subscription_registry,
         knowledge_db_path=knowledge_db_path,
         knowledge_context=knowledge_context,
+        topic_registry=topic_registry,
     )
 
     def _subscription_processor(msgs: list[ModelMessage]) -> list[ModelMessage]:
@@ -162,6 +167,9 @@ def main() -> None:
             workspace_root,
             memory_db_path,
         )
+
+    def _topic_processor(msgs: list[ModelMessage]) -> list[ModelMessage]:
+        return inject_topic_context(msgs, topic_registry)
 
     agent = build_agent(
         provider,
@@ -173,6 +181,7 @@ def main() -> None:
                 _truncate_processor,
                 _compact_processor,
                 _subscription_processor,
+                _topic_processor,
                 checkpoint_history_processor,
             ],
         ),

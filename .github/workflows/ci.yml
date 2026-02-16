@@ -111,6 +111,9 @@ jobs:
             ["tools/subscription_tools.py"]="specs/modules/subscriptions.md"
             ["store/subscriptions.py"]="specs/modules/subscriptions.md"
             ["infra/work_queue.py"]="specs/modules/queue.md"
+            ["topic_manager.py"]="specs/modules/topics.md"
+            ["tools/topic_tools.py"]="specs/modules/topics.md"
+            ["infra/topic_processor.py"]="specs/modules/topics.md"
           )
 
           missing_specs=()

@@ -23,6 +23,8 @@ from tools.knowledge_tools import create_knowledge_toolset
 from tools.memory_tools import create_memory_toolset
 from tools.subscription_tools import create_subscription_toolset
 from tools.toolset_wrappers import wrap_toolsets
+from tools.topic_tools import create_topic_toolset
+from topic_manager import TopicRegistry
 
 try:
     from pydantic_ai_backends import LocalBackend, create_console_toolset
@@ -166,6 +168,7 @@ def build_toolsets(
     subscription_registry: SubscriptionRegistry | None = None,
     knowledge_db_path: str | None = None,
     knowledge_context: str = "",
+    topic_registry: TopicRegistry | None = None,
 ) -> tuple[list[AbstractToolset[AgentDeps]], str]:
     """Build all toolsets and return their static capability system prompt."""
     validate_console_deps_contract()
@@ -197,6 +200,11 @@ def build_toolsets(
         sub_toolset, sub_instr = create_subscription_toolset(subscription_registry)
         toolsets.append(sub_toolset)
         prompt_fragments.append(sub_instr)
+
+    if topic_registry is not None:
+        topic_toolset, topic_instr = create_topic_toolset(topic_registry)
+        toolsets.append(topic_toolset)
+        prompt_fragments.append(topic_instr)
 
     return wrap_toolsets(toolsets), compose_system_prompt(prompt_fragments)
 

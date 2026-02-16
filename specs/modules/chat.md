@@ -295,6 +295,7 @@ describe actual enforcement honestly — cwd/path validation, not hard sandbox.
   narrowed exception handling, cached regex. (Issue #89)
 
 ### Changelog
+- 2026-02-16: Integrated topic system — TopicRegistry init, topic processor in history pipeline (#129)
 - 2026-02-16: Modules moved into subdirectories (`agent/`, `approval/`, `display/`, `infra/`, `store/`, `tools/`) as part of subdirectory restructuring (#119)
 - 2026-02-16: Added Dependencies/Wired-in docstring headers (#121)
 - 2026-02-16: Added `serve` subcommand for FastAPI server mode (#126)
