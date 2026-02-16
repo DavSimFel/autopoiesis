@@ -12,6 +12,7 @@ from pydantic_ai import AbstractToolset, Agent, RunContext
 from pydantic_ai._agent_graph import HistoryProcessor
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
+from pydantic_ai.settings import ModelSettings
 from pydantic_ai.tools import ToolDefinition
 
 from approval_keys import ApprovalKeyManager
@@ -246,17 +247,42 @@ async def _strict_tool_definitions(
     return [replace(td, strict=True) for td in tool_defs]
 
 
+def build_model_settings() -> ModelSettings | None:
+    """Build ModelSettings from AI_TEMPERATURE, AI_MAX_TOKENS, AI_TOP_P env vars."""
+    settings: ModelSettings = {}
+    temp_raw = os.getenv("AI_TEMPERATURE")
+    if temp_raw is not None:
+        settings["temperature"] = float(temp_raw)
+    max_tokens_raw = os.getenv("AI_MAX_TOKENS")
+    if max_tokens_raw is not None:
+        settings["max_tokens"] = int(max_tokens_raw)
+    top_p_raw = os.getenv("AI_TOP_P")
+    if top_p_raw is not None:
+        settings["top_p"] = float(top_p_raw)
+    return settings if settings else None
+
+
+@dataclass
+class AgentOptions:
+    """Optional behavioural knobs for :func:`build_agent`."""
+
+    instructions: list[str] | None = None
+    history_processors: Sequence[HistoryProcessor[AgentDeps]] = ()
+    model_settings: ModelSettings | None = None
+
+
 def build_agent(
     provider: str,
     agent_name: str,
     toolsets: list[AbstractToolset[AgentDeps]],
     system_prompt: str,
-    instructions: list[str] | None = None,
-    history_processors: Sequence[HistoryProcessor[AgentDeps]] | None = None,
+    options: AgentOptions | None = None,
 ) -> Agent[AgentDeps, str]:
     """Create the configured agent from explicit provider/name/toolset settings."""
-    hp = history_processors or []
-    dynamic_instructions = instructions if instructions is not None else None
+    opts = options or AgentOptions()
+    hp = list(opts.history_processors)
+    dynamic_instructions = opts.instructions if opts.instructions is not None else None
+    effective_settings = opts.model_settings or build_model_settings()
     if provider == "anthropic":
         required_env("ANTHROPIC_API_KEY")
         return Agent(
@@ -267,6 +293,8 @@ def build_agent(
             instructions=dynamic_instructions,
             history_processors=hp,
             name=agent_name,
+            model_settings=effective_settings,
+            end_strategy="exhaustive",
         )
     if provider == "openrouter":
         model = OpenAIChatModel(
@@ -285,6 +313,8 @@ def build_agent(
             history_processors=hp,
             name=agent_name,
             prepare_tools=_strict_tool_definitions,
+            model_settings=effective_settings,
+            end_strategy="exhaustive",
         )
     raise SystemExit("Unsupported AI_PROVIDER. Use 'openrouter' or 'anthropic'.")
 
