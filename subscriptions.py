@@ -123,11 +123,16 @@ class SubscriptionRegistry:
                     pattern,content_hash,sort_key,session_id,created_at)
                    VALUES (?,?,?,?,?,?,?,?,?,?)""",
                 (
-                    sub.id, sub.kind, sub.target,
+                    sub.id,
+                    sub.kind,
+                    sub.target,
                     sub.line_range[0] if sub.line_range else None,
                     sub.line_range[1] if sub.line_range else None,
-                    sub.pattern, sub.content_hash,
-                    sub.sort_key, sub.session_id, sub.created_at,
+                    sub.pattern,
+                    sub.content_hash,
+                    sub.sort_key,
+                    sub.session_id,
+                    sub.created_at,
                 ),
             )
             conn.commit()

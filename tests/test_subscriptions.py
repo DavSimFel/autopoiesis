@@ -170,7 +170,10 @@ class TestMaterializeSubscriptions:
         registry.add(kind="file", target="ctx.md")
         user_msg = ModelRequest(parts=[UserPromptPart(content="hello")])
         result = materialize_subscriptions(
-            [user_msg], registry, workspace, memory_db,
+            [user_msg],
+            registry,
+            workspace,
+            memory_db,
         )
         expected_count = 2
         assert len(result) == expected_count
@@ -192,7 +195,10 @@ class TestMaterializeSubscriptions:
         )
         user_msg = ModelRequest(parts=[UserPromptPart(content="hi")])
         result = materialize_subscriptions(
-            [old_mat, user_msg], registry, workspace, memory_db,
+            [old_mat, user_msg],
+            registry,
+            workspace,
+            memory_db,
         )
         # Old materialization stripped, new one added
         mat_msgs = [m for m in result if is_materialization(m)]
@@ -206,6 +212,9 @@ class TestMaterializeSubscriptions:
     ) -> None:
         user_msg = ModelRequest(parts=[UserPromptPart(content="hi")])
         result = materialize_subscriptions(
-            [user_msg], registry, workspace, memory_db,
+            [user_msg],
+            registry,
+            workspace,
+            memory_db,
         )
         assert result == [user_msg]

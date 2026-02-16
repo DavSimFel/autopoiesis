@@ -102,9 +102,13 @@ def main() -> None:
         memory_db_path=memory_db_path,
         subscription_registry=subscription_registry,
     )
+
     def _subscription_processor(msgs: list[ModelMessage]) -> list[ModelMessage]:
         return materialize_subscriptions(
-            msgs, subscription_registry, workspace_root, memory_db_path,
+            msgs,
+            subscription_registry,
+            workspace_root,
+            memory_db_path,
         )
 
     agent = build_agent(

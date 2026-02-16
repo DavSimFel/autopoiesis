@@ -74,8 +74,10 @@ def _register_tools(
         kind: SubscriptionKind = "lines" if line_range is not None else "file"
         try:
             sub = registry.add(
-                kind=kind, target=path,
-                line_range=line_range, pattern=pattern,
+                kind=kind,
+                target=path,
+                line_range=line_range,
+                pattern=pattern,
             )
         except ValueError as exc:
             return str(exc)
@@ -132,8 +134,7 @@ def _register_tools(
             return "No active subscriptions."
         return "\n".join(_format_subscription(s) for s in active)
 
-    _ = (subscribe_file, subscribe_memory, unsubscribe,
-         unsubscribe_all, list_subscriptions)
+    _ = (subscribe_file, subscribe_memory, unsubscribe, unsubscribe_all, list_subscriptions)
 
 
 def create_subscription_toolset(

@@ -23,8 +23,8 @@ from subscriptions import (
     MaterializedContent,
     Subscription,
     SubscriptionRegistry,
-    truncate_content,
     content_hash,
+    truncate_content,
 )
 
 logger = logging.getLogger(__name__)
@@ -76,9 +76,7 @@ def _read_memory(
         return "(no matches)"
     parts: list[str] = []
     for entry in results:
-        parts.append(
-            f"- [{entry['timestamp']}] {entry['summary']}"
-        )
+        parts.append(f"- [{entry['timestamp']}] {entry['summary']}")
     return "\n".join(parts)
 
 
@@ -133,7 +131,9 @@ def materialize_subscriptions(
     """
     cleaned = [m for m in messages if not is_materialization(m)]
     materialized = resolve_subscriptions(
-        registry, workspace_root, memory_db_path,
+        registry,
+        workspace_root,
+        memory_db_path,
     )
     non_empty = [m for m in materialized if m.content.strip()]
     if not non_empty:
@@ -142,9 +142,11 @@ def materialize_subscriptions(
     parts: list[UserPromptPart] = []
     hashes: dict[str, str] = {}
     for mat in non_empty:
-        parts.append(UserPromptPart(
-            content=f"{mat.header}\n{mat.content}",
-        ))
+        parts.append(
+            UserPromptPart(
+                content=f"{mat.header}\n{mat.content}",
+            )
+        )
         hashes[mat.subscription.id] = mat.content_hash
 
     mat_msg = ModelRequest(
