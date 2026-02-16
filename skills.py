@@ -1,8 +1,7 @@
 """Filesystem-based skill system with progressive disclosure.
 
-Skills are folders containing a ``SKILL.md`` with YAML frontmatter (metadata)
-and markdown body (instructions). The agent discovers skills at startup by
-scanning frontmatter only — full instructions are loaded on demand to keep token usage low.
+Skills are folders containing ``SKILL.md`` with YAML frontmatter and markdown body.
+Frontmatter is scanned at startup; full instructions are loaded on demand.
 """
 
 from __future__ import annotations
@@ -183,7 +182,7 @@ def _read_resource(cache: dict[str, Skill], skill_name: str, resource_name: str)
     skill = cache.get(skill_name)
     if skill is None:
         return f"Skill '{skill_name}' not found."
-    available = _format_available_resources(skill.resources)
+    available = ", ".join(sorted(skill.resources)) if skill.resources else "none"
     error = _validate_resource_path(skill, resource_name, available)
     if error is not None:
         return error
@@ -207,11 +206,6 @@ def _validate_resource_path(skill: Skill, resource_name: str, available: str) ->
     if not resolved_path.is_file():
         return f"Resource '{resource_name}' is not a file."
     return None
-
-
-def _format_available_resources(resources: list[str]) -> str:
-    """Format a stable resource list for user-facing error messages."""
-    return ", ".join(sorted(resources)) if resources else "none"
 
 
 def _load_skill_parts(skill: Skill) -> tuple[dict[str, Any], str]:
@@ -248,10 +242,12 @@ def skills_instructions(cache: dict[str, Skill]) -> str:
     """Generate a compact system prompt fragment for skill tool discovery."""
     if not cache:
         return ""
+    skill_list = "\n".join(f"  - {n}: {cache[n].description}" for n in sorted(cache))
     return (
-        f"You have skills available: {', '.join(sorted(cache.keys()))}. "
-        "Use list_skills to see details, load_skill to get full instructions, "
-        "and validate_skill/lint_skill when editing skills."
+        f"Skills extend your capabilities:\n{skill_list}\n\n"
+        "When a task matches a skill, call load_skill(name) to get full instructions, "
+        "then follow them. Skills may reference resource files — use "
+        "read_skill_resource to access scripts, templates, or reference data."
     )
 
 

@@ -132,8 +132,17 @@ def _build_skill_directories() -> list[SkillDirectory]:
 
 
 _CONSOLE_INSTRUCTIONS = (
-    "You have filesystem tools for reading, writing, and editing files "
-    "in the workspace. Write and edit operations require user approval."
+    "You have filesystem tools (ls, read_file, write_file, edit_file, glob, grep) "
+    "and shell execution tools (execute, process_list, process_poll, etc.).\n\n"
+    "Common workflows:\n"
+    "- To run code: write it with write_file, then run with execute. "
+    "Example: write_file('script.py', 'import datetime\\nprint(datetime.datetime.now())') "
+    "then execute('python script.py').\n"
+    "- To check results: read_file to see output files, grep to search for patterns.\n"
+    "- To run tests: execute('python -m pytest -v').\n"
+    "- For long-running tasks: execute with background=True, then process_poll to check status.\n\n"
+    "Write and edit operations require user approval. "
+    "Shell commands require approval except read-only process tools (list/poll/log)."
 )
 
 _READ_ONLY_EXEC_TOOLS: frozenset[str] = frozenset({"process_list", "process_poll", "process_log"})
