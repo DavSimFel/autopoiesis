@@ -8,7 +8,7 @@ split into focused companion modules.
 
 ## Status
 
-- **Last updated:** 2026-02-16 (Issue #81)
+- **Last updated: 2026-02-16 (Issue #81)
 - **Source:** `chat.py`, `chat_runtime.py`, `chat_worker.py`, `chat_approval.py`, `chat_cli.py`
 
 ## File Structure
