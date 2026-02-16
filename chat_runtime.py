@@ -130,15 +130,16 @@ def _build_skill_directories() -> list[SkillDirectory]:
 
 _CONSOLE_INSTRUCTIONS = (
     "You have filesystem tools for reading, writing, and editing files "
-    "in the workspace. Write and edit operations require user approval. "
-    "Shell execution is disabled."
+    "in the workspace. Write and edit operations require user approval."
 )
 
 _EXEC_INSTRUCTIONS = (
     "You have shell execution tools: 'execute' runs commands (with optional PTY, "
     "timeout, background mode); 'process_list', 'process_poll', 'process_log', "
     "'process_write', 'process_send_keys', and 'process_kill' manage running "
-    "sessions. All commands run sandboxed inside the workspace. "
+    "sessions. Commands run with working directory set to the workspace. "
+    "Path arguments are validated against the workspace root. "
+    "This is NOT a security sandbox — do not run untrusted commands. "
     "Execution requires user approval."
 )
 
