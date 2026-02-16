@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+from typing import Any
 from uuid import uuid4
 
 from approval_types import ApprovalVerificationError
@@ -10,7 +11,22 @@ from chat_approval import display_approval_requests, gather_approvals
 from chat_runtime import get_runtime
 from chat_worker import enqueue_and_wait
 from models import WorkItem, WorkItemInput, WorkItemPriority, WorkItemType
-from streaming import PrintStreamHandle, register_stream
+from streaming import ChannelStatus, RichStreamHandle, register_stream
+
+
+def _collapse_approval(
+    handle: RichStreamHandle,
+    payload: dict[str, Any],
+    *,
+    approved: bool,
+) -> None:
+    """Create and immediately collapse an approval channel in the display."""
+    requests = payload.get("requests", [])
+    tool_names = ", ".join(str(r.get("tool_name", "?")) for r in requests)
+    status: ChannelStatus = "done" if approved else "error"
+    label = "approved" if approved else "denied"
+    summary = f"{tool_names} — {label}"
+    handle.show_approval(summary, status)
 
 
 def _run_turn(
@@ -37,19 +53,28 @@ def _run_turn(
                 approval_context_id=approval_context_id,
             ),
         )
-        register_stream(item.id, PrintStreamHandle())
+        handle = RichStreamHandle()
+        register_stream(item.id, handle)
         output = enqueue_and_wait(item)
         history_json = output.message_history_json
 
         if output.deferred_tool_requests_json is None:
             break
 
+        handle.pause_display()
         requests_payload = display_approval_requests(output.deferred_tool_requests_json)
-        deferred_results_json = gather_approvals(
-            requests_payload,
-            approval_store=rt.approval_store,
-            key_manager=rt.key_manager,
-        )
+        try:
+            deferred_results_json = gather_approvals(
+                requests_payload,
+                approval_store=rt.approval_store,
+                key_manager=rt.key_manager,
+            )
+            _collapse_approval(handle, requests_payload, approved=True)
+        except (EOFError, KeyboardInterrupt):
+            _collapse_approval(handle, requests_payload, approved=False)
+            raise
+        finally:
+            handle.resume_display()
         prompt = None
 
     return history_json

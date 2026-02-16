@@ -9,7 +9,7 @@ The runtime combines model-facing agent logic with durable execution so conversa
 - **PydanticAI agent** handles model orchestration, deps typing, and tool wiring.
 - **DBOS durability layer** wraps agent execution and provides crash recovery.
 - **Priority queue** — all work (chat, research, code, review) flows through a single DBOS queue as `WorkItem` instances.
-- **Stream handles** — optional in-process handles for real-time token streaming. Convenience only; durability comes from the final output.
+- **Stream handles** — optional in-process handles for real-time token streaming. CLI uses a Rich live display with collapsible assistant/tool channels; durability still comes from the final output.
 - **Provider abstraction** selects Anthropic or OpenRouter at startup.
 - **Backend tool integration** uses `LocalBackend` and the console toolset for scoped file operations.
 - **Skill system** provides extensible capabilities via filesystem-based skills with progressive disclosure (frontmatter scan, load on demand) from shipped and workspace-custom directories.
@@ -40,7 +40,7 @@ The runtime combines model-facing agent logic with durable execution so conversa
 ### Interactive CLI chat
 
 Same path as above, but with `WorkItemType.CHAT`, `CRITICAL` priority,
-and a `PrintStreamHandle` for stdout streaming.
+and a `RichStreamHandle` for Rich live streaming.
 
 ## Development Workflow
 
@@ -53,6 +53,7 @@ For workflow rationale, see `specs/decisions/001-trunk-based-workflow.md`.
 ## Module Index
 
 - `chat.py`: `specs/modules/chat.md`
+- Rich display: `specs/modules/rich-display.md`
 - `skills.py`: `specs/modules/skills.md`
 - `skillmaker_tools.py`: `specs/modules/skillmaker-tools.md`
 - Queue / WorkItem: `specs/modules/queue.md`

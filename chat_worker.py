@@ -3,14 +3,30 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
+from collections.abc import AsyncIterable
 from contextvars import ContextVar, Token
 from dataclasses import dataclass
 from typing import Any
 
 from pydantic_ai import DeferredToolRequests
-from pydantic_ai.messages import ModelMessage, ModelMessagesTypeAdapter, ModelResponse
-from pydantic_ai.tools import DeferredToolResults
+from pydantic_ai.exceptions import UserError
+from pydantic_ai.messages import (
+    AgentStreamEvent,
+    FunctionToolCallEvent,
+    FunctionToolResultEvent,
+    ModelMessage,
+    ModelMessagesTypeAdapter,
+    ModelResponse,
+    PartDeltaEvent,
+    PartStartEvent,
+    RetryPromptPart,
+    ThinkingPart,
+    ThinkingPartDelta,
+    ToolReturnPart,
+)
+from pydantic_ai.tools import DeferredToolResults, RunContext
 
 from approval_types import ApprovalScope
 from chat_approval import (
@@ -21,7 +37,7 @@ from chat_approval import (
 from chat_runtime import Runtime, get_runtime
 from history_store import clear_checkpoint, load_checkpoint, save_checkpoint
 from models import AgentDeps, WorkItem, WorkItemOutput
-from streaming import StreamHandle, take_stream
+from streaming import ChannelStatus, StreamHandle, ToolAwareStreamHandle, take_stream
 from work_queue import work_queue
 
 try:
@@ -115,6 +131,64 @@ def _build_output(
     )
 
 
+def _format_tool_args(args: str | dict[str, Any] | None) -> str | None:
+    """Format tool call arguments for display."""
+    if args is None:
+        return None
+    if isinstance(args, str):
+        stripped = args.strip()
+        if not stripped:
+            return None
+        try:
+            parsed = json.loads(stripped)
+        except json.JSONDecodeError:
+            return stripped
+        return json.dumps(parsed, indent=2, sort_keys=True, default=str)
+    if not args:
+        return None
+    return json.dumps(args, indent=2, sort_keys=True, default=str)
+
+
+def _format_tool_result(
+    result: ToolReturnPart | RetryPromptPart,
+) -> tuple[ChannelStatus, str | None]:
+    """Extract status and summary from a tool result part."""
+    if isinstance(result, RetryPromptPart):
+        content = result.content
+        details = content if isinstance(content, str) else json.dumps(content, default=str)
+        return "error", details or None
+    content = result.content
+    details = content if isinstance(content, str) else json.dumps(content, default=str)
+    return "done", details or None
+
+
+async def _forward_stream_events(
+    handle: StreamHandle,
+    _ctx: RunContext[AgentDeps],
+    events: AsyncIterable[AgentStreamEvent],
+) -> None:
+    """Route tool and thinking events to a ToolAwareStreamHandle."""
+    if not isinstance(handle, ToolAwareStreamHandle):
+        async for _ in events:
+            pass
+        return
+
+    async for event in events:
+        if isinstance(event, FunctionToolCallEvent):
+            details = _format_tool_args(event.part.args)
+            handle.start_tool_call(event.tool_call_id, event.part.tool_name, details)
+        elif isinstance(event, FunctionToolResultEvent):
+            status, details = _format_tool_result(event.result)
+            handle.finish_tool_call(event.tool_call_id, status, details)
+        elif isinstance(event, PartStartEvent) and isinstance(event.part, ThinkingPart):
+            handle.start_thinking()
+            if event.part.content:
+                handle.update_thinking(event.part.content)
+        elif isinstance(event, PartDeltaEvent) and isinstance(event.delta, ThinkingPartDelta):
+            if event.delta.content_delta:
+                handle.update_thinking(event.delta.content_delta)
+
+
 def _run_streaming(
     rt: Runtime,
     turn: _TurnInput,
@@ -124,6 +198,12 @@ def _run_streaming(
     output_type: list[type[AgentOutput]] = [str, DeferredToolRequests]
 
     async def _stream() -> WorkItemOutput:
+        async def _on_events(
+            ctx: RunContext[AgentDeps],
+            events: AsyncIterable[AgentStreamEvent],
+        ) -> None:
+            await _forward_stream_events(stream_handle, ctx, events)
+
         try:
             async with rt.agent.run_stream(
                 turn.prompt,
@@ -131,9 +211,15 @@ def _run_streaming(
                 message_history=turn.history,
                 output_type=output_type,
                 deferred_tool_results=turn.deferred_results,
+                event_stream_handler=_on_events,
             ) as stream:
-                async for chunk in stream.stream_text(delta=True):
-                    stream_handle.write(chunk)
+                try:
+                    async for chunk in stream.stream_text(delta=True):
+                        stream_handle.write(chunk)
+                except UserError:
+                    pass
+                if isinstance(stream_handle, ToolAwareStreamHandle):
+                    stream_handle.finish_thinking()
                 result_output: AgentOutput = await stream.get_output()
                 all_msgs = stream.all_messages()
         finally:
