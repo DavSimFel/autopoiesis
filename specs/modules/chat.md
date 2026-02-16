@@ -8,8 +8,8 @@ split into focused companion modules.
 
 ## Status
 
-- **Last updated:** 2026-02-16 (Issue #25)
-- **Source:** `chat.py`, `chat_runtime.py`, `chat_worker.py`, `chat_approval.py`, `chat_cli.py`, `streaming.py`, `rich_display.py`
+- **Last updated:** 2026-02-16 (Issue #19)
+- **Source:** `chat.py`, `chat_runtime.py`, `chat_worker.py`, `chat_approval.py`, `chat_cli.py`
 
 ## File Structure
 
@@ -19,13 +19,12 @@ split into focused companion modules.
 | `chat_runtime.py` | Runtime dataclass, env loading helpers, backend/toolset/agent builders |
 | `chat_worker.py` | DBOS workflow/step functions, enqueue helpers, history serialization |
 | `chat_approval.py` | Approval scope, request/result serialization, CLI approval collection |
-| `chat_cli.py` | Interactive CLI loop and approval re-enqueue flow using Rich live streaming |
+| `chat_cli.py` | Interactive CLI loop and approval re-enqueue flow |
 | `toolset_wrappers.py` | `ObservableToolset` wrapper for logging tool call metrics (name, duration, outcome) |
 | `models.py` | `AgentDeps`, `WorkItem`, `WorkItemInput`, `WorkItemOutput`, priority/type enums |
 | `skills.py` | Skill discovery, progressive loading, skills toolset |
 | `work_queue.py` | Queue instance only (no functions importing from `chat.py`) |
-| `streaming.py` | `StreamHandle` protocol, `RichStreamHandle`, optional tool-event stream extension, registry |
-| `rich_display.py` | Rich live tree manager with collapsible channels for assistant/tool streaming |
+| `streaming.py` | `StreamHandle` protocol, `PrintStreamHandle`, registry |
 
 ## Environment Variables
 
@@ -99,8 +98,6 @@ split into focused companion modules.
 - `run_agent_step(work_item_dict)` — `@DBOS.step()`. Passes
   `output_type=[str, DeferredToolRequests]` to all agent calls. Checks for
   stream handle: if present, uses `agent.run_stream()` for real-time output;
-  forwards tool call start/finish events to tool-aware stream handles via
-  PydanticAI `event_stream_handler`,
   otherwise `agent.run_sync()`. If input carries `deferred_tool_results_json`,
   passes reconstructed approvals to the agent. Returns `WorkItemOutput` as dict.
 - `execute_work_item(work_item_dict)` — `@DBOS.workflow()`. Delegates to
@@ -124,7 +121,7 @@ split into focused companion modules.
 ### CLI
 
 - `cli_chat_loop()` — interactive loop with approval flow. Each message →
-  `WorkItem` with CRITICAL priority + `RichStreamHandle` →
+  `WorkItem` with CRITICAL priority + `PrintStreamHandle` →
   `enqueue_and_wait()`. If output contains `deferred_tool_requests_json`,
   displays pending tool calls, gathers user approval, and re-enqueues with
   `deferred_tool_results_json` until a final text response is received.
@@ -177,16 +174,13 @@ split into focused companion modules.
 - `pydantic-ai-slim[openai,anthropic,cli,dbos,mcp]>=1.59,<2`
 - `pydantic-ai-backend==0.1.6`
 - `python-dotenv>=1.2,<2`
-- `rich>=13.0`
 
 ## Change Log
 
-- 2026-02-16: Enable strict tool definitions for OpenRouter provider via
-  `prepare_tools` callback, reducing malformed tool-call arguments. (Issue #33)
-- 2026-02-16: Replaced `PrintStreamHandle` with Rich live display. Each tool
-  call, reasoning stream, and response gets its own channel. Pinned response
-  channel never hides. Approval prompts pause/resume Live. Non-TTY fallback
-  to plain print. Plain-text final output for scrollback. (Issue #25)
+- 2026-02-16: Approval prompts now capture an optional denial reason when the
+  user explicitly denies a tool (`n`). If provided, that message is serialized
+  as `denial_message`; empty input preserves the default denial text.
+  (Issue #32)
 - 2026-02-16: Hardened SQLite reliability in approval, memory, and history stores.
   Connections now use explicit close semantics (`contextlib.closing` with
   transactional context), and each connection sets `PRAGMA journal_mode=WAL`
