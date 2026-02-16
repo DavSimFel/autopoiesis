@@ -5,7 +5,7 @@ requires-python = ">=3.12"
 dependencies = [
   "pydantic-ai-slim[openai,anthropic,cli,dbos,mcp]>=1.59,<2",
   "pydantic-ai-backend==0.1.6",
-  "cryptography>=44.0,<46",
+  "cryptography>=46.0.5,<47",
   "python-dotenv>=1.2,<2",
   "rich>=13.0",
   "pyyaml>=6.0",
