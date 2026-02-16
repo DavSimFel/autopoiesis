@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from pydantic_ai import RunContext
+from pydantic_ai.messages import ToolReturn
 
 import exec_registry
 from models import AgentDeps
@@ -156,6 +157,20 @@ async def _spawn_subprocess(
     return proc, None
 
 
+def _to_tool_return(summary: dict[str, Any]) -> ToolReturn:
+    """Convert a summary dict into a ToolReturn with structured metadata."""
+    tail = summary.get("output_tail", [])
+    content = "\n".join(tail) if tail else "(no output)"
+    return ToolReturn(
+        return_value=content,
+        metadata={
+            "session_id": summary["session_id"],
+            "log_path": summary.get("log_path", ""),
+            "exit_code": summary.get("exit_code"),
+        },
+    )
+
+
 def _build_summary(session: exec_registry.ProcessSession) -> dict[str, Any]:
     tail = _tail_lines(session.log_path, _MAX_SUMMARY_LINES)
     return {
@@ -190,7 +205,7 @@ async def execute(
     env: dict[str, str] | None = None,
     timeout: float = _DEFAULT_TIMEOUT,
     background: bool = False,
-) -> dict[str, Any]:
+) -> ToolReturn:
     """Execute a shell command.
 
     Args:
@@ -201,7 +216,7 @@ async def execute(
         background: If True, return immediately with session id.
 
     Returns:
-        Summary dict with session_id, exit_code, log_path, output_tail.
+        ToolReturn with output summary as content and session metadata.
     """
     workspace_root = Path(ctx.deps.backend.root_dir)
     safe_cwd = sandbox_cwd(cwd, workspace_root)
@@ -225,8 +240,10 @@ async def execute(
         task = asyncio.create_task(_monitor_background(session))
         _background_tasks.add(task)
         task.add_done_callback(_background_tasks.discard)
-        return _build_summary(session)
-    return await _wait_with_timeout(session, timeout)
+        summary = _build_summary(session)
+    else:
+        summary = await _wait_with_timeout(session, timeout)
+    return _to_tool_return(summary)
 
 
 async def execute_pty(
@@ -237,7 +254,7 @@ async def execute_pty(
     env: dict[str, str] | None = None,
     timeout: float = _DEFAULT_TIMEOUT,
     background: bool = False,
-) -> dict[str, Any]:
+) -> ToolReturn:
     """Execute a shell command under a pseudo-terminal.
 
     Same as ``execute`` but allocates a PTY for interactive programs.
@@ -271,5 +288,7 @@ async def execute_pty(
         task = asyncio.create_task(_monitor_background(session))
         _background_tasks.add(task)
         task.add_done_callback(_background_tasks.discard)
-        return _build_summary(session)
-    return await _wait_with_timeout(session, timeout)
+        summary = _build_summary(session)
+    else:
+        summary = await _wait_with_timeout(session, timeout)
+    return _to_tool_return(summary)

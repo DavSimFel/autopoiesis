@@ -284,16 +284,17 @@ def create_skills_toolset(
         docstring_format="google",
         require_parameter_descriptions=True,
     )
+    skill_meta: dict[str, str] = {"category": "skills"}
 
     discovered = discover_skills(directories)
     cache: dict[str, Skill] = {s.name: s for s in discovered}
 
-    @toolset.tool
+    @toolset.tool(metadata=skill_meta)
     async def list_skills(ctx: RunContext[AgentDeps]) -> str:
         """List available skills with name, description, and tags."""
         return _format_skill_list(cache)
 
-    @toolset.tool
+    @toolset.tool(metadata=skill_meta)
     async def load_skill(ctx: RunContext[AgentDeps], skill_name: str) -> str:
         """Load full instructions for a skill by name (progressive disclosure).
 
@@ -302,7 +303,7 @@ def create_skills_toolset(
         """
         return load_skill_instructions(cache, skill_name)
 
-    @toolset.tool
+    @toolset.tool(metadata=skill_meta)
     async def read_skill_resource(
         ctx: RunContext[AgentDeps],
         skill_name: str,
@@ -316,7 +317,7 @@ def create_skills_toolset(
         """
         return _read_resource(cache, skill_name, resource_name)
 
-    @toolset.tool
+    @toolset.tool(metadata=skill_meta)
     async def validate_skill(ctx: RunContext[AgentDeps], skill_name: str) -> str:
         """Validate SKILL.md frontmatter and required structure.
 
@@ -325,7 +326,7 @@ def create_skills_toolset(
         """
         return _validate_skill(cache, skill_name)
 
-    @toolset.tool
+    @toolset.tool(metadata=skill_meta)
     async def lint_skill(ctx: RunContext[AgentDeps], skill_name: str) -> str:
         """Lint SKILL.md for common style issues.
 

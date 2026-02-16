@@ -37,6 +37,10 @@ Persistent chat memory with semantic search via SQLite FTS5. The agent retains k
 - Memory store initialized at startup in `chat.py`
 - System prompt instructs: search memory before answering questions about prior work
 
+## Observability
+
+- All memory tools carry `metadata={"category": "memory"}` for toolset-level observability.
+
 ## Safety
 
 - File paths validated with `Path.resolve().is_relative_to(workspace_root)`

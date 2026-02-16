@@ -20,6 +20,7 @@ from approval_store import ApprovalStore
 from memory_tools import create_memory_toolset
 from models import AgentDeps
 from skills import SkillDirectory, create_skills_toolset
+from toolset_wrappers import wrap_toolsets
 
 try:
     from pydantic_ai_backends import LocalBackend, create_console_toolset
@@ -172,16 +173,18 @@ def _build_exec_toolset() -> AbstractToolset[AgentDeps]:
         process_write,
     )
 
+    exec_meta: dict[str, str] = {"category": "exec"}
+    proc_meta: dict[str, str] = {"category": "process"}
     ts: FunctionToolset[AgentDeps] = FunctionToolset(
         tools=[
-            Tool(execute),
-            Tool(execute_pty),
-            Tool(process_list),
-            Tool(process_poll),
-            Tool(process_log),
-            Tool(process_write),
-            Tool(process_send_keys),
-            Tool(process_kill),
+            Tool(execute, metadata=exec_meta),
+            Tool(execute_pty, metadata=exec_meta),
+            Tool(process_list, metadata=proc_meta),
+            Tool(process_poll, metadata=proc_meta),
+            Tool(process_log, metadata=proc_meta),
+            Tool(process_write, metadata=proc_meta),
+            Tool(process_send_keys, metadata=proc_meta),
+            Tool(process_kill, metadata=proc_meta),
         ],
         docstring_format="google",
         require_parameter_descriptions=True,
@@ -214,7 +217,7 @@ def build_toolsets(
         toolsets.append(memory_toolset)
         instructions.append(memory_instr)
 
-    return toolsets, instructions
+    return wrap_toolsets(toolsets), instructions
 
 
 def build_agent(

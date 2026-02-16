@@ -48,6 +48,12 @@ Uses stdlib `pty.openpty()` — zero external dependencies. Enables interactive 
 - **Env blocklist**: `_DANGEROUS_ENV_VARS` frozenset blocks `LD_PRELOAD`, `PYTHONPATH`, etc.
 - **Log cleanup**: `cleanup_exec_logs(max_age_hours)` runs at startup
 
+## Observability
+
+- All exec and process tools carry `metadata={"category": "exec"}` or `{"category": "process"}` for toolset-level observability.
+- `execute` and `execute_pty` return `ToolReturn` (not raw dicts) with structured metadata (`session_id`, `log_path`, `exit_code`).
+- `process_log` returns `ToolReturn` with log content as `return_value` and metadata (`session_id`, `log_path`, `total` line count).
+
 ## References
 
 - Issue: #24
