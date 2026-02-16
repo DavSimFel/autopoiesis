@@ -22,6 +22,7 @@ split into focused companion modules.
 | `chat_worker.py` | DBOS workflow/step functions, enqueue helpers, history serialization |
 | `chat_approval.py` | Approval scope, request/result serialization, CLI approval collection |
 | `chat_cli.py` | Interactive CLI loop and approval re-enqueue flow |
+| `agent/batch.py` | Non-interactive batch execution with auto-approval and JSON output |
 | `models.py` | `AgentDeps`, `WorkItem`, `WorkItemInput`, `WorkItemOutput`, priority/type enums |
 | `skills.py` | Skill discovery, progressive loading, skills toolset |
 | `work_queue.py` | Queue instance only (no functions importing from `chat.py`) |
@@ -124,6 +125,15 @@ split into focused companion modules.
   (supports approve-all, deny-all, or pick individually); returns serialized
   approval decisions
 
+### Batch Mode
+
+- `run_batch(task, output_path, timeout)` — execute a single task non-interactively
+  using `run_simple()` for auto-approval, produce structured JSON output, and exit
+  with code 0 (success) or 1 (failure). Supports stdin input (`--task -`), file output
+  (`--output`), and SIGALRM-based timeout (`--timeout`).
+- `format_output(result)` — serialize `BatchResult` to JSON
+- `BatchResult` dataclass — success, result text, error, approval_rounds, elapsed_seconds
+
 ### CLI
 
 - `cli_chat_loop()` — interactive loop with approval flow. Each message →
@@ -136,8 +146,9 @@ split into focused companion modules.
 
 ### Entrypoint
 
-- `main()` — load .env → optional `rotate-key` command path → unlock approval key
-  (required) → build stack → set runtime → DBOS launch → chat loop
+- `main()` — load .env → optional `rotate-key` command path → optional `serve` command →
+  build stack → set runtime → if `run` command: batch execution (no DBOS, no approval unlock);
+  otherwise: unlock approval key → DBOS launch → chat loop
 - `_rotate_key(base_dir)` — interactive key rotation; invalidates pending envelopes
 
 ## Deferred Tool Approval Flow
@@ -305,4 +316,6 @@ describe actual enforcement honestly — cwd/path validation, not hard sandbox.
 - 2026-02-16: Modules moved into subdirectories (`agent/`, `approval/`, `display/`, `infra/`, `store/`, `tools/`) as part of subdirectory restructuring (#119)
 - 2026-02-16: Added Dependencies/Wired-in docstring headers (#121)
 - 2026-02-16: Added `serve` subcommand for FastAPI server mode (#126)
+- 2026-02-16: Non-interactive batch mode via `run` subcommand with auto-approval,
+  structured JSON output, timeout, and exit codes (#138)
 - 2026-02-16: Knowledge system integration — startup indexing, knowledge tools wiring, memory store deprecated (#130)
