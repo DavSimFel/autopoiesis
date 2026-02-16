@@ -11,6 +11,7 @@ import time
 from typing import Any
 
 from pydantic_ai import RunContext
+from pydantic_ai.exceptions import ApprovalRequired
 from pydantic_ai.toolsets import AbstractToolset
 from pydantic_ai.toolsets.wrapper import WrapperToolset
 
@@ -33,6 +34,10 @@ class ObservableToolset(WrapperToolset[AgentDeps]):
         start = time.monotonic()
         try:
             result = await super().call_tool(name, tool_args, ctx, tool)
+        except ApprovalRequired:
+            elapsed = time.monotonic() - start
+            logger.info("tool_call name=%s duration=%.3fs status=deferred", name, elapsed)
+            raise
         except Exception:
             elapsed = time.monotonic() - start
             logger.error("tool_call name=%s duration=%.3fs status=error", name, elapsed)

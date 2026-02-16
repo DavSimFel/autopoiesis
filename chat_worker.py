@@ -3,14 +3,22 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
+from collections.abc import AsyncIterable
 from contextvars import ContextVar, Token
 from dataclasses import dataclass
 from typing import Any
 
 from pydantic_ai import DeferredToolRequests
-from pydantic_ai.messages import ModelMessage, ModelMessagesTypeAdapter, ModelResponse
-from pydantic_ai.tools import DeferredToolResults
+from pydantic_ai.exceptions import UserError
+from pydantic_ai.messages import (
+    AgentStreamEvent,
+    ModelMessage,
+    ModelMessagesTypeAdapter,
+    ModelResponse,
+)
+from pydantic_ai.tools import DeferredToolResults, RunContext
 
 from approval_types import ApprovalScope
 from chat_approval import (
@@ -21,7 +29,8 @@ from chat_approval import (
 from chat_runtime import Runtime, get_runtime
 from history_store import clear_checkpoint, load_checkpoint, save_checkpoint
 from models import AgentDeps, WorkItem, WorkItemOutput
-from streaming import StreamHandle, take_stream
+from stream_formatting import forward_stream_events
+from streaming import StreamHandle, ToolAwareStreamHandle, take_stream
 from work_queue import work_queue
 
 try:
@@ -115,6 +124,9 @@ def _build_output(
     )
 
 
+_log = logging.getLogger(__name__)
+
+
 def _run_streaming(
     rt: Runtime,
     turn: _TurnInput,
@@ -124,6 +136,12 @@ def _run_streaming(
     output_type: list[type[AgentOutput]] = [str, DeferredToolRequests]
 
     async def _stream() -> WorkItemOutput:
+        async def _on_events(
+            ctx: RunContext[AgentDeps],
+            events: AsyncIterable[AgentStreamEvent],
+        ) -> None:
+            await forward_stream_events(stream_handle, ctx, events)
+
         try:
             async with rt.agent.run_stream(
                 turn.prompt,
@@ -131,9 +149,15 @@ def _run_streaming(
                 message_history=turn.history,
                 output_type=output_type,
                 deferred_tool_results=turn.deferred_results,
+                event_stream_handler=_on_events,
             ) as stream:
-                async for chunk in stream.stream_text(delta=True):
-                    stream_handle.write(chunk)
+                try:
+                    async for chunk in stream.stream_text(delta=True):
+                        stream_handle.write(chunk)
+                except UserError:
+                    _log.debug("stream_text unavailable (non-text output); skipping")
+                if isinstance(stream_handle, ToolAwareStreamHandle):
+                    stream_handle.finish_thinking()
                 result_output: AgentOutput = await stream.get_output()
                 all_msgs = stream.all_messages()
         finally:
