@@ -79,3 +79,6 @@ Uses stdlib `pty.openpty()` — zero external dependencies. Enables interactive 
 
 - 2026-02-16: Code smell cleanup — improved error messages, removed defensive checks,
   narrowed exception handling, cached regex. (Issue #89)
+
+### Changelog
+- 2026-02-16: Modules moved into subdirectories (`agent/`, `approval/`, `display/`, `infra/`, `store/`, `tools/`) as part of subdirectory restructuring (#119)
