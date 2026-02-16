@@ -139,9 +139,9 @@ def _sanitize_fts_query(query: str) -> str:
     search term.  FTS5 keywords (AND, OR, NOT, NEAR) are dropped because
     they alter query semantics even when suffixed with ``*``.
     """
-    _FTS5_KEYWORDS = {"AND", "OR", "NOT", "NEAR"}
+    fts5_keywords = {"AND", "OR", "NOT", "NEAR"}
     cleaned = re.sub(r"[^\w\s]", " ", query)
-    tokens = [t for t in cleaned.split() if t.upper() not in _FTS5_KEYWORDS]
+    tokens = [t for t in cleaned.split() if t.upper() not in fts5_keywords]
     if not tokens:
         return ""
     return " OR ".join(f"{token}*" for token in tokens)
