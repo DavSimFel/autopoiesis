@@ -1,6 +1,8 @@
 """Terminal UI and streaming display.
 
-Public API: StreamHandle, RichStreamHandle, ToolAwareStreamHandle, register_stream, take_stream
+Public API: ChannelStatus, RichStreamHandle, StreamHandle,
+    ToolAwareStreamHandle, forward_stream_events, register_stream,
+    take_stream
 Internal: rich_display, stream_formatting, streaming
 """
 

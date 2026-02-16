@@ -150,11 +150,11 @@ Don't read everything. Start here:
 | `skillmaker_tools.py` | Linting and validation helpers for SKILL.md files. | 165 |
 | `skills.py` | Filesystem-based skill system with progressive disclosure. | 294 |
 | `toolset_builder.py` | Toolset, backend, and workspace wiring for chat runtime. | 203 |
-| `agent/cli.py` | Interactive CLI loop and approval handling. | 111 |
+| `agent/cli.py` | Interactive CLI loop and approval handling. | 112 |
 | `agent/context.py` | Sliding-window context management with token-based compaction. | 144 |
-| `agent/runtime.py` | Agent construction and process runtime state for CLI chat. | 140 |
+| `agent/runtime.py` | Agent construction and process runtime state for CLI chat. | 141 |
 | `agent/truncation.py` | Truncate large tool results and persist full output to disk. | 92 |
-| `agent/worker.py` | DBOS worker and queue helpers for chat work items. | 264 |
+| `agent/worker.py` | DBOS worker and queue helpers for chat work items. | 266 |
 | `approval/chat_approval.py` | Approval scope construction and approval decision serialization helpers. | 204 |
 | `approval/crypto.py` | Cryptographic helpers for approval signing keys. | 221 |
 | `approval/key_files.py` | Filesystem and serialization helpers for approval key material. | 98 |
@@ -171,7 +171,7 @@ Don't read everything. Start here:
 | `tools/toolset_wrappers.py` | Observable toolset wrapper for logging tool call metrics. | 57 |
 | `store/history.py` | SQLite-backed checkpoint store for durable agent message history. | 129 |
 | `store/memory.py` | SQLite FTS5-backed persistent memory store for cross-session knowledge. | 253 |
-| `store/subscriptions.py` | Subscription registry for reactive context injection. | 220 |
+| `store/subscriptions.py` | Subscription registry for reactive context injection. | 221 |
 | `display/rich_display.py` | Rich live display manager with per-section streaming channels. | 243 |
 | `display/stream_formatting.py` | Stream event formatting and forwarding helpers. | 103 |
 | `display/streaming.py` | In-process stream handles for real-time work item output. | 239 |

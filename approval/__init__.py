@@ -1,6 +1,10 @@
 """Cryptographic approval subsystem.
 
-Public API: ApprovalStore, ApprovalKeyManager, ToolPolicyRegistry
+Public API: ApprovalKeyManager, ApprovalScope, ApprovalStore,
+    ApprovalVerificationError, DeferredToolCall, SignedDecision,
+    ToolPolicyRegistry, build_approval_scope,
+    deserialize_deferred_results, display_approval_requests,
+    gather_approvals, serialize_deferred_requests
 Internal: crypto, key_files, store_schema, store_verify, chat_approval, types
 """
 

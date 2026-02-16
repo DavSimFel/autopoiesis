@@ -1,6 +1,7 @@
 """Low-level infrastructure and plumbing.
 
-Public API: work_queue, spawn_pty, materialize_subscriptions, cleanup_exec_logs
+Public API: PtyProcess, cleanup_exec_logs,
+    materialize_subscriptions, read_master, spawn_pty, work_queue
 Internal: exec_registry, otel_tracing, pty_spawn, subscription_processor, work_queue
 """
 

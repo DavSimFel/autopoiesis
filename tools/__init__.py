@@ -1,6 +1,8 @@
 """Agent-facing tool definitions.
 
-Public API: execute, execute_pty, create_memory_toolset, create_subscription_toolset, wrap_toolsets
+Public API: create_memory_toolset, create_subscription_toolset,
+    execute, execute_pty, process_kill, process_list, process_log,
+    process_poll, process_send_keys, process_write, wrap_toolsets
 Internal: exec_tool, memory_tools, process_tool, subscription_tools, toolset_wrappers
 """
 

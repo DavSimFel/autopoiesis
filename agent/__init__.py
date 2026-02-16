@@ -1,6 +1,9 @@
 """Agent runtime, worker, CLI, and context management.
 
-Public API: Runtime, AgentOptions, build_agent, cli_chat_loop, enqueue_and_wait
+Public API: AgentOptions, Runtime, build_agent,
+    checkpoint_history_processor, cli_chat_loop, compact_history,
+    enqueue, enqueue_and_wait, get_runtime, instrument_agent,
+    set_runtime, truncate_tool_results
 Internal: cli, context, runtime, truncation, worker
 """
 
