@@ -36,8 +36,10 @@ from toolset_wrappers import wrap_toolsets
 try:
     from pydantic_ai_backends import LocalBackend, create_console_toolset
 except ModuleNotFoundError as exc:
+    missing_package = exc.name or "unknown package"
     raise SystemExit(
-        "Missing backend dependency. Run `uv sync` so `pydantic-ai-backend==0.1.6` is installed."
+        f"Missing backend dependency package `{missing_package}`. "
+        "Run `uv sync` so `pydantic-ai-backend==0.1.6` is installed."
     ) from exc
 
 

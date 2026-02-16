@@ -20,8 +20,10 @@ try:
     from rich.text import Text
     from rich.tree import Tree
 except ModuleNotFoundError as exc:
+    missing_package = exc.name or "unknown package"
     raise SystemExit(
-        "Missing display dependency. Run `uv sync` so `rich>=13.0` is installed."
+        f"Missing display dependency package `{missing_package}`. "
+        "Run `uv sync` so `rich>=13.0` is installed."
     ) from exc
 
 _SPINNER_FRAMES: Final[tuple[str, ...]] = ("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧")

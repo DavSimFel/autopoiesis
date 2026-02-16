@@ -3,7 +3,10 @@
 try:
     from dbos import Queue
 except ImportError as exc:
-    raise SystemExit("DBOS not installed. Run: uv sync") from exc
+    missing_package = exc.name or "unknown package"
+    raise SystemExit(
+        f"Missing DBOS dependency `{missing_package}`. Run `uv sync` to install `dbos`."
+    ) from exc
 
 work_queue = Queue(
     "agent_work",

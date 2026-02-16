@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
 from pathlib import Path
 from typing import Any, cast
 
@@ -60,11 +59,7 @@ def parse_skill_md(content: str) -> tuple[dict[str, Any], str]:
     frontmatter_yaml = "".join(lines[1:closing_idx]).strip()
     instructions = "".join(lines[closing_idx + 1 :]).strip()
 
-    safe_load_obj = getattr(yaml, "safe_load", None)
-    if not callable(safe_load_obj):
-        raise ValueError("PyYAML safe_load is unavailable.")
-    safe_load = cast(Callable[[str], object], safe_load_obj)
-    loaded_frontmatter: object = safe_load(frontmatter_yaml) if frontmatter_yaml else {}
+    loaded_frontmatter: object = yaml.safe_load(frontmatter_yaml) if frontmatter_yaml else {}
     if not isinstance(loaded_frontmatter, dict):
         raise ValueError("SKILL.md frontmatter must be a mapping.")
     frontmatter = cast(dict[str, Any], loaded_frontmatter)

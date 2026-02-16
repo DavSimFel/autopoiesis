@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import pty
 from dataclasses import dataclass
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -14,7 +17,7 @@ class PtyProcess:
 
     process: asyncio.subprocess.Process
     master_fd: int
-    slave_fd: int
+    slave_fd: int | None
 
 
 async def spawn_pty(
@@ -38,13 +41,14 @@ async def spawn_pty(
             cwd=cwd,
             env=env,
         )
-    except Exception:
+    except OSError as exc:
+        logger.debug("PTY subprocess spawn failed with %s", type(exc).__name__, exc_info=exc)
         os.close(master_fd)
         os.close(slave_fd)
         raise
     # The slave fd is now owned by the child; close our copy.
     os.close(slave_fd)
-    return PtyProcess(process=process, master_fd=master_fd, slave_fd=-1)
+    return PtyProcess(process=process, master_fd=master_fd, slave_fd=None)
 
 
 def read_master(master_fd: int, size: int = 4096) -> bytes:
