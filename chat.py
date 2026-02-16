@@ -7,19 +7,29 @@ import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
+from pydantic_ai.messages import ModelMessage
 
 from approval_keys import ApprovalKeyManager
 from approval_policy import ToolPolicyRegistry
 from approval_store import ApprovalStore
 from chat_cli import cli_chat_loop
-from chat_runtime import Runtime, build_agent, build_backend, build_toolsets, set_runtime
+from chat_runtime import (
+    Runtime,
+    build_agent,
+    build_backend,
+    build_toolsets,
+    resolve_workspace_root,
+    set_runtime,
+)
 from chat_worker import checkpoint_history_processor
+from context_manager import compact_history
 from history_store import (
     cleanup_stale_checkpoints,
     init_history_store,
     resolve_history_db_path,
 )
 from memory_store import init_memory_store, resolve_memory_db_path
+from tool_result_truncation import truncate_tool_results
 
 try:
     from dbos import DBOS, DBOSConfig
@@ -28,6 +38,16 @@ except ModuleNotFoundError as exc:
         "Missing DBOS dependencies. Run `uv sync` so "
         "`pydantic-ai-slim[dbos,mcp]` and `dbos` are installed."
     ) from exc
+
+
+def _truncate_processor(msgs: list[ModelMessage]) -> list[ModelMessage]:
+    """Truncate oversized tool results in message history."""
+    return truncate_tool_results(msgs, resolve_workspace_root())
+
+
+def _compact_processor(msgs: list[ModelMessage]) -> list[ModelMessage]:
+    """Compact older messages when token usage exceeds threshold."""
+    return compact_history(msgs)
 
 
 def _rotate_key(base_dir: Path) -> None:
@@ -77,7 +97,11 @@ def main() -> None:
         agent_name,
         toolsets,
         system_prompt,
-        history_processors=[checkpoint_history_processor],
+        history_processors=[
+            _truncate_processor,
+            _compact_processor,
+            checkpoint_history_processor,
+        ],
     )
     system_database_url = os.getenv(
         "DBOS_SYSTEM_DATABASE_URL",
