@@ -1,0 +1,47 @@
+[
+  {
+    "id": "basic_chat",
+    "instruction": "What is 2+2? Reply with just the number.",
+    "validate": "grep -q '4' $RESULT_FILE"
+  },
+  {
+    "id": "file_write",
+    "instruction": "Create a file at /tmp/e2e_test.txt containing the text 'hello autopoiesis'. Use your tools.",
+    "validate": "grep -q 'hello autopoiesis' /tmp/e2e_test.txt"
+  },
+  {
+    "id": "file_read",
+    "setup": "echo 'canary_value_42' > /tmp/e2e_readable.txt",
+    "instruction": "Read the file /tmp/e2e_readable.txt and tell me what it contains.",
+    "validate": "jq -r .result $OUTPUT_FILE | grep -qi 'canary_value_42'"
+  },
+  {
+    "id": "memory_store",
+    "instruction": "Memorize the following using your memory tool: The secret code is ZEBRA-9876.",
+    "validate": "jq -r .success $OUTPUT_FILE | grep -q 'true'"
+  },
+  {
+    "id": "memory_recall",
+    "instruction": "Search your memory for any secret code you were told to memorize.",
+    "validate": "jq -r .result $OUTPUT_FILE | grep -qi 'ZEBRA-9876'"
+  },
+  {
+    "id": "knowledge_search",
+    "setup": "mkdir -p knowledge/reference && echo 'The capital of Freedonia is Glorpville.' > knowledge/reference/e2e_fact.md",
+    "instruction": "Search your knowledge base for information about Freedonia.",
+    "validate": "jq -r .result $OUTPUT_FILE | grep -qi 'Glorpville'",
+    "teardown": "rm -f knowledge/reference/e2e_fact.md"
+  },
+  {
+    "id": "topic_list",
+    "instruction": "List all available topics.",
+    "validate": "jq -r .result $OUTPUT_FILE | grep -qi 'research\\|code.review\\|writing'"
+  },
+  {
+    "id": "timeout_handling",
+    "instruction": "Write a 10000-word essay about every planet in the solar system in extreme detail.",
+    "timeout": 5,
+    "expect_failure": true,
+    "validate": "jq -r .success $OUTPUT_FILE | grep -q 'false'"
+  }
+]
