@@ -225,17 +225,19 @@ async def execute(
     timeout: float = _DEFAULT_TIMEOUT,
     background: bool = False,
 ) -> ToolReturn:
-    """Execute a shell command.
+    """Run a shell command in the workspace.
+
+    Use for system queries, builds, tests, git, or any task needing shell access.
 
     Args:
-        command: Shell command to run.
-        cwd: Working directory (relative to workspace root).
-        env: Extra environment variables (dangerous keys blocked).
-        timeout: Seconds before the process is killed (foreground only).
-        background: If True, return immediately with session id.
+        command: Shell command to execute (e.g. "date", "pytest -q", "git status").
+        cwd: Working directory relative to workspace root. Defaults to workspace root.
+        env: Extra environment variables to set. Dangerous keys (LD_PRELOAD etc.) are blocked.
+        timeout: Seconds before the process is killed. Only applies to foreground commands.
+        background: Run in background and return session id immediately. Use for long-running tasks.
 
     Returns:
-        ToolReturn with output summary as content and session metadata.
+        ToolReturn with command output summary and session metadata.
     """
     workspace_root = Path(ctx.deps.backend.root_dir)
     safe_cwd = sandbox_cwd(cwd, workspace_root)
@@ -274,16 +276,18 @@ async def execute_pty(
     timeout: float = _DEFAULT_TIMEOUT,
     background: bool = False,
 ) -> ToolReturn:
-    """Execute a shell command under a pseudo-terminal.
+    """Run a shell command with a pseudo-terminal.
 
-    Same as ``execute`` but allocates a PTY for interactive programs.
+    Use for interactive programs (REPLs, TUIs, coding agents).
+
+    Same as execute but allocates a PTY, which some programs require for proper output.
 
     Args:
-        command: Shell command to run.
-        cwd: Working directory (relative to workspace root).
-        env: Extra environment variables (dangerous keys blocked).
-        timeout: Seconds before the process is killed (foreground only).
-        background: If True, return immediately with session id.
+        command: Shell command to execute under a PTY.
+        cwd: Working directory relative to workspace root.
+        env: Extra environment variables. Dangerous keys are blocked.
+        timeout: Seconds before kill. Foreground only.
+        background: Run in background and return session id for monitoring via process tools.
     """
     workspace_root = Path(ctx.deps.backend.root_dir)
     safe_cwd = sandbox_cwd(cwd, workspace_root)

@@ -14,15 +14,14 @@ from pydantic_ai.toolsets import FunctionToolset
 from memory_store import combined_search, get_memory_file_snippet, save_memory
 from models import AgentDeps
 
-_MEMORY_INSTRUCTIONS = (
-    "You have persistent memory tools for retaining knowledge across sessions.\n"
-    "- Before answering questions about prior work, decisions, or preferences, "
-    "search memory first.\n"
-    "- Write key decisions and reasoning to MEMORY.md.\n"
-    "- Keep MEMORY.md under 200 lines — distill, don't append.\n"
-    "Use memory_search to find past context, memory_get to read memory file "
-    "snippets, and memory_save to persist important information."
-)
+_MEMORY_INSTRUCTIONS = """\
+## Persistent memory
+You retain knowledge across sessions via memory tools.
+- **Always search memory first** when asked about past work, decisions, preferences, or people.
+- Save important outcomes, decisions with reasoning, and lessons learned.
+- Keep MEMORY.md under 200 lines — distill, don't just append.
+- Use `memory_search` for recall, `memory_get` for reading file snippets, \
+`memory_save` for persisting new knowledge."""
 
 
 def create_memory_toolset(
@@ -42,11 +41,13 @@ def create_memory_toolset(
         query: str,
         max_results: int = 5,
     ) -> str:
-        """Search persistent memory (database + files) for past context.
+        """Search past conversations, decisions, and saved context.
+
+        Always call this before answering about prior work or preferences.
 
         Args:
-            query: Search query string to match against stored memories.
-            max_results: Maximum number of results to return.
+            query: Natural language search query.
+            max_results: Maximum results to return. Default 5.
         """
         return combined_search(db_path, workspace_root, query, max_results)
 
@@ -57,12 +58,14 @@ def create_memory_toolset(
         from_line: int | None = None,
         lines: int | None = None,
     ) -> str:
-        """Read a snippet from a workspace memory file.
+        """Read lines from a memory file (MEMORY.md or memory/*.md).
+
+        Use after memory_search to pull full context from a match.
 
         Args:
-            path: Relative path to the memory file within the workspace.
-            from_line: Line number to start reading from (1-indexed).
-            lines: Number of lines to read from the starting position.
+            path: Relative path to the memory file (e.g. "MEMORY.md", "memory/2026-02-16.md").
+            from_line: Starting line number (1-indexed). Omit to read from the beginning.
+            lines: Number of lines to read. Omit to read to end of file.
         """
         return get_memory_file_snippet(workspace_root, path, from_line, lines)
 
@@ -72,11 +75,13 @@ def create_memory_toolset(
         summary: str,
         topics: list[str],
     ) -> str:
-        """Save a memory entry for future retrieval.
+        """Persist an important fact, decision, or outcome for future recall.
+
+        Use for anything worth remembering across sessions.
 
         Args:
-            summary: Text content of the memory to persist.
-            topics: List of topic tags for categorizing the memory.
+            summary: What to remember — decision, lesson, preference.
+            topics: Tags for categorization (e.g. ["auth", "decision"]).
         """
         entry_id = save_memory(db_path, summary, topics)
         return f"Memory saved (id: {entry_id})."

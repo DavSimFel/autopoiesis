@@ -71,12 +71,12 @@ def main() -> None:
         os.getenv("DBOS_SYSTEM_DATABASE_URL", "sqlite:///dbostest.sqlite")
     )
     init_memory_store(memory_db_path)
-    toolsets, instructions = build_toolsets(memory_db_path=memory_db_path)
+    toolsets, system_prompt = build_toolsets(memory_db_path=memory_db_path)
     agent = build_agent(
         provider,
         agent_name,
         toolsets,
-        instructions,
+        system_prompt,
         history_processors=[checkpoint_history_processor],
     )
     system_database_url = os.getenv(

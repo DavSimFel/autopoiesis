@@ -38,7 +38,7 @@ def _require_session(session_id: str) -> exec_registry.ProcessSession:
 async def process_list(
     ctx: RunContext[AgentDeps],
 ) -> list[dict[str, Any]]:
-    """List all tracked process sessions."""
+    """List all running and recently exited background process sessions."""
     return [_session_info(s) for s in exec_registry.list_sessions()]
 
 
@@ -46,10 +46,10 @@ async def process_poll(
     ctx: RunContext[AgentDeps],
     session_id: str,
 ) -> ToolReturn:
-    """Poll a session for its current status and output tail.
+    """Check if a background process is still running and get its latest output.
 
     Args:
-        session_id: Identifier of the session to poll.
+        session_id: Session id returned by execute or execute_pty.
     """
     session = _require_session(session_id)
     code = session.process.returncode
@@ -68,12 +68,14 @@ async def process_log(
     offset: int = 0,
     limit: int = 50,
 ) -> ToolReturn:
-    """Read log lines from a session's output file.
+    """Read output from a background process log.
+
+    Use to review full output or paginate through logs.
 
     Args:
-        session_id: Identifier of the session to read logs from.
-        offset: Line offset to start reading from.
-        limit: Maximum number of lines to return.
+        session_id: Session id to read logs from.
+        offset: Line number to start from (0-indexed).
+        limit: Maximum lines to return. Default 50.
     """
     session = _require_session(session_id)
     try:
@@ -101,11 +103,11 @@ async def process_write(
     session_id: str,
     data: str,
 ) -> ToolReturn:
-    """Write data to a session's stdin.
+    """Send text to a non-PTY process via stdin. For PTY sessions, use process_send_keys instead.
 
     Args:
-        session_id: Identifier of the session to write to.
-        data: String data to send to the session's stdin.
+        session_id: Session id of the running process.
+        data: Text to write to the process stdin.
     """
     session = _require_session(session_id)
     if session.process.stdin is None:
@@ -121,11 +123,13 @@ async def process_send_keys(
     session_id: str,
     data: str,
 ) -> ToolReturn:
-    """Send keystrokes to a PTY session's master fd.
+    """Send keystrokes to an interactive PTY session.
+
+    Use for answering prompts, navigating TUIs, or control sequences.
 
     Args:
-        session_id: Identifier of the PTY session.
-        data: Keystroke data to send to the PTY master.
+        session_id: Session id of a PTY process (started with execute_pty).
+        data: Keystroke data to send (e.g. "y\\n" for yes+enter, "\\x03" for Ctrl-C).
     """
     session = _require_session(session_id)
     if session.master_fd is None or session.master_fd < 0:
@@ -141,11 +145,13 @@ async def process_kill(
     *,
     sig: int = signal.SIGTERM,
 ) -> ToolReturn:
-    """Kill a running session.
+    """Terminate a running background process.
+
+    Use when a process is stuck, no longer needed, or timed out.
 
     Args:
-        session_id: Identifier of the session to kill.
-        sig: Signal number to send (default: SIGTERM).
+        session_id: Session id of the process to kill.
+        sig: Unix signal number. Default SIGTERM (graceful). Use 9 for SIGKILL (force).
     """
     session = _require_session(session_id)
     if session.exit_code is not None:

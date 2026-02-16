@@ -8,7 +8,7 @@ split into focused companion modules.
 
 ## Status
 
-- **Last updated:** 2026-02-16 (Issue #19)
+- **Last updated:** 2026-02-16 (Issue #31)
 - **Source:** `chat.py`, `chat_runtime.py`, `chat_worker.py`, `chat_approval.py`, `chat_cli.py`
 
 ## File Structure
@@ -61,12 +61,13 @@ split into focused companion modules.
 - `_build_skill_directories()` — build skill directory list in precedence order (shipped first, custom second)
 - `build_backend()` — `LocalBackend` with execute disabled
 - `validate_console_deps_contract()` — structural typing guard
-- `build_toolsets()` — returns `(toolsets, instructions)`. Console toolset
+- `build_toolsets()` — returns `(toolsets, system_prompt)`. Console toolset
   (write approval) + skills toolset from shipped and custom directories.
   Custom skills override shipped skills when names collide.
-- `build_agent(provider, name, toolsets, instructions)` — Anthropic or
-  OpenRouter factory. Passes instructions to PydanticAI's `instructions`
-  parameter for automatic system prompt composition.
+- `build_agent(provider, name, toolsets, system_prompt, instructions=None)` —
+  Anthropic or OpenRouter factory. Static capability text is passed through
+  PydanticAI's `system_prompt`; optional `instructions` is reserved for
+  dynamic per-turn guidance.
 
 ### Observability
 
@@ -177,10 +178,13 @@ split into focused companion modules.
 
 ## Change Log
 
-- 2026-02-16: Approval prompts now capture an optional denial reason when the
-  user explicitly denies a tool (`n`). If provided, that message is serialized
-  as `denial_message`; empty input preserves the default denial text.
-  (Issue #32)
+- 2026-02-16: Comprehensive prompt engineering overhaul. Moved static capability
+  text from per-turn `instructions` into cached `system_prompt`. Rewrote all
+  tool docstrings as behavioral prompts (when to use, not just what it does).
+  Added proactive-use guidance to system prompt ("act first, approval handles
+  safety"). Rewrote toolset instruction blocks for exec, memory, skills, and
+  console. `build_toolsets()` returns `(toolsets, system_prompt)`, `build_agent()`
+  accepts `system_prompt` plus optional dynamic `instructions`. (Issue #31)
 - 2026-02-16: Hardened SQLite reliability in approval, memory, and history stores.
   Connections now use explicit close semantics (`contextlib.closing` with
   transactional context), and each connection sets `PRAGMA journal_mode=WAL`
@@ -237,8 +241,8 @@ When resuming after an approval decision, the prompt is `None` (not empty string
 PydanticAI treats `None` as a follow-up turn with no new user input, while `""` adds a
 meaningless empty user message that can skew tool-call behavior.
 
-### Capability Instructions
+### Capability Prompt
 
-Capability text (exec, memory, skills) is generated conditionally based on what's
-actually enabled. No contradictory "disabled/enabled" text is emitted. Instructions
-describe actual enforcement honestly — cwd/path validation, not hard sandbox.
+Static capability text (console, exec, skills, memory) is composed once at
+startup and passed via `system_prompt`, allowing provider-side prompt caching.
+`instructions` is reserved for short-lived, dynamic runtime guidance.

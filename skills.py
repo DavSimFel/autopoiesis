@@ -266,9 +266,11 @@ def skills_instructions(cache: dict[str, Skill]) -> str:
         return ""
     names = ", ".join(sorted(cache.keys()))
     return (
-        f"You have skills available: {names}. "
-        "Use list_skills to see details, load_skill to get full instructions, "
-        "and validate_skill/lint_skill when editing skills."
+        f"## Skills\n"
+        f"Available skills: {names}.\n"
+        "Skills extend your capabilities. Use `list_skills` to browse, "
+        "`load_skill` to get full instructions before using one. "
+        "Only load skills you actually need — keep token usage low."
     )
 
 
@@ -291,15 +293,19 @@ def create_skills_toolset(
 
     @toolset.tool(metadata=skill_meta)
     async def list_skills(ctx: RunContext[AgentDeps]) -> str:
-        """List available skills with name, description, and tags."""
+        """Show all available skills with names, descriptions, and tags.
+
+        Call this to discover capabilities before loading a skill."""
         return _format_skill_list(cache)
 
     @toolset.tool(metadata=skill_meta)
     async def load_skill(ctx: RunContext[AgentDeps], skill_name: str) -> str:
-        """Load full instructions for a skill by name (progressive disclosure).
+        """Load a skill's full instructions.
+
+        Call when you need to use a skill — instructions tell you how.
 
         Args:
-            skill_name: Name of the skill to load instructions for.
+            skill_name: Skill name as shown by list_skills.
         """
         return load_skill_instructions(cache, skill_name)
 
@@ -309,29 +315,35 @@ def create_skills_toolset(
         skill_name: str,
         resource_name: str,
     ) -> str:
-        """Read a resource file from a skill directory.
+        """Read a supporting file from a skill directory.
+
+        Templates, checklists, examples. Only discovered resources are accessible.
 
         Args:
-            skill_name: Name of the skill that owns the resource.
-            resource_name: Filename of the resource within the skill directory.
+            skill_name: Skill that owns the resource.
+            resource_name: Filename within the skill directory.
         """
         return _read_resource(cache, skill_name, resource_name)
 
     @toolset.tool(metadata=skill_meta)
     async def validate_skill(ctx: RunContext[AgentDeps], skill_name: str) -> str:
-        """Validate SKILL.md frontmatter and required structure.
+        """Check a skill's SKILL.md for structural correctness.
+
+        Validates required fields, naming conventions, metadata schema.
 
         Args:
-            skill_name: Name of the skill to validate.
+            skill_name: Skill to validate.
         """
         return _validate_skill(cache, skill_name)
 
     @toolset.tool(metadata=skill_meta)
     async def lint_skill(ctx: RunContext[AgentDeps], skill_name: str) -> str:
-        """Lint SKILL.md for common style issues.
+        """Lint a skill's instructions for style issues.
+
+        Flags long lines, tabs, trailing whitespace, TODOs without issue refs.
 
         Args:
-            skill_name: Name of the skill to lint.
+            skill_name: Skill to lint.
         """
         return _lint_skill(cache, skill_name)
 

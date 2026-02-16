@@ -132,12 +132,45 @@ def _build_skill_directories() -> list[SkillDirectory]:
     return [SkillDirectory(path=shipped_dir), SkillDirectory(path=custom_dir)]
 
 
-_CONSOLE_INSTRUCTIONS = (
-    "You have filesystem tools for reading, writing, and editing files "
-    "in the workspace. Write and edit operations require user approval."
-)
+_BASE_SYSTEM_PROMPT = """\
+You are a hands-on coding assistant with direct access to the user's workspace.
+
+## Core behavior
+- Act immediately when the user's intent is clear. Call tools first, explain after.
+- Never describe what you *could* do — just do it. The approval system will prompt \
+the user if authorization is needed. Do not ask for confirmation yourself.
+- If a task needs a shell command, run it. If it needs a file read, read it. \
+Do not narrate your plan unless the task is complex or ambiguous.
+- Be concise. Short answers for short questions. Detailed answers only when asked.
+
+## Approval system
+Write operations and shell commands require cryptographic user approval. \
+When you call a tool that needs approval, the system pauses and asks the user. \
+You do NOT need to warn them or ask permission — the system handles it. \
+If a tool is denied, you receive the denial reason. Adjust your approach accordingly."""
+
+_CONSOLE_INSTRUCTIONS = """\
+## Filesystem tools
+Read, write, and edit files in the workspace. Paths are relative to workspace root.
+- `ls`, `glob`, `grep`: browse and search freely (no approval needed)
+- `read_file`: read file contents (no approval needed)
+- `write_file`, `edit_file`: modify files (requires user approval)"""
+
+_EXEC_INSTRUCTIONS = """\
+## Shell execution
+Run any shell command in the workspace. Use this for:
+- System queries (date, disk space, environment, network)
+- Build and test commands (make, pytest, npm, cargo, etc.)
+- Git operations, package installs, anything the user asks for
+- `process_list`, `process_poll`, `process_log`: monitor running processes (no approval)
+- `execute`, `execute_pty`: run commands (requires approval for safety)"""
 
 _READ_ONLY_EXEC_TOOLS: frozenset[str] = frozenset({"process_list", "process_poll", "process_log"})
+
+
+def _compose_system_prompt(fragments: Sequence[str]) -> str:
+    """Join non-empty static prompt fragments into a stable system prompt string."""
+    return "\n\n".join(fragment for fragment in fragments if fragment)
 
 
 def _needs_exec_approval(
@@ -201,13 +234,18 @@ def _build_exec_toolset() -> AbstractToolset[AgentDeps]:
 
 def build_toolsets(
     memory_db_path: str | None = None,
-) -> tuple[list[AbstractToolset[AgentDeps]], list[str]]:
-    """Build all toolsets and collect their system prompt instructions."""
+) -> tuple[list[AbstractToolset[AgentDeps]], str]:
+    """Build all toolsets and return their static capability system prompt."""
     validate_console_deps_contract()
     console = create_console_toolset(include_execute=False, require_write_approval=True)
     skills_toolset, skills_instr = create_skills_toolset(_build_skill_directories())
     toolsets: list[AbstractToolset[AgentDeps]] = [console, skills_toolset]
-    instructions = [i for i in [_CONSOLE_INSTRUCTIONS, skills_instr] if i]
+    system_prompt_fragments: list[str] = [
+        _BASE_SYSTEM_PROMPT,
+        _CONSOLE_INSTRUCTIONS,
+        _EXEC_INSTRUCTIONS,
+        skills_instr,
+    ]
 
     toolsets.append(_build_exec_toolset())
 
@@ -215,9 +253,9 @@ def build_toolsets(
         workspace_root = resolve_workspace_root()
         memory_toolset, memory_instr = create_memory_toolset(memory_db_path, workspace_root)
         toolsets.append(memory_toolset)
-        instructions.append(memory_instr)
+        system_prompt_fragments.append(memory_instr)
 
-    return wrap_toolsets(toolsets), instructions
+    return wrap_toolsets(toolsets), _compose_system_prompt(system_prompt_fragments)
 
 
 async def _strict_tool_definitions(
@@ -242,22 +280,21 @@ def build_agent(
     provider: str,
     agent_name: str,
     toolsets: list[AbstractToolset[AgentDeps]],
-    instructions: list[str],
+    system_prompt: str,
+    instructions: list[str] | None = None,
     history_processors: Sequence[HistoryProcessor[AgentDeps]] | None = None,
 ) -> Agent[AgentDeps, str]:
-    """Create the configured agent from explicit provider/name/toolset/instructions."""
-    all_instructions: list[str] = [
-        "You are a helpful coding assistant with filesystem and skill tools.",
-        *instructions,
-    ]
+    """Create the configured agent from explicit provider/name/toolset settings."""
     hp = history_processors or []
+    dynamic_instructions = instructions or None
     if provider == "anthropic":
         required_env("ANTHROPIC_API_KEY")
         return Agent(
             os.getenv("ANTHROPIC_MODEL", "anthropic:claude-3-5-sonnet-latest"),
             deps_type=AgentDeps,
             toolsets=toolsets,
-            instructions=all_instructions,
+            system_prompt=system_prompt,
+            instructions=dynamic_instructions,
             history_processors=hp,
             name=agent_name,
         )
@@ -273,7 +310,8 @@ def build_agent(
             model,
             deps_type=AgentDeps,
             toolsets=toolsets,
-            instructions=all_instructions,
+            system_prompt=system_prompt,
+            instructions=dynamic_instructions,
             history_processors=hp,
             name=agent_name,
             prepare_tools=_strict_tool_definitions,
