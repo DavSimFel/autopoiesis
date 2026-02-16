@@ -177,6 +177,8 @@ split into focused companion modules.
 
 ## Change Log
 
+- 2026-02-16: Enable strict tool definitions for OpenRouter provider via
+  `prepare_tools` callback, reducing malformed tool-call arguments. (Issue #33)
 - 2026-02-16: Hardened SQLite reliability in approval, memory, and history stores.
   Connections now use explicit close semantics (`contextlib.closing` with
   transactional context), and each connection sets `PRAGMA journal_mode=WAL`

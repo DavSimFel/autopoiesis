@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, get_type_hints
 
@@ -220,6 +220,24 @@ def build_toolsets(
     return wrap_toolsets(toolsets), instructions
 
 
+async def _strict_tool_definitions(
+    ctx: RunContext[AgentDeps],
+    tool_defs: list[ToolDefinition],
+) -> list[ToolDefinition] | None:
+    """Enable strict JSON schema validation on every tool definition.
+
+    OpenRouter and OpenAI-compatible providers produce fewer malformed
+    tool-call arguments when tool schemas are marked ``strict=True``.
+
+    This is OpenRouter-only because Anthropic's native API does not support
+    the ``strict`` field on tool definitions — it is an OpenAI-compatible
+    extension.  The callback must be async (returning ``Awaitable``) to
+    satisfy PydanticAI's ``ToolsPrepareFunc`` type signature, even though
+    the body performs no I/O.
+    """
+    return [replace(td, strict=True) for td in tool_defs]
+
+
 def build_agent(
     provider: str,
     agent_name: str,
@@ -258,5 +276,6 @@ def build_agent(
             instructions=all_instructions,
             history_processors=hp,
             name=agent_name,
+            prepare_tools=_strict_tool_definitions,
         )
     raise SystemExit("Unsupported AI_PROVIDER. Use 'openrouter' or 'anthropic'.")
