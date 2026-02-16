@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from pydantic_ai import DeferredToolRequests
-from pydantic_ai.exceptions import UserError
+from pydantic_ai.exceptions import AgentRunError, UserError
 from pydantic_ai.messages import (
     AgentStreamEvent,
     ModelMessage,
@@ -134,6 +134,11 @@ def _build_output(
 _log = logging.getLogger(__name__)
 
 
+def _wrap_agent_run_error(error: AgentRunError) -> RuntimeError:
+    """Convert non-picklable pydantic-ai errors into a built-in RuntimeError."""
+    return RuntimeError(f"{error.__class__.__name__}: {error}")
+
+
 def _run_streaming(
     rt: Runtime,
     turn: _TurnInput,
@@ -232,10 +237,13 @@ def run_agent_step(work_item_dict: dict[str, Any]) -> dict[str, Any]:
 
     with otel_tracing.trace_span("agent.run", attributes=span_attrs) as result_attrs:
         try:
-            if stream_handle is not None:
-                output = _run_streaming(rt, turn, stream_handle)
-            else:
-                output = _run_sync(rt, turn)
+            try:
+                if stream_handle is not None:
+                    output = _run_streaming(rt, turn, stream_handle)
+                else:
+                    output = _run_sync(rt, turn)
+            except AgentRunError as exc:
+                raise _wrap_agent_run_error(exc) from exc
         finally:
             _active_checkpoint_context.reset(checkpoint_token)
 

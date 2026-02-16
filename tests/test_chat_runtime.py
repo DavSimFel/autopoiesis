@@ -211,6 +211,23 @@ class TestBuildAgent:
                 build_agent("anthropic", "test", [], "prompt")
 
 
+class TestPrepareToolsForProvider:
+    """Tests for provider-specific tool preparation selection."""
+
+    def test_openrouter_uses_strict_tool_preparation(self) -> None:
+        from agent.runtime import prepare_tools_for_provider
+        from toolset_builder import strict_tool_definitions
+
+        prepare = prepare_tools_for_provider("openrouter")
+        assert prepare is strict_tool_definitions
+
+    def test_anthropic_disables_tool_preparation(self) -> None:
+        from agent.runtime import prepare_tools_for_provider
+
+        prepare = prepare_tools_for_provider("anthropic")
+        assert prepare is None
+
+
 class TestRuntimeRegistry:
     """Tests for lock-protected runtime registry injection and wrappers."""
 

@@ -8,7 +8,7 @@ split into focused companion modules.
 
 ## Status
 
-- **Last updated:** 2026-02-16 (Issue #76)
+- **Last updated:** 2026-02-16 (Issue #141)
 - **Source:** `chat.py`, `chat_runtime.py`, `model_resolution.py`, `toolset_builder.py`, `chat_worker.py`, `chat_approval.py`, `chat_cli.py`
 
 ## File Structure
@@ -73,8 +73,8 @@ split into focused companion modules.
   (write approval) + skills toolset from shipped and custom directories.
   Custom skills override shipped skills when names collide.
 - `chat_runtime.build_agent(provider, name, toolsets, system_prompt, options)` — Anthropic/OpenRouter factory
-  that resolves model fallback, strict tool preparation, history processors, and model settings.
-- `toolset_builder.strict_tool_definitions(...)` — marks the first `_MAX_STRICT_TOOLS` (20) tools `strict=True` for OpenAI-compatible providers; remaining tools stay non-strict to respect Anthropic's limit
+  that resolves model fallback, provider-specific tool preparation, history processors, and model settings.
+- `toolset_builder.strict_tool_definitions(...)` — marks the first `_MAX_STRICT_TOOLS` (20) tools `strict=True`; this callback is applied only when the selected provider is `openrouter`
 - `chat_runtime.instrument_agent(agent)` — Enables OpenTelemetry instrumentation when
   `OTEL_EXPORTER_OTLP_ENDPOINT` is set. Returns `True` if applied.
 
@@ -183,6 +183,12 @@ split into focused companion modules.
 
 ## Change Log
 
+- 2026-02-16: `build_agent()` now applies strict tool schema preparation only for
+  `AI_PROVIDER=openrouter`. Anthropic runs without strict tool forcing to avoid
+  provider-side schema compilation failures with larger toolsets. Worker execution
+  now wraps `AgentRunError` as a built-in `RuntimeError` before returning across
+  DBOS workflow boundaries, preventing `ModelHTTPError` pickle deserialization
+  failures in `handle.get_result()`. (Issue #141)
 - 2026-02-16: OTEL insecure flag made configurable via
   `OTEL_EXPORTER_OTLP_INSECURE` env var (Issue #82)
 - 2026-02-16: Headless passphrase support via `APPROVAL_KEY_PASSPHRASE`
