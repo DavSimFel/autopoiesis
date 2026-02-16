@@ -1,5 +1,10 @@
 """SQLite FTS5-backed persistent memory store for cross-session knowledge.
 
+.. deprecated::
+    This module is superseded by :mod:`store.knowledge` which uses markdown
+    files as the source of truth with an FTS5 search index.  This module is
+    kept for backward compatibility and migration purposes.
+
 Provides structured memory entries stored in SQLite with full-text search via
 FTS5, plus unstructured workspace memory file searching. Zero external
 dependencies — uses only stdlib sqlite3.

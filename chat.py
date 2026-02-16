@@ -32,6 +32,12 @@ from store.history import (
     init_history_store,
     resolve_history_db_path,
 )
+from store.knowledge import (
+    ensure_journal_entry,
+    init_knowledge_index,
+    load_knowledge_context,
+    reindex_knowledge,
+)
 from store.memory import init_memory_store, resolve_memory_db_path
 from store.subscriptions import SubscriptionRegistry
 from toolset_builder import build_backend, build_toolsets, resolve_workspace_root
@@ -134,9 +140,19 @@ def main() -> None:
     workspace_root = resolve_workspace_root()
     sub_db_path = str(Path(memory_db_path).with_name("subscriptions.sqlite"))
     subscription_registry = SubscriptionRegistry(sub_db_path)
+    # Knowledge system: index files and load context
+    knowledge_root = workspace_root / "knowledge"
+    knowledge_db_path = str(Path(memory_db_path).with_name("knowledge.sqlite"))
+    init_knowledge_index(knowledge_db_path)
+    reindex_knowledge(knowledge_db_path, knowledge_root)
+    ensure_journal_entry(knowledge_root)
+    knowledge_context = load_knowledge_context(knowledge_root)
+
     toolsets, system_prompt = build_toolsets(
         memory_db_path=memory_db_path,
         subscription_registry=subscription_registry,
+        knowledge_db_path=knowledge_db_path,
+        knowledge_context=knowledge_context,
     )
 
     def _subscription_processor(msgs: list[ModelMessage]) -> list[ModelMessage]:

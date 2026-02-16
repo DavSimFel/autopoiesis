@@ -19,6 +19,7 @@ from prompts import (
 )
 from skills import SkillDirectory, create_skills_toolset
 from store.subscriptions import SubscriptionRegistry
+from tools.knowledge_tools import create_knowledge_toolset
 from tools.memory_tools import create_memory_toolset
 from tools.subscription_tools import create_subscription_toolset
 from tools.toolset_wrappers import wrap_toolsets
@@ -163,6 +164,8 @@ def _build_exec_toolset() -> AbstractToolset[AgentDeps]:
 def build_toolsets(
     memory_db_path: str | None = None,
     subscription_registry: SubscriptionRegistry | None = None,
+    knowledge_db_path: str | None = None,
+    knowledge_context: str = "",
 ) -> tuple[list[AbstractToolset[AgentDeps]], str]:
     """Build all toolsets and return their static capability system prompt."""
     validate_console_deps_contract()
@@ -175,6 +178,13 @@ def build_toolsets(
     exec_enabled = os.getenv("ENABLE_EXECUTE", "").lower() in ("1", "true", "yes")
     if exec_enabled:
         prompt_fragments.append(EXEC_INSTRUCTIONS)
+
+    if knowledge_db_path is not None:
+        knowledge_toolset, knowledge_instr = create_knowledge_toolset(knowledge_db_path)
+        toolsets.append(knowledge_toolset)
+        prompt_fragments.append(knowledge_instr)
+        if knowledge_context:
+            prompt_fragments.append(knowledge_context)
 
     if memory_db_path is not None:
         memory_toolset, memory_instr = create_memory_toolset(
