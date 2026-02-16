@@ -116,3 +116,67 @@ Never merge the next PR until main is green.
 18. Test files without assertions
 19. Changing files outside the scope of the issue
 20. Missing error context (`raise ValueError("failed")` — describe what/why)
+
+21. Reading the whole codebase instead of using the File Map
+
+## File Map
+
+Don't read everything. Start here:
+
+| Task | Read first | Then if needed |
+|------|-----------|----------------|
+| Change system prompt | `prompts.py` | `toolset_builder.py` (prompt composition + tool wiring) |
+| Add a new tool | `tools/_PATTERN.md` | existing `*_tools.py`, then `toolset_builder.py` |
+| Fix approval bug | `approval_types.py` | target `approval_*.py` |
+| Fix persistence | `history_store.py` or `memory_store.py` | `db.py`, `subscriptions.py`, `models.py` |
+| Fix streaming/display | `streaming.py` | `rich_display.py` or `stream_formatting.py` |
+| Fix agent execution | `chat_runtime.py` | `chat_worker.py` |
+| Fix CLI interaction | `chat_cli.py` | `chat_approval.py` |
+| Add tests | `tests/conftest.py` | existing test for same module |
+
+## Module Index
+
+> Auto-generate with `./scripts/module-index.sh`
+
+| Module | Description | Lines |
+|--------|-------------|-------|
+| `approval_crypto.py` | Cryptographic helpers for approval signing keys. | 217 |
+| `approval_key_files.py` | Filesystem and serialization helpers for approval key material. | 94 |
+| `approval_keys.py` | Key management and signing for approval envelopes. | 263 |
+| `approval_policy.py` | Immutable tool classification policy for deferred approvals. | 57 |
+| `approval_store.py` | SQLite approval envelope storage and verification workflow. | 277 |
+| `approval_store_schema.py` | Schema and migration helpers for approval envelope storage. | 119 |
+| `approval_store_verify.py` | Verification and parsing helpers for approval submissions. | 157 |
+| `approval_types.py` | Shared data models and canonicalization helpers for approval security. | 211 |
+| `chat_approval.py` | Approval scope construction and approval decision serialization helpers. | 200 |
+| `chat_cli.py` | Interactive CLI loop and approval handling. | 107 |
+| `chat.py` | Durable CLI chat entrypoint with DBOS-backed queue execution. | 187 |
+| `chat_runtime.py` | Agent construction and process runtime state for CLI chat. | 136 |
+| `chat_worker.py` | DBOS worker and queue helpers for chat work items. | 260 |
+| `context_manager.py` | Sliding-window context management with token-based compaction. | 140 |
+| `db.py` | Shared SQLite connection helpers for local stores. | 14 |
+| `exec_registry.py` | In-memory registry for tracked subprocess sessions. | 143 |
+| `exec_tool.py` | Shell execution tool with PTY support, timeout, and background mode. | 281 |
+| `history_store.py` | SQLite-backed checkpoint store for durable agent message history. | 125 |
+| `io_utils.py` | Shared file-tail helpers for bounded log reads. | 36 |
+| `memory_store.py` | SQLite FTS5-backed persistent memory store for cross-session knowledge. | 250 |
+| `memory_tools.py` | PydanticAI tool definitions for persistent chat memory. | 92 |
+| `model_resolution.py` | Model/provider resolution helpers for chat runtime. | 102 |
+| `models.py` | Work item types for DBOS-backed priority queue execution. | 103 |
+| `otel_tracing.py` | OpenTelemetry tracing helpers for autopoiesis. | 109 |
+| `process_tool.py` | Process management tool for inspecting and controlling running sessions. | 186 |
+| `prompts.py` | Static system prompt constants for the agent runtime. | 43 |
+| `pty_spawn.py` | Thin typed wrapper around stdlib pty for async subprocess spawning. | 59 |
+| `rich_display.py` | Rich live display manager with per-section streaming channels. | 240 |
+| `run_simple.py` | Convenience wrapper for agent.run_sync() that auto-approves deferred tools. | 92 |
+| `skillmaker_tools.py` | Linting and validation helpers for SKILL.md files. | 165 |
+| `skills.py` | Filesystem-based skill system with progressive disclosure. | 294 |
+| `stream_formatting.py` | Stream event formatting and forwarding helpers. | 100 |
+| `streaming.py` | In-process stream handles for real-time work item output. | 236 |
+| `subscription_processor.py` | History processor that materializes subscriptions before each agent turn. | 170 |
+| `subscriptions.py` | Subscription registry for reactive context injection. | 217 |
+| `subscription_tools.py` | PydanticAI tool definitions for subscription management. | 149 |
+| `tool_result_truncation.py` | Truncate large tool results and persist full output to disk. | 88 |
+| `toolset_builder.py` | Toolset, backend, and workspace wiring for chat runtime. | 203 |
+| `toolset_wrappers.py` | Observable toolset wrapper for logging tool call metrics. | 54 |
+| `work_queue.py` | DBOS queue instances for background agent work. | 16 |
