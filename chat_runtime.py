@@ -5,9 +5,11 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
+from collections.abc import Sequence
 from typing import get_type_hints
 
 from pydantic_ai import AbstractToolset, Agent
+from pydantic_ai.agent import HistoryProcessor
 from pydantic_ai.messages import ModelMessage
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
@@ -25,7 +27,6 @@ except ModuleNotFoundError as exc:
         "Missing backend dependency. Run `uv sync` so `pydantic-ai-backend==0.1.6` is installed."
     ) from exc
 
-HistoryProcessor = list[ModelMessage]
 
 
 @dataclass
@@ -151,7 +152,7 @@ def build_agent(
     agent_name: str,
     toolsets: list[AbstractToolset[AgentDeps]],
     instructions: list[str],
-    history_processors: list[object] | None = None,
+    history_processors: Sequence[HistoryProcessor[AgentDeps]] | None = None,
 ) -> Agent[AgentDeps, str]:
     """Create the configured agent from explicit provider/name/toolset/instructions."""
     all_instructions: list[str] = [

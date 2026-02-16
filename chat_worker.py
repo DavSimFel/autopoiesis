@@ -12,6 +12,7 @@ from pydantic_ai import DeferredToolRequests
 from pydantic_ai.messages import ModelMessage, ModelMessagesTypeAdapter, ModelResponse
 from pydantic_ai.tools import DeferredToolResults
 
+from approval_types import ApprovalScope
 from chat_approval import (
     build_approval_scope,
     deserialize_deferred_results,
@@ -82,7 +83,7 @@ def checkpoint_history_processor(messages: list[ModelMessage]) -> list[ModelMess
 def _build_output(
     result_output: AgentOutput,
     all_msgs: list[ModelMessage],
-    scope: str,
+    scope: ApprovalScope,
     rt: Runtime,
 ) -> WorkItemOutput:
     """Convert agent output to a WorkItemOutput, handling deferred approvals."""
@@ -109,7 +110,7 @@ def _run_streaming(
     deps: AgentDeps,
     history: list[ModelMessage],
     deferred_results: DeferredToolResults | None,
-    scope: str,
+    scope: ApprovalScope,
     stream_handle: StreamHandle,
 ) -> WorkItemOutput:
     """Execute an agent turn with real-time streaming output."""
@@ -142,7 +143,7 @@ def _run_sync(
     deps: AgentDeps,
     history: list[ModelMessage],
     deferred_results: DeferredToolResults | None,
-    scope: str,
+    scope: ApprovalScope,
 ) -> WorkItemOutput:
     """Execute an agent turn synchronously without streaming."""
     output_type: list[type[AgentOutput]] = [str, DeferredToolRequests]
