@@ -32,6 +32,9 @@ except ModuleNotFoundError as exc:
         "Run `uv sync` so `pydantic-ai-backend==0.1.6` is installed."
     ) from exc
 
+#: Maximum number of tool definitions that may be marked ``strict=True``.
+#: Anthropic's API rejects requests with more than 20 strict tools.
+_MAX_STRICT_TOOLS = 20
 
 _READ_ONLY_EXEC_TOOLS: frozenset[str] = frozenset({"process_list", "process_poll", "process_log"})
 
@@ -193,4 +196,8 @@ async def strict_tool_definitions(
     tool_defs: list[ToolDefinition],
 ) -> list[ToolDefinition] | None:
     """Mark all tool definitions strict for OpenAI-compatible provider schemas."""
-    return [replace(tool_def, strict=True) for tool_def in tool_defs]
+    # Anthropic caps strict tools at _MAX_STRICT_TOOLS.
+    return [
+        replace(tool_def, strict=True) if i < _MAX_STRICT_TOOLS else tool_def
+        for i, tool_def in enumerate(tool_defs)
+    ]
