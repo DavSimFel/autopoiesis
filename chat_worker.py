@@ -50,6 +50,17 @@ _active_checkpoint_context: ContextVar[_CheckpointContext | None] = ContextVar(
 )
 
 
+@dataclass(frozen=True)
+class _TurnInput:
+    """Bundled arguments for a single agent turn."""
+
+    prompt: str
+    deps: AgentDeps
+    history: list[ModelMessage]
+    deferred_results: DeferredToolResults | None
+    scope: ApprovalScope
+
+
 def _deserialize_history(history_json: str | None) -> list[ModelMessage]:
     if not history_json:
         return []
@@ -106,11 +117,7 @@ def _build_output(
 
 def _run_streaming(
     rt: Runtime,
-    prompt: str,
-    deps: AgentDeps,
-    history: list[ModelMessage],
-    deferred_results: DeferredToolResults | None,
-    scope: ApprovalScope,
+    turn: _TurnInput,
     stream_handle: StreamHandle,
 ) -> WorkItemOutput:
     """Execute an agent turn with real-time streaming output."""
@@ -119,11 +126,11 @@ def _run_streaming(
     async def _stream() -> WorkItemOutput:
         try:
             async with rt.agent.run_stream(
-                prompt,
-                deps=deps,
-                message_history=history,
+                turn.prompt,
+                deps=turn.deps,
+                message_history=turn.history,
                 output_type=output_type,
-                deferred_tool_results=deferred_results,
+                deferred_tool_results=turn.deferred_results,
             ) as stream:
                 async for chunk in stream.stream_text(delta=True):
                     stream_handle.write(chunk)
@@ -132,29 +139,25 @@ def _run_streaming(
         finally:
             stream_handle.close()
 
-        return _build_output(result_output, all_msgs, scope, rt)
+        return _build_output(result_output, all_msgs, turn.scope, rt)
 
     return asyncio.run(_stream())
 
 
 def _run_sync(
     rt: Runtime,
-    prompt: str,
-    deps: AgentDeps,
-    history: list[ModelMessage],
-    deferred_results: DeferredToolResults | None,
-    scope: ApprovalScope,
+    turn: _TurnInput,
 ) -> WorkItemOutput:
     """Execute an agent turn synchronously without streaming."""
     output_type: list[type[AgentOutput]] = [str, DeferredToolRequests]
     result = rt.agent.run_sync(
-        prompt,
-        deps=deps,
-        message_history=history,
+        turn.prompt,
+        deps=turn.deps,
+        message_history=turn.history,
         output_type=output_type,
-        deferred_tool_results=deferred_results,
+        deferred_tool_results=turn.deferred_results,
     )
-    return _build_output(result.output, result.all_messages(), scope, rt)
+    return _build_output(result.output, result.all_messages(), turn.scope, rt)
 
 
 @DBOS.step()
@@ -180,6 +183,10 @@ def run_agent_step(work_item_dict: dict[str, Any]) -> dict[str, Any]:
         )
 
     prompt = item.input.prompt or ""
+    turn = _TurnInput(
+        prompt=prompt, deps=deps, history=history,
+        deferred_results=deferred_results, scope=scope,
+    )
     stream_handle = take_stream(item.id)
     checkpoint_token: Token[_CheckpointContext | None] = _active_checkpoint_context.set(
         _CheckpointContext(db_path=rt.history_db_path, work_item_id=item.id)
@@ -187,11 +194,9 @@ def run_agent_step(work_item_dict: dict[str, Any]) -> dict[str, Any]:
 
     try:
         if stream_handle is not None:
-            output = _run_streaming(
-                rt, prompt, deps, history, deferred_results, scope, stream_handle
-            )
+            output = _run_streaming(rt, turn, stream_handle)
         else:
-            output = _run_sync(rt, prompt, deps, history, deferred_results, scope)
+            output = _run_sync(rt, turn)
     finally:
         _active_checkpoint_context.reset(checkpoint_token)
 

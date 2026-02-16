@@ -23,6 +23,7 @@ class _FakeRunResult:
 
 @dataclass
 class _FakeAgent:
+    name: str | None = "test-agent"
     captured_message_history: list[Any] | None = None
 
     def run_sync(

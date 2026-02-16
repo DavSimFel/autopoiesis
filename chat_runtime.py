@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from collections.abc import Sequence
 from typing import get_type_hints
 
 from pydantic_ai import AbstractToolset, Agent
-from pydantic_ai.agent import HistoryProcessor
-from pydantic_ai.messages import ModelMessage
+from pydantic_ai._agent_graph import HistoryProcessor
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 
