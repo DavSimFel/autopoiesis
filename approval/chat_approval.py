@@ -1,4 +1,8 @@
-"""Approval scope construction and approval decision serialization helpers."""
+"""Approval scope construction and approval decision serialization helpers.
+
+Dependencies: approval.keys, approval.policy, approval.store, approval.types
+Wired in: agent/cli.py → cli_chat_loop(), agent/worker.py → run_agent_step()
+"""
 
 from __future__ import annotations
 

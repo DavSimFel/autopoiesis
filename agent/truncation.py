@@ -1,4 +1,8 @@
-"""Truncate large tool results and persist full output to disk."""
+"""Truncate large tool results and persist full output to disk.
+
+Dependencies: pydantic_ai.messages
+Wired in: chat.py → main() (as history_processor)
+"""
 
 from __future__ import annotations
 

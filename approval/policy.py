@@ -1,4 +1,8 @@
-"""Immutable tool classification policy for deferred approvals."""
+"""Immutable tool classification policy for deferred approvals.
+
+Dependencies: approval.types
+Wired in: chat.py → main(), approval/chat_approval.py → build_approval_scope()
+"""
 
 from __future__ import annotations
 

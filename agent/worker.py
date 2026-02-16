@@ -1,4 +1,10 @@
-"""DBOS worker and queue helpers for chat work items."""
+"""DBOS worker and queue helpers for chat work items.
+
+Dependencies: agent.runtime, approval.chat_approval, approval.types,
+    display.stream_formatting, display.streaming, infra.otel_tracing,
+    infra.work_queue, models, store.history
+Wired in: agent/cli.py → _run_turn()
+"""
 
 from __future__ import annotations
 

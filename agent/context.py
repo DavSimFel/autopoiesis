@@ -1,4 +1,8 @@
-"""Sliding-window context management with token-based compaction."""
+"""Sliding-window context management with token-based compaction.
+
+Dependencies: pydantic_ai.messages
+Wired in: chat.py → main() (as history_processor)
+"""
 
 from __future__ import annotations
 

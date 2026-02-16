@@ -1,4 +1,9 @@
-"""Interactive CLI loop and approval handling."""
+"""Interactive CLI loop and approval handling.
+
+Dependencies: agent.runtime, agent.worker, approval.chat_approval,
+    approval.types, display.streaming, models
+Wired in: chat.py → main()
+"""
 
 from __future__ import annotations
 

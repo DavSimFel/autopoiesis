@@ -1,4 +1,8 @@
-"""Filesystem and serialization helpers for approval key material."""
+"""Filesystem and serialization helpers for approval key material.
+
+Dependencies: (stdlib only)
+Wired in: approval/keys.py → ApprovalKeyManager, approval/crypto.py
+"""
 
 from __future__ import annotations
 

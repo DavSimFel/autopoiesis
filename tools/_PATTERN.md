@@ -2,11 +2,11 @@
 
 Step-by-step guide for adding a tool to autopoiesis.
 
-## 1. Create `*_tools.py`
+## 1. Create `tools/*_tools.py`
 
-Create a new file in the repo root (e.g. `widget_tools.py`).
+Create a new file in the `tools/` package (e.g. `tools/widget_tools.py`).
 
-Follow this pattern (see `memory_tools.py` for a real example):
+Follow this pattern (see `tools/memory_tools.py` for a real example):
 
 ```python
 """PydanticAI tool definitions for [your domain]."""
@@ -67,7 +67,7 @@ Import your factory and add it to the toolset list:
 
 ```python
 # At top of toolset_builder.py
-from widget_tools import create_widget_toolset
+from tools.widget_tools import create_widget_toolset
 
 # Inside build_toolsets(), after existing toolsets:
 def build_toolsets(...) -> tuple[list[AbstractToolset[AgentDeps]], str]:
@@ -98,7 +98,7 @@ from __future__ import annotations
 import pytest
 
 # Test the underlying logic, not the PydanticAI wiring
-from widget_tools import create_widget_toolset
+from tools.widget_tools import create_widget_toolset
 
 
 def test_widget_toolset_creation() -> None:

@@ -16,32 +16,32 @@ Responses stream back to a Rich terminal UI in real time.
 ┌─────────────────────────────────────────────────────────────┐
 │  chat.py  (entrypoint)                                      │
 │  ┌─────────────┐  ┌──────────────┐  ┌───────────────────┐  │
-│  │ chat_cli.py  │→│ chat_worker  │→│  chat_runtime.py   │  │
+│  │ agent/cli    │→│ agent/worker │→│  agent/runtime     │  │
 │  │ (REPL loop)  │  │ (DBOS queue) │  │  (agent builder)  │  │
 │  └──────┬───────┘  └──────┬───────┘  └────────┬──────────┘  │
 │         │                 │                    │             │
 │         ▼                 ▼                    ▼             │
 │  ┌─────────────┐  ┌──────────────┐  ┌───────────────────┐  │
-│  │ streaming.py │  │ approval_*   │  │ toolset_builder   │  │
-│  │ rich_display │  │ (crypto gate)│  │ (tool wiring)     │  │
+│  │ display/     │  │ approval/    │  │ toolset_builder   │  │
+│  │ streaming    │  │ (crypto gate)│  │ (tool wiring)     │  │
 │  └─────────────┘  └──────────────┘  └────────┬──────────┘  │
 │                                               │             │
 │                    ┌──────────────────────────┬┘            │
 │                    ▼              ▼           ▼             │
 │             ┌───────────┐ ┌───────────┐ ┌──────────┐       │
-│             │ exec_tool  │ │ memory_*  │ │ skills   │       │
-│             │ process_*  │ │ stores    │ │ subs     │       │
+│             │ tools/     │ │ store/    │ │ skills   │       │
+│             │ exec,proc  │ │ mem,hist  │ │ subs     │       │
 │             └───────────┘ └───────────┘ └──────────┘       │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ## Data Flow: One Chat Turn
 
-1. **User types** a message at the `>` prompt in `chat_cli.py`
+1. **User types** a message at the `>` prompt in `agent/cli.py`
 2. `_run_turn()` wraps it in a `WorkItem` (type=CHAT, priority=CRITICAL)
-3. A `RichStreamHandle` is registered for the item's id in `streaming.py`
-4. `enqueue_and_wait()` puts the item on the DBOS `work_queue`
-5. DBOS dispatches `execute_work_item()` → `run_agent_step()` in `chat_worker.py`
+3. A `RichStreamHandle` is registered for the item's id in `display/streaming.py`
+4. `enqueue_and_wait()` puts the item on the DBOS `infra/work_queue`
+5. DBOS dispatches `execute_work_item()` → `run_agent_step()` in `agent/worker.py`
 6. Worker deserializes history, builds `AgentDeps`, constructs `ApprovalScope`
 7. `rt.agent.run_stream_sync()` calls the PydanticAI agent with all toolsets
 8. Tokens stream through `StreamHandle.write()` → `RichDisplayManager` → terminal
@@ -53,83 +53,83 @@ Responses stream back to a Rich terminal UI in real time.
 
 ```mermaid
 graph TD
-    chat.py --> chat_cli.py
-    chat.py --> chat_runtime.py
-    chat.py --> chat_worker.py
+    chat.py --> agent/cli.py
+    chat.py --> agent/runtime.py
+    chat.py --> agent/worker.py
     chat.py --> toolset_builder.py
     chat.py --> model_resolution.py
-    chat.py --> approval_keys.py
-    chat.py --> approval_store.py
-    chat.py --> history_store.py
-    chat.py --> memory_store.py
+    chat.py --> approval/keys.py
+    chat.py --> approval/store.py
+    chat.py --> store/history.py
+    chat.py --> store/memory.py
 
-    chat_cli.py --> chat_worker.py
-    chat_cli.py --> chat_approval.py
-    chat_cli.py --> streaming.py
+    agent/cli.py --> agent/worker.py
+    agent/cli.py --> approval/chat_approval.py
+    agent/cli.py --> display/streaming.py
 
-    chat_worker.py --> chat_runtime.py
-    chat_worker.py --> chat_approval.py
-    chat_worker.py --> history_store.py
-    chat_worker.py --> streaming.py
-    chat_worker.py --> stream_formatting.py
+    agent/worker.py --> agent/runtime.py
+    agent/worker.py --> approval/chat_approval.py
+    agent/worker.py --> store/history.py
+    agent/worker.py --> display/streaming.py
+    agent/worker.py --> display/stream_formatting.py
 
-    chat_runtime.py --> toolset_builder.py
-    chat_runtime.py --> model_resolution.py
-    chat_runtime.py --> models.py
+    agent/runtime.py --> toolset_builder.py
+    agent/runtime.py --> model_resolution.py
+    agent/runtime.py --> models.py
 
     toolset_builder.py --> prompts.py
-    toolset_builder.py --> memory_tools.py
+    toolset_builder.py --> tools/memory_tools.py
     toolset_builder.py --> skills.py
-    toolset_builder.py --> subscription_tools.py
-    toolset_builder.py --> exec_tool.py
-    toolset_builder.py --> process_tool.py
-    toolset_builder.py --> toolset_wrappers.py
+    toolset_builder.py --> tools/subscription_tools.py
+    toolset_builder.py --> tools/exec_tool.py
+    toolset_builder.py --> tools/process_tool.py
+    toolset_builder.py --> tools/toolset_wrappers.py
 
-    approval_store.py --> approval_crypto.py
-    approval_store.py --> approval_types.py
-    approval_store.py --> approval_store_schema.py
-    approval_store.py --> approval_store_verify.py
-    approval_keys.py --> approval_key_files.py
-    approval_keys.py --> approval_crypto.py
+    approval/store.py --> approval/crypto.py
+    approval/store.py --> approval/types.py
+    approval/store.py --> approval/store_schema.py
+    approval/store.py --> approval/store_verify.py
+    approval/keys.py --> approval/key_files.py
+    approval/keys.py --> approval/crypto.py
 
-    exec_tool.py --> exec_registry.py
-    exec_tool.py --> pty_spawn.py
-    exec_tool.py --> io_utils.py
+    tools/exec_tool.py --> infra/exec_registry.py
+    tools/exec_tool.py --> infra/pty_spawn.py
+    tools/exec_tool.py --> io_utils.py
 
-    memory_tools.py --> memory_store.py
-    subscription_tools.py --> subscriptions.py
-    subscription_processor.py --> subscriptions.py
+    tools/memory_tools.py --> store/memory.py
+    tools/subscription_tools.py --> store/subscriptions.py
+    infra/subscription_processor.py --> store/subscriptions.py
 ```
 
 ## Package Responsibilities
 
 | Cluster | Files | What it does |
 |---------|-------|-------------|
-| **Entry & CLI** | `chat.py`, `chat_cli.py` | Arg parsing, env loading, DBOS bootstrap, interactive REPL |
-| **Agent Runtime** | `chat_runtime.py`, `chat_worker.py`, `models.py`, `work_queue.py` | Agent construction, DBOS queue worker, work item types, priority queue |
-| **Tool Wiring** | `toolset_builder.py`, `toolset_wrappers.py`, `prompts.py` | Assembles all toolsets, composes system prompt, observable wrappers |
-| **Exec Tools** | `exec_tool.py`, `process_tool.py`, `exec_registry.py`, `pty_spawn.py`, `io_utils.py` | Shell execution with PTY, process management, session tracking |
-| **Memory** | `memory_tools.py`, `memory_store.py` | FTS5-backed persistent memory, search/save/get tools |
+| **Entry & CLI** | `chat.py`, `agent/cli.py` | Arg parsing, env loading, DBOS bootstrap, interactive REPL |
+| **Agent Runtime** | `agent/runtime.py`, `agent/worker.py`, `models.py`, `infra/work_queue.py` | Agent construction, DBOS queue worker, work item types, priority queue |
+| **Tool Wiring** | `toolset_builder.py`, `tools/toolset_wrappers.py`, `prompts.py` | Assembles all toolsets, composes system prompt, observable wrappers |
+| **Exec Tools** | `tools/exec_tool.py`, `tools/process_tool.py`, `infra/exec_registry.py`, `infra/pty_spawn.py`, `io_utils.py` | Shell execution with PTY, process management, session tracking |
+| **Memory** | `tools/memory_tools.py`, `store/memory.py` | FTS5-backed persistent memory, search/save/get tools |
 | **Skills** | `skills.py`, `skillmaker_tools.py` | Filesystem skill discovery, progressive disclosure, skill linting |
-| **Subscriptions** | `subscription_tools.py`, `subscriptions.py`, `subscription_processor.py` | Reactive context injection, subscription registry, history materialization |
-| **Approval** | `approval_types.py`, `approval_crypto.py`, `approval_keys.py`, `approval_key_files.py`, `approval_policy.py`, `approval_store.py`, `approval_store_schema.py`, `approval_store_verify.py`, `chat_approval.py` | Cryptographic tool approval with Ed25519 signing, envelope storage, policy |
-| **Persistence** | `history_store.py`, `memory_store.py`, `db.py` | SQLite checkpoint store, memory FTS5 store, shared DB helpers |
-| **Display** | `streaming.py`, `rich_display.py`, `stream_formatting.py` | Real-time Rich terminal UI, stream handles, event formatting |
-| **Context** | `context_manager.py`, `tool_result_truncation.py` | Token-based history compaction, oversized tool result truncation |
+| **Subscriptions** | `tools/subscription_tools.py`, `store/subscriptions.py`, `infra/subscription_processor.py` | Reactive context injection, subscription registry, history materialization |
+| **Approval** | `approval/types.py`, `approval/crypto.py`, `approval/keys.py`, `approval/key_files.py`, `approval/policy.py`, `approval/store.py`, `approval/store_schema.py`, `approval/store_verify.py`, `approval/chat_approval.py` | Cryptographic tool approval with Ed25519 signing, envelope storage, policy |
+| **Persistence** | `store/history.py`, `store/memory.py`, `db.py` | SQLite checkpoint store, memory FTS5 store, shared DB helpers |
+| **Display** | `display/streaming.py`, `display/rich_display.py`, `display/stream_formatting.py` | Real-time Rich terminal UI, stream handles, event formatting |
+| **Context** | `agent/context.py`, `agent/truncation.py` | Token-based history compaction, oversized tool result truncation |
 | **Model** | `model_resolution.py` | Provider/model resolution (Anthropic, OpenRouter) |
-| **Observability** | `otel_tracing.py` | OpenTelemetry span creation and configuration |
+| **Observability** | `infra/otel_tracing.py` | OpenTelemetry span creation and configuration |
 | **Utility** | `run_simple.py` | Convenience auto-approve wrapper for scripted runs |
 
 ## Key Design Decisions
 
 ### Single DBOS Queue
 All work (chat, exec callbacks, future task types) flows through one priority
-queue (`work_queue.py`). Priority levels (`CRITICAL` to `IDLE`) control
+queue (`infra/work_queue.py`). Priority levels (`CRITICAL` to `IDLE`) control
 ordering. This keeps the execution model simple and durable — DBOS handles
 retries and persistence.
 
 ### Cryptographic Approval
-Shell execution and filesystem operations (via `exec_tool` and `process_tool`)
+Shell execution and filesystem operations (via `tools/exec_tool` and `tools/process_tool`)
 require Ed25519-signed approval envelopes. Memory and subscription tools
 operate on local SQLite databases and are wired without approval predicates.
 The user unlocks their signing key at startup; the CLI prompts per-tool-call.

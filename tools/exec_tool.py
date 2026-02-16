@@ -1,4 +1,8 @@
-"""Shell execution tool with PTY support, timeout, and background mode."""
+"""Shell execution tool with PTY support, timeout, and background mode.
+
+Dependencies: infra.exec_registry, infra.pty_spawn, io_utils, models
+Wired in: toolset_builder.py → build_toolsets()
+"""
 
 from __future__ import annotations
 

@@ -4,6 +4,9 @@ Resolves all active subscriptions to their current content and injects
 a ``ModelRequest`` with the materialized text right before the final
 user message.  Old materialization messages are stripped first so
 content is always fresh.
+
+Dependencies: store.memory, store.subscriptions
+Wired in: chat.py → main() (as history_processor)
 """
 
 from __future__ import annotations

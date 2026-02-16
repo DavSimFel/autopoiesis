@@ -3,6 +3,9 @@
 Each channel represents one logical activity (tool call, reasoning, assistant
 response) rendered as a branch in a Rich tree. Completed channels show a
 one-line summary instead of disappearing.
+
+Dependencies: display.streaming
+Wired in: display/streaming.py → RichStreamHandle
 """
 
 from __future__ import annotations

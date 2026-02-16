@@ -1,4 +1,13 @@
-"""SQLite persistence layer."""
+"""SQLite persistence layer.
+
+Public API: MaterializedContent, Subscription, SubscriptionKind,
+    SubscriptionRegistry, cleanup_stale_checkpoints, clear_checkpoint,
+    combined_search, content_hash, get_memory_file_snippet,
+    init_history_store, init_memory_store, load_checkpoint,
+    resolve_history_db_path, resolve_memory_db_path, save_checkpoint,
+    save_memory, search_memory
+Internal: history, memory, subscriptions
+"""
 
 from store.history import (
     cleanup_stale_checkpoints,

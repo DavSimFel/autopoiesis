@@ -1,4 +1,8 @@
-"""Schema and migration helpers for approval envelope storage."""
+"""Schema and migration helpers for approval envelope storage.
+
+Dependencies: (stdlib only)
+Wired in: approval/store.py → ApprovalStore.__init__()
+"""
 
 from __future__ import annotations
 

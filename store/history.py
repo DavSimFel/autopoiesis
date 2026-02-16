@@ -1,4 +1,8 @@
-"""SQLite-backed checkpoint store for durable agent message history."""
+"""SQLite-backed checkpoint store for durable agent message history.
+
+Dependencies: db
+Wired in: chat.py → main(), agent/worker.py → run_agent_step()
+"""
 
 from __future__ import annotations
 
