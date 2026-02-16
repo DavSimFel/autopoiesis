@@ -52,8 +52,9 @@ class TestRequiredEnv:
     def test_raises_on_empty_string(self) -> None:
         from chat_runtime import required_env
 
-        with patch.dict(os.environ, {"EMPTY_VAR": ""}), pytest.raises(
-            SystemExit, match="Missing required"
+        with (
+            patch.dict(os.environ, {"EMPTY_VAR": ""}),
+            pytest.raises(SystemExit, match="Missing required"),
         ):
             required_env("EMPTY_VAR")
 

@@ -27,9 +27,7 @@ def workspace(tmp_path: Path) -> Path:
     ws.mkdir()
     mem_dir = ws / "memory"
     mem_dir.mkdir()
-    (mem_dir / "2026-02-16.md").write_text(
-        "## 2026-02-16\n- Did some work\n- Made decisions"
-    )
+    (mem_dir / "2026-02-16.md").write_text("## 2026-02-16\n- Did some work\n- Made decisions")
     (ws / "MEMORY.md").write_text("# Memory\n- Important fact")
     return ws
 
@@ -37,16 +35,12 @@ def workspace(tmp_path: Path) -> Path:
 class TestCreateMemoryToolset:
     """Tests for create_memory_toolset structure."""
 
-    def test_returns_toolset_and_instructions(
-        self, memory_db: str, workspace: Path
-    ) -> None:
+    def test_returns_toolset_and_instructions(self, memory_db: str, workspace: Path) -> None:
         toolset, instructions = create_memory_toolset(memory_db, workspace)
         assert toolset is not None
         assert "memory" in instructions.lower()
 
-    def test_instructions_contain_usage_guidance(
-        self, memory_db: str, workspace: Path
-    ) -> None:
+    def test_instructions_contain_usage_guidance(self, memory_db: str, workspace: Path) -> None:
         _, instructions = create_memory_toolset(memory_db, workspace)
         assert "memory_search" in instructions
         assert "memory_save" in instructions
@@ -70,9 +64,7 @@ class TestCombinedSearch:
     def test_special_characters(self, memory_db: str, workspace: Path) -> None:
         from memory_store import combined_search
 
-        result = combined_search(
-            memory_db, workspace, 'test "quotes" & <special>'
-        )
+        result = combined_search(memory_db, workspace, 'test "quotes" & <special>')
         assert isinstance(result, str)
 
     def test_returns_saved_entry(self, memory_db: str, workspace: Path) -> None:
@@ -102,9 +94,7 @@ class TestSaveMemory:
     def test_save_special_characters(self, memory_db: str) -> None:
         from memory_store import save_memory
 
-        entry_id = save_memory(
-            memory_db, 'Decision: use "quotes" & <tags>', ["special"]
-        )
+        entry_id = save_memory(memory_db, 'Decision: use "quotes" & <tags>', ["special"])
         assert isinstance(entry_id, str)
 
 
@@ -157,9 +147,7 @@ class TestMemoryToolsetIntegration:
             create_memory_toolset(memory_db, workspace)
             mock_fn.assert_not_called()
 
-    def test_save_tool_delegates_to_save_memory(
-        self, memory_db: str, workspace: Path
-    ) -> None:
+    def test_save_tool_delegates_to_save_memory(self, memory_db: str, workspace: Path) -> None:
         with patch(
             "memory_tools.save_memory",
             return_value="abc123",
