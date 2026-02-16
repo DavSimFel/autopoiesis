@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 from typing import Any, cast
 from uuid import uuid4
@@ -49,7 +50,7 @@ class ApprovalStore:
         self._nonce_retention_seconds = nonce_retention_seconds
         self._clock_skew_seconds = clock_skew_seconds
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
-        with self._connect() as conn:
+        with closing(self._connect()) as conn, conn:
             init_schema(conn)
 
     @classmethod
@@ -88,7 +89,7 @@ class ApprovalStore:
         tool_call_ids = [call["tool_call_id"] for call in tool_calls]
         scoped = scope.with_tool_call_ids(tool_call_ids)
         plan_hash = compute_plan_hash(scoped, tool_calls)
-        with self._connect() as conn:
+        with closing(self._connect()) as conn, conn:
             conn.execute(
                 """
                 INSERT INTO approval_envelopes (
@@ -116,7 +117,7 @@ class ApprovalStore:
         decisions: list[SignedDecision],
         key_manager: ApprovalKeyManager,
     ) -> None:
-        with self._connect() as conn:
+        with closing(self._connect()) as conn, conn:
             row = conn.execute(
                 """
                 SELECT nonce, plan_hash, key_id, state
@@ -165,7 +166,7 @@ class ApprovalStore:
         nonce, submitted_decisions = parse_submission(submission_json)
         signed_decisions = signed_decisions_from_submitted(submitted_decisions)
 
-        with self._connect() as conn:
+        with closing(self._connect()) as conn, conn:
             row = conn.execute(
                 """
                 SELECT nonce, scope_json, tool_calls_json, plan_hash, key_id,
@@ -211,7 +212,7 @@ class ApprovalStore:
         return submitted_decisions
 
     def expire_pending_envelopes(self) -> None:
-        with self._connect() as conn:
+        with closing(self._connect()) as conn, conn:
             now = utc_now_epoch()
             conn.execute(
                 """
@@ -231,7 +232,7 @@ class ApprovalStore:
 
     def prune_expired_envelopes(self) -> None:
         cutoff = utc_now_epoch() - self._nonce_retention_seconds
-        with self._connect() as conn:
+        with closing(self._connect()) as conn, conn:
             conn.execute(
                 """
                 DELETE FROM approval_envelopes
@@ -242,6 +243,7 @@ class ApprovalStore:
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self._db_path)
+        conn.execute("PRAGMA journal_mode=WAL")
         conn.row_factory = sqlite3.Row
         return conn
 
