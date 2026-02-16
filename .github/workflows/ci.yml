@@ -33,6 +33,17 @@ jobs:
       - name: Run tests
         run: uv run pytest -v --tb=short
 
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+      - run: uv sync
+      - name: pip-audit
+        run: uv run pip-audit
+      - name: Bandit
+        run: uv run bandit -r . -x tests/
+
   spec-check:
     runs-on: ubuntu-latest
     steps:
