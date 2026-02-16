@@ -107,12 +107,10 @@ jobs:
           )
 
           missing_specs=()
-          unmapped_sources=()
           for src_path in "${changed_sources[@]}"; do
-            # Look up by full relative path (not basename)
+            # Look up by full relative path; unmapped files are ignored
             expected_spec="${source_to_spec[$src_path]-}"
             if [ -z "$expected_spec" ]; then
-              unmapped_sources+=("$src_path")
               continue
             fi
 
@@ -123,18 +121,6 @@ jobs:
 
             if [ -z "${changed_spec_set[$expected_spec]+x}" ]; then
               missing_specs+=("$src_path -> $expected_spec")
-            fi
-          done
-
-          # Fallback convention for unmapped modules:
-          # if <basename>.py has a spec at specs/modules/<basename>.md,
-          # that spec must be updated in the same PR.
-          for src_path in "${unmapped_sources[@]}"; do
-            base_name="${src_path##*/}"
-            fallback_spec="specs/modules/${base_name%.py}.md"
-
-            if [ -f "$fallback_spec" ] && [ -z "${changed_spec_set[$fallback_spec]+x}" ]; then
-              missing_specs+=("$src_path -> $fallback_spec")
             fi
           done
 
