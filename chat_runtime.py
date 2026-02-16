@@ -134,6 +134,56 @@ _CONSOLE_INSTRUCTIONS = (
     "Shell execution is disabled."
 )
 
+_EXEC_INSTRUCTIONS = (
+    "You have shell execution tools: 'execute' runs commands (with optional PTY, "
+    "timeout, background mode); 'process_list', 'process_poll', 'process_log', "
+    "'process_write', 'process_send_keys', and 'process_kill' manage running "
+    "sessions. All commands run sandboxed inside the workspace. "
+    "Execution requires user approval."
+)
+
+
+def _exec_enabled() -> bool:
+    return os.getenv("ENABLE_EXECUTE", "").lower() in ("1", "true", "yes")
+
+
+def _build_exec_toolset() -> tuple[AbstractToolset[AgentDeps] | None, str | None]:
+    """Build the exec/process toolset if enabled via ENABLE_EXECUTE."""
+    if not _exec_enabled():
+        return None, None
+    from pydantic_ai import FunctionToolset
+
+    from exec_tool import execute, execute_pty
+    from process_tool import (
+        process_kill,
+        process_list,
+        process_log,
+        process_poll,
+        process_send_keys,
+        process_write,
+    )
+
+    ts: FunctionToolset[AgentDeps] = FunctionToolset()
+    # pydantic-ai's FunctionToolset.tool overloads don't cover all async
+    # signatures with keyword args; runtime registration works correctly.
+    tool = ts.tool
+    tool(execute, requires_approval=True)  # pyright: ignore[reportCallIssue]
+    tool(execute_pty, requires_approval=True)  # pyright: ignore[reportCallIssue]
+    tool(process_list)
+    tool(process_poll)
+    tool(process_log)
+    tool(process_write, requires_approval=True)  # pyright: ignore[reportCallIssue]
+    tool(process_send_keys, requires_approval=True)  # pyright: ignore[reportCallIssue]
+    tool(process_kill, requires_approval=True)  # pyright: ignore[reportCallIssue]
+
+    # Clean up old exec logs at startup
+    workspace = resolve_workspace_root()
+    from exec_registry import cleanup_exec_logs
+
+    cleanup_exec_logs(workspace)
+
+    return ts, _EXEC_INSTRUCTIONS
+
 
 def build_toolsets() -> tuple[list[AbstractToolset[AgentDeps]], list[str]]:
     """Build all toolsets and collect their system prompt instructions."""
@@ -142,6 +192,13 @@ def build_toolsets() -> tuple[list[AbstractToolset[AgentDeps]], list[str]]:
     skills_toolset, skills_instr = create_skills_toolset(_build_skill_directories())
     toolsets: list[AbstractToolset[AgentDeps]] = [console, skills_toolset]
     instructions = [i for i in [_CONSOLE_INSTRUCTIONS, skills_instr] if i]
+
+    exec_toolset, exec_instr = _build_exec_toolset()
+    if exec_toolset is not None:
+        toolsets.append(exec_toolset)
+    if exec_instr:
+        instructions.append(exec_instr)
+
     return toolsets, instructions
 
 
