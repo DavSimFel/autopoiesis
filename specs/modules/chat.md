@@ -52,6 +52,7 @@ split into focused companion modules.
 | `SKILLS_DIR` | No | `skills` | `_resolve_shipped_skills_dir()` | Shipped skills path, resolves from `chat.py` dir |
 | `CUSTOM_SKILLS_DIR` | No | `skills` | `_resolve_custom_skills_dir()` | Custom skills path, resolves inside `AGENT_WORKSPACE_ROOT` when relative |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | No | — | `instrument_agent()` | When set, enables OpenTelemetry trace export via `agent.instrument()` |
+| `OTEL_EXPORTER_OTLP_INSECURE` | No | `true` | `otel_tracing.configure()` | Controls OTLP gRPC transport security (`true` disables TLS) |
 
 ## Functions
 
@@ -175,6 +176,9 @@ split into focused companion modules.
 
 ## Change Log
 
+- 2026-02-16: `otel_tracing.py` now reads `OTEL_EXPORTER_OTLP_INSECURE`
+  (default `true`) so OTLP exporter TLS behavior is env-configurable
+  instead of hardcoded insecure mode. (Issue #82)
 - 2026-02-16: FallbackModel for provider resilience. When both
   `ANTHROPIC_API_KEY` and `OPENROUTER_API_KEY` are set, wraps primary
   and alternate models in `FallbackModel` for automatic retry on provider
