@@ -224,6 +224,11 @@ split into focused companion modules.
   `output_type=[str, DeferredToolRequests]`. CLI gathers human approval
   and re-enqueues. `WorkItemInput` gains `deferred_tool_results_json`,
   `WorkItemOutput` gains `deferred_tool_requests_json`. (Issue #16)
+- 2026-02-16: SigNoz observability stack and custom OTEL span attributes.
+  Added `docker/docker-compose.signoz.yml` for local SigNoz dev setup,
+  `otel_tracing.py` module for SDK bootstrap and span helpers, custom
+  `agent.run` spans in `chat_worker.py` with model/provider/workflow
+  attributes, and `docs/observability.md`. (Issue #70)
 - 2026-02-15: Unified all work through priority queue. WorkItem model with
   structured input/output. Stream handles for real-time CLI output. Removed
   `to_cli_sync()` / `DBOSAgent`. (Issue #8)

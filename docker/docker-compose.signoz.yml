@@ -1,0 +1,73 @@
+# SigNoz observability stack — single-node dev setup.
+# Start: docker compose -f docker/docker-compose.signoz.yml up -d
+# UI: http://localhost:3301  |  OTLP gRPC: 4317  |  OTLP HTTP: 4318
+
+services:
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.1-alpine
+    volumes:
+      - signoz-clickhouse:/var/lib/clickhouse
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8123/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  alertmanager:
+    image: signoz/alertmanager:0.23.7
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    restart: unless-stopped
+
+  query-service:
+    image: signoz/query-service:0.55.0
+    environment:
+      ClickHouseUrl: tcp://clickhouse:9000
+      ALERTMANAGER_API_PREFIX: http://alertmanager:9093/api/
+      SIGNOZ_LOCAL_DB_PATH: /var/lib/signoz/signoz.db
+    volumes:
+      - signoz-data:/var/lib/signoz
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+      alertmanager:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  frontend:
+    image: signoz/frontend:0.55.0
+    environment:
+      FRONTEND_API_ENDPOINT: http://query-service:8080
+    ports:
+      - "3301:3301"
+    depends_on:
+      query-service:
+        condition: service_healthy
+    restart: unless-stopped
+
+  otel-collector:
+    image: signoz/signoz-otel-collector:0.55.0
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    environment:
+      OTEL_RESOURCE_ATTRIBUTES: host.name=autopoiesis-dev
+    volumes:
+      - signoz-otel:/etc/otel
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  signoz-clickhouse:
+  signoz-data:
+  signoz-otel:

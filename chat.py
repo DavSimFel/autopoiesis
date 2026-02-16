@@ -9,6 +9,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from pydantic_ai.messages import ModelMessage
 
+import otel_tracing
 from approval_keys import ApprovalKeyManager
 from approval_policy import ToolPolicyRegistry
 from approval_store import ApprovalStore
@@ -75,6 +76,7 @@ def main() -> None:
     """Load config, assemble runtime components, and launch DBOS + CLI chat."""
     base_dir = Path(__file__).resolve().parent
     load_dotenv(dotenv_path=base_dir / ".env")
+    otel_tracing.configure()
 
     if _handle_subcommand(base_dir):
         return

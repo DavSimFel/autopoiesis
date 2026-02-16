@@ -20,6 +20,7 @@ from pydantic_ai.messages import (
 )
 from pydantic_ai.tools import DeferredToolResults, RunContext
 
+import otel_tracing
 from approval_types import ApprovalScope
 from chat_approval import (
     build_approval_scope,
@@ -218,13 +219,24 @@ def run_agent_step(work_item_dict: dict[str, Any]) -> dict[str, Any]:
         _CheckpointContext(db_path=rt.history_db_path, work_item_id=item.id)
     )
 
-    try:
-        if stream_handle is not None:
-            output = _run_streaming(rt, turn, stream_handle)
-        else:
-            output = _run_sync(rt, turn)
-    finally:
-        _active_checkpoint_context.reset(checkpoint_token)
+    provider_name = os.getenv("AI_PROVIDER", "unknown")
+    model_name = os.getenv("ANTHROPIC_MODEL") or os.getenv("OPENROUTER_MODEL") or "unknown"
+    span_attrs: dict[str, str | int | float | bool] = {
+        "autopoiesis.model_name": model_name,
+        "autopoiesis.provider": provider_name,
+        "autopoiesis.workflow_id": item.id,
+    }
+
+    with otel_tracing.trace_span("agent.run", attributes=span_attrs) as result_attrs:
+        try:
+            if stream_handle is not None:
+                output = _run_streaming(rt, turn, stream_handle)
+            else:
+                output = _run_sync(rt, turn)
+        finally:
+            _active_checkpoint_context.reset(checkpoint_token)
+
+        result_attrs["autopoiesis.completed"] = True
 
     clear_checkpoint(rt.history_db_path, item.id)
     return output.model_dump()
