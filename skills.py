@@ -280,7 +280,10 @@ def create_skills_toolset(
     Tools expose progressive disclosure (``load_skill``), safe resource reads,
     and skill authoring quality checks (``validate_skill``/``lint_skill``).
     """
-    toolset: FunctionToolset[AgentDeps] = FunctionToolset()
+    toolset: FunctionToolset[AgentDeps] = FunctionToolset(
+        docstring_format="google",
+        require_parameter_descriptions=True,
+    )
 
     discovered = discover_skills(directories)
     cache: dict[str, Skill] = {s.name: s for s in discovered}
@@ -292,7 +295,11 @@ def create_skills_toolset(
 
     @toolset.tool
     async def load_skill(ctx: RunContext[AgentDeps], skill_name: str) -> str:
-        """Load full instructions for a skill by name (progressive disclosure)."""
+        """Load full instructions for a skill by name (progressive disclosure).
+
+        Args:
+            skill_name: Name of the skill to load instructions for.
+        """
         return load_skill_instructions(cache, skill_name)
 
     @toolset.tool
@@ -301,17 +308,30 @@ def create_skills_toolset(
         skill_name: str,
         resource_name: str,
     ) -> str:
-        """Read a resource file from a skill directory."""
+        """Read a resource file from a skill directory.
+
+        Args:
+            skill_name: Name of the skill that owns the resource.
+            resource_name: Filename of the resource within the skill directory.
+        """
         return _read_resource(cache, skill_name, resource_name)
 
     @toolset.tool
     async def validate_skill(ctx: RunContext[AgentDeps], skill_name: str) -> str:
-        """Validate SKILL.md frontmatter and required structure."""
+        """Validate SKILL.md frontmatter and required structure.
+
+        Args:
+            skill_name: Name of the skill to validate.
+        """
         return _validate_skill(cache, skill_name)
 
     @toolset.tool
     async def lint_skill(ctx: RunContext[AgentDeps], skill_name: str) -> str:
-        """Lint SKILL.md for common style issues."""
+        """Lint SKILL.md for common style issues.
+
+        Args:
+            skill_name: Name of the skill to lint.
+        """
         return _lint_skill(cache, skill_name)
 
     # Ensure pyright recognizes decorator-registered functions as used

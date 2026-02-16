@@ -30,7 +30,10 @@ def create_memory_toolset(
     workspace_root: Path,
 ) -> tuple[FunctionToolset[AgentDeps], str]:
     """Create memory tools and return the toolset with instructions."""
-    toolset: FunctionToolset[AgentDeps] = FunctionToolset()
+    toolset: FunctionToolset[AgentDeps] = FunctionToolset(
+        docstring_format="google",
+        require_parameter_descriptions=True,
+    )
 
     @toolset.tool
     async def memory_search(
@@ -38,7 +41,12 @@ def create_memory_toolset(
         query: str,
         max_results: int = 5,
     ) -> str:
-        """Search persistent memory (database + files) for past context."""
+        """Search persistent memory (database + files) for past context.
+
+        Args:
+            query: Search query string to match against stored memories.
+            max_results: Maximum number of results to return.
+        """
         return combined_search(db_path, workspace_root, query, max_results)
 
     @toolset.tool
@@ -48,7 +56,13 @@ def create_memory_toolset(
         from_line: int | None = None,
         lines: int | None = None,
     ) -> str:
-        """Read a snippet from a workspace memory file."""
+        """Read a snippet from a workspace memory file.
+
+        Args:
+            path: Relative path to the memory file within the workspace.
+            from_line: Line number to start reading from (1-indexed).
+            lines: Number of lines to read from the starting position.
+        """
         return get_memory_file_snippet(workspace_root, path, from_line, lines)
 
     @toolset.tool
@@ -57,7 +71,12 @@ def create_memory_toolset(
         summary: str,
         topics: list[str],
     ) -> str:
-        """Save a memory entry for future retrieval."""
+        """Save a memory entry for future retrieval.
+
+        Args:
+            summary: Text content of the memory to persist.
+            topics: List of topic tags for categorizing the memory.
+        """
         entry_id = save_memory(db_path, summary, topics)
         return f"Memory saved (id: {entry_id})."
 

@@ -43,7 +43,11 @@ async def process_poll(
     ctx: RunContext[AgentDeps],
     session_id: str,
 ) -> dict[str, Any]:
-    """Poll a session for its current status and output tail."""
+    """Poll a session for its current status and output tail.
+
+    Args:
+        session_id: Identifier of the session to poll.
+    """
     session = _require_session(session_id)
     code = session.process.returncode
     if code is not None and session.exit_code is None:
@@ -59,7 +63,13 @@ async def process_log(
     offset: int = 0,
     limit: int = 50,
 ) -> dict[str, Any]:
-    """Read log lines from a session's output file."""
+    """Read log lines from a session's output file.
+
+    Args:
+        session_id: Identifier of the session to read logs from.
+        offset: Line offset to start reading from.
+        limit: Maximum number of lines to return.
+    """
     session = _require_session(session_id)
     try:
         text = session.log_path.read_text(errors="replace")
@@ -75,7 +85,12 @@ async def process_write(
     session_id: str,
     data: str,
 ) -> dict[str, str]:
-    """Write data to a session's stdin."""
+    """Write data to a session's stdin.
+
+    Args:
+        session_id: Identifier of the session to write to.
+        data: String data to send to the session's stdin.
+    """
     session = _require_session(session_id)
     if session.process.stdin is None:
         msg = "Session has no stdin (PTY sessions use send_keys)"
@@ -90,7 +105,12 @@ async def process_send_keys(
     session_id: str,
     data: str,
 ) -> dict[str, str]:
-    """Send keystrokes to a PTY session's master fd."""
+    """Send keystrokes to a PTY session's master fd.
+
+    Args:
+        session_id: Identifier of the PTY session.
+        data: Keystroke data to send to the PTY master.
+    """
     session = _require_session(session_id)
     if session.master_fd is None or session.master_fd < 0:
         msg = "Session has no PTY master fd"
@@ -105,7 +125,12 @@ async def process_kill(
     *,
     sig: int = signal.SIGTERM,
 ) -> dict[str, Any]:
-    """Kill a running session."""
+    """Kill a running session.
+
+    Args:
+        session_id: Identifier of the session to kill.
+        sig: Signal number to send (default: SIGTERM).
+    """
     session = _require_session(session_id)
     if session.exit_code is not None:
         return {"status": "already_exited", **_session_info(session)}
