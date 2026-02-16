@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from chat import _project_version, parse_cli_args
+from chat import parse_cli_args, project_version
 
 
 def _repo_root() -> Path:
@@ -31,7 +31,7 @@ def test_parse_cli_args_no_approval_flag() -> None:
     assert args.no_approval is True
 
 
-def test_parse_cli_args_version_exits_with_project_version(
+def test_parse_cli_args_version_exits_withproject_version(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     with pytest.raises(SystemExit) as exc:
@@ -39,8 +39,8 @@ def test_parse_cli_args_version_exits_with_project_version(
     assert exc.value.code == 0
 
     captured = capsys.readouterr()
-    assert _project_version(_repo_root()) in captured.out
+    assert project_version(_repo_root()) in captured.out
 
 
-def test_project_version_falls_back_when_pyproject_missing(tmp_path: Path) -> None:
-    assert _project_version(tmp_path) == "0.1.0"
+def testproject_version_falls_back_when_pyproject_missing(tmp_path: Path) -> None:
+    assert project_version(tmp_path) == "0.1.0"

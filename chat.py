@@ -8,6 +8,7 @@ import tomllib
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
 from dotenv import load_dotenv
 from pydantic_ai.messages import ModelMessage
@@ -77,7 +78,7 @@ class CliArgs:
     no_approval: bool
 
 
-def _project_version(base_dir: Path) -> str:
+def project_version(base_dir: Path) -> str:
     """Read package version from pyproject.toml with a stable fallback."""
     pyproject_path = base_dir / "pyproject.toml"
     try:
@@ -86,7 +87,8 @@ def _project_version(base_dir: Path) -> str:
         return "0.1.0"
     project_data = pyproject_data.get("project")
     if isinstance(project_data, dict):
-        version = project_data.get("version")
+        project_dict = cast("dict[str, object]", project_data)
+        version = project_dict.get("version")
         if isinstance(version, str) and version:
             return version
     return "0.1.0"
@@ -101,7 +103,7 @@ def parse_cli_args(base_dir: Path, argv: Sequence[str] | None = None) -> CliArgs
     parser.add_argument(
         "--version",
         action="version",
-        version=f"%(prog)s {_project_version(base_dir)}",
+        version=f"%(prog)s {project_version(base_dir)}",
     )
     parser.add_argument(
         "--no-approval",
