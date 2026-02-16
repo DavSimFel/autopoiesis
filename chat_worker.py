@@ -184,8 +184,11 @@ def run_agent_step(work_item_dict: dict[str, Any]) -> dict[str, Any]:
 
     prompt = item.input.prompt or ""
     turn = _TurnInput(
-        prompt=prompt, deps=deps, history=history,
-        deferred_results=deferred_results, scope=scope,
+        prompt=prompt,
+        deps=deps,
+        history=history,
+        deferred_results=deferred_results,
+        scope=scope,
     )
     stream_handle = take_stream(item.id)
     checkpoint_token: Token[_CheckpointContext | None] = _active_checkpoint_context.set(
