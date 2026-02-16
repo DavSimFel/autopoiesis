@@ -53,8 +53,11 @@ For workflow rationale, see `specs/decisions/001-trunk-based-workflow.md`.
 ## Module Index
 
 - `chat.py`: `specs/modules/chat.md`
-- Rich display: `specs/modules/rich-display.md`
-- `skills.py`: `specs/modules/skills.md`
-- `skillmaker_tools.py`: `specs/modules/skillmaker-tools.md`
+- Context management: `specs/modules/context.md`
+- Exec/process tooling: `specs/modules/exec.md`
+- Memory + history storage: `specs/modules/memory.md`
 - Queue / WorkItem: `specs/modules/queue.md`
+- Rich display: `specs/modules/rich-display.md`
+- `skillmaker_tools.py`: `specs/modules/skillmaker-tools.md`
+- `skills.py`: `specs/modules/skills.md`
 - Subscriptions: `specs/modules/subscriptions.md`

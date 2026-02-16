@@ -8,7 +8,7 @@ split into focused companion modules.
 
 ## Status
 
-- **Last updated:** 2026-02-16 (Issue #19)
+- **Last updated:** 2026-02-16 (Issue #81)
 - **Source:** `chat.py`, `chat_runtime.py`, `chat_worker.py`, `chat_approval.py`, `chat_cli.py`
 
 ## File Structure
@@ -23,7 +23,7 @@ split into focused companion modules.
 | `models.py` | `AgentDeps`, `WorkItem`, `WorkItemInput`, `WorkItemOutput`, priority/type enums |
 | `skills.py` | Skill discovery, progressive loading, skills toolset |
 | `work_queue.py` | Queue instance only (no functions importing from `chat.py`) |
-| `streaming.py` | `StreamHandle` protocol, `PrintStreamHandle`, registry |
+| `streaming.py` | `StreamHandle` protocol, `RichStreamHandle`, registry |
 
 ## Environment Variables
 
@@ -76,18 +76,18 @@ split into focused companion modules.
 ### Runtime State
 
 - `_Runtime` dataclass holds agent + backend + approval store + unlocked key manager + tool policy for the process lifetime
-- `_set_runtime()` / `_get_runtime()` — set in `main()`, read by workers
+- `set_runtime()` / `get_runtime()` — set in `main()`, read by workers
 - `_CheckpointContext` + `ContextVar` store active checkpoint metadata per
   execution context for history processor writes
 
 ### Deferred Tool Serialization
 
-- `_build_approval_scope(approval_context_id, backend, agent_name)` — build live
+- `build_approval_scope(approval_context_id, backend, agent_name)` — build live
   execution scope for approval hashing/verification
-- `_serialize_deferred_requests(requests, scope, approval_store, key_manager, tool_policy)` —
+- `serialize_deferred_requests(requests, scope, approval_store, key_manager, tool_policy)` —
   validate deferred calls against immutable tool policy, persist a nonce-bound
   envelope with `key_id`, and serialize nonce + plan hash prefix + tool calls
-- `_deserialize_deferred_results(results_json, scope, approval_store, key_manager)` —
+- `deserialize_deferred_results(results_json, scope, approval_store, key_manager)` —
   verify signature-first + context drift + bijection + atomic nonce consume, then reconstruct
   `DeferredToolResults`
 
@@ -119,7 +119,7 @@ split into focused companion modules.
 ### CLI
 
 - `cli_chat_loop()` — interactive loop with approval flow. Each message →
-  `WorkItem` with CRITICAL priority + `PrintStreamHandle` →
+  `WorkItem` with CRITICAL priority + `RichStreamHandle` →
   `enqueue_and_wait()`. If output contains `deferred_tool_requests_json`,
   displays pending tool calls, gathers user approval, and re-enqueues with
   `deferred_tool_results_json` until a final text response is received.
