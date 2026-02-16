@@ -26,6 +26,7 @@ _FORWARDED_ENV_KEYS = (
 _AGENT_ROOT = Path("/installed-agent/autopoiesis")
 
 # Batch result file written by ``python chat.py run --output``.
+# Used in both create_run_agent_commands (--output) and populate_context_post_run.
 _RESULT_FILENAME = "batch-result.json"
 
 

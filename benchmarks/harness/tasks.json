@@ -18,13 +18,8 @@
     "teardown": "rm -f data/agent-workspace/e2e_readable.txt"
   },
   {
-    "id": "memory_store",
-    "instruction": "Memorize the following using your memory tool: The secret code is ZEBRA-9876.",
-    "validate": "jq -r .success $OUTPUT_FILE | grep -q 'true'"
-  },
-  {
-    "id": "memory_recall",
-    "instruction": "Search your memory for any secret code you were told to memorize.",
+    "id": "memory_roundtrip",
+    "instruction": "First, memorize this using your memory tool: 'The secret code is ZEBRA-9876'. Then immediately search your memory and confirm you can find it. Include the code in your response.",
     "validate": "jq -r .result $OUTPUT_FILE | grep -qi 'ZEBRA-9876'"
   },
   {

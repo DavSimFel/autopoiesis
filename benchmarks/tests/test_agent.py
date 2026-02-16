@@ -63,11 +63,16 @@ class TestAutopoiesisAgent:
         assert "--output" in cmds[1].command
 
     def test_instruction_escaping(self, tmp_path: Path) -> None:
+        import shlex
+
         agent = AutopoiesisAgent(logs_dir=tmp_path)
-        cmds = agent.create_run_agent_commands('it\'s a "test"')
+        instruction = 'it\'s a "test" with $vars'
+        cmds = agent.create_run_agent_commands(instruction)
         run_cmd = cmds[1].command
-        # Must not contain unescaped quotes
-        assert "it's" not in run_cmd or "'" in run_cmd
+        # The instruction must survive shlex roundtrip inside the command
+        # (it's wrapped in bash -lc '...' which contains shlex.quote(instruction))
+        inner = shlex.split(run_cmd)[-1]  # extract the bash -lc argument
+        assert instruction in inner or shlex.quote(instruction) in run_cmd
 
     def test_populate_context_no_file(self, tmp_path: Path) -> None:
         from harbor.models.agent.context import AgentContext

@@ -114,6 +114,9 @@ def run_batch(
         print(output_json)
 
     exit_code = 0 if batch_result.success else 1
+    # Flush explicitly before os._exit — it bypasses atexit/finally handlers.
+    sys.stdout.flush()
+    sys.stderr.flush()
     # Use os._exit for hard termination — httpx/anyio background threads
     # can prevent clean shutdown after a SIGALRM timeout.
     os._exit(exit_code)

@@ -2,6 +2,9 @@
 # Local test harness for autopoiesis via batch mode.
 # Exercises core features end-to-end with real LLM calls.
 #
+# TRUST BOUNDARY: tasks.json setup/validate/teardown commands are executed
+# via bash -c. Only run task files you trust (treat them like scripts).
+#
 # Usage:
 #   ./benchmarks/harness/run.sh                    # run all tasks
 #   ./benchmarks/harness/run.sh basic_chat file_write  # run specific tasks
@@ -10,6 +13,7 @@
 #   AI_PROVIDER      — provider (default: anthropic)
 #   HARNESS_TIMEOUT  — default per-task timeout in seconds (default: 120)
 
+# No -e: individual task failures are caught and reported, not fatal.
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -76,7 +80,7 @@ run_task() {
 
     # Setup
     if [[ -n "$setup" ]]; then
-        eval "$setup" 2>/dev/null || true
+        bash -c "$setup" 2>/dev/null || true
     fi
 
     log "Running: $id (timeout: ${timeout}s)"
@@ -101,7 +105,7 @@ run_task() {
         if [[ $exit_code -ne 0 ]]; then
             success=true
         elif [[ -f "$output" ]]; then
-            if eval "$validate" 2>/dev/null; then
+            if bash -c "$validate" 2>/dev/null; then
                 success=true
             fi
         fi
@@ -113,7 +117,7 @@ run_task() {
                     success=true
                 fi
             else
-                if eval "$validate" 2>/dev/null; then
+                if bash -c "$validate" 2>/dev/null; then
                     success=true
                 fi
             fi
@@ -122,7 +126,7 @@ run_task() {
 
     # Teardown
     if [[ -n "$teardown" ]]; then
-        eval "$teardown" 2>/dev/null || true
+        bash -c "$teardown" 2>/dev/null || true
     fi
 
     if [[ "$success" == "true" ]]; then
