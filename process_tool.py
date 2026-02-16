@@ -35,7 +35,12 @@ def _require_session(session_id: str) -> exec_registry.ProcessSession:
 async def process_list(
     ctx: RunContext[AgentDeps],
 ) -> list[dict[str, Any]]:
-    """List all tracked process sessions."""
+    """List all tracked process sessions (running and exited).
+
+    Use to discover active background processes or check what commands have been run.
+    Returns session_id, command, pid, exit_code, and background flag for each session.
+    Call this before process_poll or process_log to find the right session_id.
+    """
     return [_session_info(s) for s in exec_registry.list_sessions()]
 
 
@@ -43,7 +48,15 @@ async def process_poll(
     ctx: RunContext[AgentDeps],
     session_id: str,
 ) -> dict[str, Any]:
-    """Poll a session for its current status and output tail."""
+    """Check the current status of a process session.
+
+    Use to monitor background processes: returns whether the process is still running,
+    its exit code (if finished), and the last 5 lines of output. Call repeatedly to
+    watch long-running commands.
+
+    Args:
+        session_id: The session identifier returned by execute or execute_pty.
+    """
     session = _require_session(session_id)
     code = session.process.returncode
     if code is not None and session.exit_code is None:
@@ -59,7 +72,16 @@ async def process_log(
     offset: int = 0,
     limit: int = 50,
 ) -> dict[str, Any]:
-    """Read log lines from a session's output file."""
+    """Read output lines from a process session's log file.
+
+    Use to inspect full command output beyond the tail summary. Supports pagination
+    via offset and limit for large outputs (e.g. test results, build logs).
+
+    Args:
+        session_id: The session identifier.
+        offset: Line number to start reading from (0-indexed). Default 0.
+        limit: Maximum number of lines to return. Default 50.
+    """
     session = _require_session(session_id)
     try:
         text = session.log_path.read_text(errors="replace")
@@ -75,7 +97,15 @@ async def process_write(
     session_id: str,
     data: str,
 ) -> dict[str, str]:
-    """Write data to a session's stdin."""
+    """Write data to a non-PTY session's standard input.
+
+    Use for piping input to processes started with execute (not execute_pty).
+    For PTY sessions, use process_send_keys instead. Requires user approval.
+
+    Args:
+        session_id: The session identifier.
+        data: Text to write to stdin. Include newlines as needed (e.g. "yes\\n").
+    """
     session = _require_session(session_id)
     if session.process.stdin is None:
         msg = "Session has no stdin (PTY sessions use send_keys)"
@@ -90,7 +120,16 @@ async def process_send_keys(
     session_id: str,
     data: str,
 ) -> dict[str, str]:
-    """Send keystrokes to a PTY session's master fd."""
+    """Send keystrokes to a PTY session.
+
+    Use for interactive programs started with execute_pty. Sends raw bytes to the
+    terminal, supporting control characters (e.g. "\\x03" for Ctrl-C, "\\n" for Enter).
+    For non-PTY sessions, use process_write instead. Requires user approval.
+
+    Args:
+        session_id: The session identifier (must be a PTY session).
+        data: Text or control characters to send to the terminal.
+    """
     session = _require_session(session_id)
     if session.master_fd is None or session.master_fd < 0:
         msg = "Session has no PTY master fd"
@@ -105,7 +144,15 @@ async def process_kill(
     *,
     sig: int = signal.SIGTERM,
 ) -> dict[str, Any]:
-    """Kill a running session."""
+    """Terminate a running process session.
+
+    Use to stop a background process or kill a hung command. Sends SIGTERM by default
+    (graceful shutdown); use sig=9 (SIGKILL) for forceful termination. Requires user approval.
+
+    Args:
+        session_id: The session identifier.
+        sig: Signal number to send. Default is SIGTERM (15). Use 9 for SIGKILL.
+    """
     session = _require_session(session_id)
     if session.exit_code is not None:
         return {"status": "already_exited", **_session_info(session)}

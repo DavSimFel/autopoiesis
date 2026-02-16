@@ -267,12 +267,25 @@ def create_skills_toolset(
 
     @toolset.tool
     async def list_skills(ctx: RunContext[AgentDeps]) -> str:
-        """List available skills with name, description, and tags."""
+        """List all available skills with their name, description, version, and tags.
+
+        Use as a starting point to discover what capabilities are available. Shows
+        a summary of each skill — call load_skill with a skill name to get full
+        instructions for using it.
+        """
         return _format_skill_list(cache)
 
     @toolset.tool
     async def load_skill(ctx: RunContext[AgentDeps], skill_name: str) -> str:
-        """Load full instructions for a skill by name (progressive disclosure)."""
+        """Load the full instructions for a skill by name.
+
+        Use after list_skills to get detailed usage instructions, configuration steps,
+        and examples for a specific skill. Instructions are loaded on demand to save
+        tokens — only call this when you actually need to use the skill.
+
+        Args:
+            skill_name: Exact skill name as shown by list_skills.
+        """
         return _load_skill_instructions(cache, skill_name)
 
     @toolset.tool
@@ -281,17 +294,41 @@ def create_skills_toolset(
         skill_name: str,
         resource_name: str,
     ) -> str:
-        """Read a resource file from a skill directory."""
+        """Read a supplementary resource file bundled with a skill.
+
+        Use to access templates, config files, examples, or other files that a skill
+        provides alongside its SKILL.md instructions. Path-traversal is blocked for safety.
+
+        Args:
+            skill_name: The skill that owns the resource.
+            resource_name: Filename of the resource (shown in list_skills or load_skill output).
+        """
         return _read_resource(cache, skill_name, resource_name)
 
     @toolset.tool
     async def validate_skill(ctx: RunContext[AgentDeps], skill_name: str) -> str:
-        """Validate SKILL.md frontmatter and required structure."""
+        """Validate a skill's SKILL.md frontmatter and structure.
+
+        Use when creating or editing skills to check that the SKILL.md has all required
+        fields (name, description, version, tags) and follows the expected format.
+        Reports specific errors if validation fails.
+
+        Args:
+            skill_name: The skill to validate.
+        """
         return _validate_skill(cache, skill_name)
 
     @toolset.tool
     async def lint_skill(ctx: RunContext[AgentDeps], skill_name: str) -> str:
-        """Lint SKILL.md for common style issues."""
+        """Lint a skill's SKILL.md for common style issues.
+
+        Use when creating or editing skills to catch formatting problems: long lines,
+        trailing whitespace, tabs, and TODOs without issue references. Complements
+        validate_skill which checks structure; this checks style.
+
+        Args:
+            skill_name: The skill to lint.
+        """
         return _lint_skill(cache, skill_name)
 
     # Ensure pyright recognizes decorator-registered functions as used

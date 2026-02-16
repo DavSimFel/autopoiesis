@@ -191,17 +191,27 @@ async def execute(
     timeout: float = _DEFAULT_TIMEOUT,
     background: bool = False,
 ) -> dict[str, Any]:
-    """Execute a shell command.
+    """Run a shell command in the workspace.
+
+    Use for: running tests, builds, git commands, file operations, installing packages,
+    and any task requiring shell access. Commands are sandboxed to the workspace directory.
+    Requires user approval before execution.
+
+    For interactive programs that need a terminal (e.g. REPLs, TUIs, editors), use
+    execute_pty instead. For long-running processes, set background=True and use
+    process_poll/process_log to monitor progress.
 
     Args:
-        command: Shell command to run.
-        cwd: Working directory (relative to workspace root).
-        env: Extra environment variables (dangerous keys blocked).
-        timeout: Seconds before the process is killed (foreground only).
-        background: If True, return immediately with session id.
+        command: Shell command to execute (bash syntax).
+        cwd: Working directory relative to workspace root. Defaults to workspace root.
+        env: Extra environment variables to set. Sensitive keys (API keys, passwords) are blocked.
+        timeout: Max seconds before the process is killed. Default 30. Only applies to foreground.
+            Use higher values for builds, tests, or downloads.
+        background: If True, return immediately with a session_id. Monitor with process_poll
+            and process_log. The agent is notified when background processes exit.
 
     Returns:
-        Summary dict with session_id, exit_code, log_path, output_tail.
+        Summary dict with session_id, exit_code, log_path, and last 5 lines of output.
     """
     workspace_root = Path(ctx.deps.backend.root_dir)
     safe_cwd = sandbox_cwd(cwd, workspace_root)
@@ -238,9 +248,24 @@ async def execute_pty(
     timeout: float = _DEFAULT_TIMEOUT,
     background: bool = False,
 ) -> dict[str, Any]:
-    """Execute a shell command under a pseudo-terminal.
+    """Run a shell command under a pseudo-terminal (PTY).
 
-    Same as ``execute`` but allocates a PTY for interactive programs.
+    Use for: interactive programs that require a TTY — REPLs (python, node), TUIs,
+    programs that detect terminal capabilities, or anything needing raw keystroke input.
+    Requires user approval before execution.
+
+    Same interface as execute, but allocates a PTY. Use process_send_keys (not
+    process_write) to send input to PTY sessions.
+
+    Args:
+        command: Shell command to execute (bash syntax).
+        cwd: Working directory relative to workspace root. Defaults to workspace root.
+        env: Extra environment variables to set. Sensitive keys are blocked.
+        timeout: Max seconds before the process is killed. Default 30. Only applies to foreground.
+        background: If True, return immediately with a session_id. Monitor with process_poll.
+
+    Returns:
+        Summary dict with session_id, exit_code, log_path, and last 5 lines of output.
     """
     workspace_root = Path(ctx.deps.backend.root_dir)
     safe_cwd = sandbox_cwd(cwd, workspace_root)
