@@ -74,43 +74,48 @@ jobs:
           # (e.g. "approval/store.py") — keys are the paths git reports.
           declare -A source_to_spec=(
             ["chat.py"]="specs/modules/chat.md"
-            ["approval_keys.py"]="specs/modules/chat.md"
-            ["otel_tracing.py"]="specs/modules/chat.md"
-            ["chat_approval.py"]="specs/modules/chat.md"
-            ["chat_cli.py"]="specs/modules/chat.md"
-            ["chat_runtime.py"]="specs/modules/chat.md"
-            ["chat_worker.py"]="specs/modules/chat.md"
+            ["approval/keys.py"]="specs/modules/chat.md"
+            ["infra/otel_tracing.py"]="specs/modules/chat.md"
+            ["approval/chat_approval.py"]="specs/modules/chat.md"
+            ["agent/cli.py"]="specs/modules/chat.md"
+            ["agent/runtime.py"]="specs/modules/chat.md"
+            ["agent/worker.py"]="specs/modules/chat.md"
             ["model_resolution.py"]="specs/modules/chat.md"
             ["toolset_builder.py"]="specs/modules/chat.md"
             ["db.py"]="specs/modules/memory.md"
-            ["approval_store.py"]="specs/modules/chat.md"
-            ["approval_store_schema.py"]="specs/modules/chat.md"
-            ["context_manager.py"]="specs/modules/context.md"
-            ["exec_registry.py"]="specs/modules/exec.md"
-            ["exec_tool.py"]="specs/modules/exec.md"
+            ["approval/store.py"]="specs/modules/chat.md"
+            ["approval/store_schema.py"]="specs/modules/chat.md"
+            ["agent/context.py"]="specs/modules/context.md"
+            ["infra/exec_registry.py"]="specs/modules/exec.md"
+            ["tools/exec_tool.py"]="specs/modules/exec.md"
             ["io_utils.py"]="specs/modules/exec.md"
-            ["history_store.py"]="specs/modules/memory.md"
-            ["memory_store.py"]="specs/modules/memory.md"
-            ["memory_tools.py"]="specs/modules/memory.md"
-            ["process_tool.py"]="specs/modules/exec.md"
-            ["pty_spawn.py"]="specs/modules/exec.md"
-            ["rich_display.py"]="specs/modules/rich-display.md"
+            ["store/history.py"]="specs/modules/memory.md"
+            ["store/memory.py"]="specs/modules/memory.md"
+            ["tools/memory_tools.py"]="specs/modules/memory.md"
+            ["tools/process_tool.py"]="specs/modules/exec.md"
+            ["infra/pty_spawn.py"]="specs/modules/exec.md"
+            ["display/rich_display.py"]="specs/modules/rich-display.md"
             ["run_simple.py"]="specs/modules/chat.md"
             ["skillmaker_tools.py"]="specs/modules/skillmaker-tools.md"
             ["skills.py"]="specs/modules/skills.md"
-            ["stream_formatting.py"]="specs/modules/rich-display.md"
-            ["streaming.py"]="specs/modules/rich-display.md"
-            ["subscription_processor.py"]="specs/modules/subscriptions.md"
-            ["subscription_tools.py"]="specs/modules/subscriptions.md"
-            ["subscriptions.py"]="specs/modules/subscriptions.md"
-            ["work_queue.py"]="specs/modules/queue.md"
+            ["display/stream_formatting.py"]="specs/modules/rich-display.md"
+            ["display/streaming.py"]="specs/modules/rich-display.md"
+            ["infra/subscription_processor.py"]="specs/modules/subscriptions.md"
+            ["tools/subscription_tools.py"]="specs/modules/subscriptions.md"
+            ["store/subscriptions.py"]="specs/modules/subscriptions.md"
+            ["infra/work_queue.py"]="specs/modules/queue.md"
           )
 
           missing_specs=()
           for src_path in "${changed_sources[@]}"; do
-            # Look up by full relative path; unmapped files are ignored
+            # Look up by full relative path
             expected_spec="${source_to_spec[$src_path]-}"
             if [ -z "$expected_spec" ]; then
+              # Warn about unmapped source files (skip __init__.py and conftest.py)
+              base="$(basename "$src_path")"
+              if [ "$base" != "__init__.py" ] && [ "$base" != "conftest.py" ]; then
+                echo "::warning::Changed source file has no spec mapping: $src_path"
+              fi
               continue
             fi
 

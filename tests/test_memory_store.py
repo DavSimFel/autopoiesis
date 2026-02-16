@@ -6,7 +6,7 @@ import os
 import tempfile
 from pathlib import Path
 
-from memory_store import (
+from store.memory import (
     combined_search,
     get_memory_file_snippet,
     init_memory_store,

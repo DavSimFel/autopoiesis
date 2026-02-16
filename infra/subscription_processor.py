@@ -19,8 +19,8 @@ from pydantic_ai.messages import (
     UserPromptPart,
 )
 
-from memory_store import search_memory
-from subscriptions import (
+from store.memory import search_memory
+from store.subscriptions import (
     MaterializedContent,
     Subscription,
     SubscriptionRegistry,

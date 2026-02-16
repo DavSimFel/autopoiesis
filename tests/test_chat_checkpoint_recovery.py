@@ -8,9 +8,9 @@ from typing import Any, cast
 
 from _pytest.monkeypatch import MonkeyPatch
 
-import chat_worker
-from history_store import init_history_store, load_checkpoint, save_checkpoint
+import agent.worker as chat_worker
 from models import WorkItem, WorkItemInput, WorkItemPriority, WorkItemType
+from store.history import init_history_store, load_checkpoint, save_checkpoint
 
 
 @dataclass

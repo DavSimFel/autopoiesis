@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from enum import StrEnum
 from types import MappingProxyType
 
-from approval_types import ApprovalVerificationError, DeferredToolCall
+from approval.types import ApprovalVerificationError, DeferredToolCall
 
 
 class ToolClassification(StrEnum):

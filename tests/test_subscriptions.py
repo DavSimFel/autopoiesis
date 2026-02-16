@@ -7,13 +7,13 @@ from pathlib import Path
 import pytest
 from pydantic_ai.messages import ModelRequest, UserPromptPart
 
-from memory_store import init_memory_store, save_memory
-from subscription_processor import (
+from infra.subscription_processor import (
     is_materialization,
     materialize_subscriptions,
     resolve_subscriptions,
 )
-from subscriptions import (
+from store.memory import init_memory_store, save_memory
+from store.subscriptions import (
     MAX_CONTENT_CHARS,
     MAX_SUBSCRIPTIONS,
     SubscriptionRegistry,

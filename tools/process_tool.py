@@ -11,7 +11,7 @@ from typing import Any
 from pydantic_ai import RunContext
 from pydantic_ai.messages import ToolReturn
 
-import exec_registry
+from infra import exec_registry
 from io_utils import tail_lines
 from models import AgentDeps
 

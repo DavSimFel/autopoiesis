@@ -6,8 +6,8 @@ import json
 import sqlite3
 from typing import Any, cast
 
-from approval_keys import ApprovalKeyManager
-from approval_types import (
+from approval.keys import ApprovalKeyManager
+from approval.types import (
     SIGNED_OBJECT_CONTEXT,
     ApprovalVerificationError,
     SignedDecision,

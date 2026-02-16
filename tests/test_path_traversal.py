@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from memory_store import init_memory_store
-from subscription_processor import resolve_subscriptions
-from subscriptions import SubscriptionRegistry
+from infra.subscription_processor import resolve_subscriptions
+from store.memory import init_memory_store
+from store.subscriptions import SubscriptionRegistry
 
 
 def _memory_db(tmp_path: Path) -> str:

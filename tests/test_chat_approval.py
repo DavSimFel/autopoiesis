@@ -9,7 +9,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-import chat_approval
+from approval import chat_approval
 
 
 def _input_feeder(values: list[str], prompts: list[str] | None = None) -> Callable[[str], str]:

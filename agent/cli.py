@@ -6,12 +6,12 @@ import sys
 from typing import Any
 from uuid import uuid4
 
-from approval_types import ApprovalVerificationError
-from chat_approval import display_approval_requests, gather_approvals
-from chat_runtime import get_runtime
-from chat_worker import enqueue_and_wait
+from agent.runtime import get_runtime
+from agent.worker import enqueue_and_wait
+from approval.chat_approval import display_approval_requests, gather_approvals
+from approval.types import ApprovalVerificationError
+from display.streaming import ChannelStatus, RichStreamHandle, register_stream
 from models import WorkItem, WorkItemInput, WorkItemPriority, WorkItemType
-from streaming import ChannelStatus, RichStreamHandle, register_stream
 
 
 def _collapse_approval(

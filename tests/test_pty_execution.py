@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 import pytest
 
-from pty_spawn import read_master, spawn_pty
+from infra.pty_spawn import read_master, spawn_pty
 
 
 async def _drain_master(master_fd: int) -> bytes:
@@ -46,7 +46,7 @@ async def test_spawn_pty_echo_hello() -> None:
 @pytest.mark.asyncio()
 async def test_spawn_pty_openpty_failure_is_raised() -> None:
     with (
-        patch("pty_spawn.pty.openpty", side_effect=OSError("no pty support")),
+        patch("infra.pty_spawn.pty.openpty", side_effect=OSError("no pty support")),
         pytest.raises(OSError, match="no pty support"),
     ):
         await spawn_pty("echo hello")

@@ -24,8 +24,8 @@ from pydantic_ai.messages import (
 )
 from pydantic_ai.tools import RunContext
 
+from display.streaming import ChannelStatus, StreamHandle, ToolAwareStreamHandle
 from models import AgentDeps
-from streaming import ChannelStatus, StreamHandle, ToolAwareStreamHandle
 
 _log = logging.getLogger(__name__)
 

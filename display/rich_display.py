@@ -12,7 +12,7 @@ import time
 from dataclasses import dataclass
 from typing import Final
 
-from streaming import ChannelStatus
+from display.streaming import ChannelStatus
 
 try:
     from rich.console import Console

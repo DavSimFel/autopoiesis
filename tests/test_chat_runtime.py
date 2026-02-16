@@ -130,7 +130,7 @@ class TestBuildToolsets:
         from toolset_builder import build_toolsets
 
         db_path = str(tmp_path / "mem.sqlite")
-        from memory_store import init_memory_store
+        from store.memory import init_memory_store
 
         init_memory_store(db_path)
         toolsets, prompt = build_toolsets(memory_db_path=db_path)
@@ -161,14 +161,14 @@ class TestBuildAgent:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
 
     def test_creates_anthropic_agent(self) -> None:
-        from chat_runtime import build_agent
+        from agent.runtime import build_agent
 
         agent = build_agent("anthropic", "test", [], "You are helpful.")
         assert agent is not None
         assert agent.name == "test"
 
     def test_creates_openrouter_agent(self) -> None:
-        from chat_runtime import build_agent
+        from agent.runtime import build_agent
 
         with patch.dict(os.environ, {"OPENROUTER_API_KEY": "or-key"}):
             agent = build_agent("openrouter", "or-test", [], "prompt")
@@ -176,7 +176,7 @@ class TestBuildAgent:
             assert agent.name == "or-test"
 
     def test_openrouter_missing_key_exits(self) -> None:
-        from chat_runtime import build_agent
+        from agent.runtime import build_agent
 
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("OPENROUTER_API_KEY", None)
@@ -184,14 +184,14 @@ class TestBuildAgent:
                 build_agent("openrouter", "test", [], "prompt")
 
     def test_unsupported_provider_exits(self) -> None:
-        from chat_runtime import build_agent
+        from agent.runtime import build_agent
 
         with pytest.raises(SystemExit, match="Unsupported"):
             build_agent("unknown", "test", [], "prompt")
 
     def test_empty_instructions_not_coerced(self) -> None:
         """Empty list should stay as empty list, not become None."""
-        from chat_runtime import AgentOptions, build_agent
+        from agent.runtime import AgentOptions, build_agent
 
         agent = build_agent(
             "anthropic",
@@ -203,7 +203,7 @@ class TestBuildAgent:
         assert agent is not None
 
     def test_anthropic_missing_key_exits(self) -> None:
-        from chat_runtime import build_agent
+        from agent.runtime import build_agent
 
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("ANTHROPIC_API_KEY", None)
@@ -215,14 +215,14 @@ class TestRuntimeRegistry:
     """Tests for lock-protected runtime registry injection and wrappers."""
 
     def test_get_before_set_raises(self) -> None:
-        from chat_runtime import RuntimeRegistry
+        from agent.runtime import RuntimeRegistry
 
         registry = RuntimeRegistry()
         with pytest.raises(RuntimeError, match="Runtime not initialised"):
             registry.get()
 
     def test_wrappers_use_injected_registry(self) -> None:
-        from chat_runtime import (
+        from agent.runtime import (
             Runtime,
             RuntimeRegistry,
             get_runtime,

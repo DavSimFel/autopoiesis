@@ -12,7 +12,7 @@ from typing import Any, cast
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
 
-from approval_crypto import (
+from approval.crypto import (
     compute_key_id,
     decrypt_private_key,
     encrypt_private_key,
@@ -21,7 +21,7 @@ from approval_crypto import (
     public_key_hex,
     validate_new_passphrase,
 )
-from approval_key_files import (
+from approval.key_files import (
     KeyringEntry,
     read_json_file,
     resolve_path,
@@ -29,7 +29,7 @@ from approval_key_files import (
     utc_now_iso,
     write_json_file,
 )
-from approval_types import SIGNED_OBJECT_CONTEXT, SignedDecision
+from approval.types import SIGNED_OBJECT_CONTEXT, SignedDecision
 
 _PUBLIC_FILE_VERSION = 1
 

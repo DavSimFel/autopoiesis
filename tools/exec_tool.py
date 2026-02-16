@@ -10,10 +10,10 @@ from typing import Any
 from pydantic_ai import RunContext
 from pydantic_ai.messages import ToolReturn
 
-import exec_registry
+from infra import exec_registry
+from infra.pty_spawn import PtyProcess, read_master, spawn_pty
 from io_utils import tail_lines
 from models import AgentDeps
-from pty_spawn import PtyProcess, read_master, spawn_pty
 
 _background_tasks: set[asyncio.Task[None]] = set()
 
@@ -107,7 +107,7 @@ async def _close_fh_on_exit(
 
 def _enqueue_exit_callback(session: exec_registry.ProcessSession) -> None:
     """Enqueue a HIGH-priority work item with exit details."""
-    from chat_worker import enqueue
+    from agent.worker import enqueue
     from models import WorkItem, WorkItemInput, WorkItemPriority, WorkItemType
 
     tail = tail_lines(session.log_path, _MAX_SUMMARY_LINES)

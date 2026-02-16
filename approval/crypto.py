@@ -14,7 +14,7 @@ from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
 from cryptography.hazmat.primitives.serialization import Encoding, PrivateFormat, PublicFormat
 from cryptography.hazmat.primitives.serialization import NoEncryption as NoPrivateKeyEncryption
 
-from approval_key_files import utc_now_iso
+from approval.key_files import utc_now_iso
 
 _PRIVATE_FILE_VERSION = 1
 _KEY_AEAD_AD = b"autopoiesis:approval-key:v1"

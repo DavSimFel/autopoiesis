@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from memory_store import init_memory_store, save_memory, search_memory
+from store.memory import init_memory_store, save_memory, search_memory
 
 _ADVERSARIAL_QUERIES = (
     "AND OR NOT",
