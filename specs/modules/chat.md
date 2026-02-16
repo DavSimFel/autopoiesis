@@ -59,6 +59,8 @@ that execute work items from the queue.
 
 - `_Runtime` dataclass holds agent + backend for the process lifetime
 - `_set_runtime()` / `_get_runtime()` — set in `main()`, read by workers
+- `_CheckpointContext` + `ContextVar` store active checkpoint metadata per
+  execution context for history processor writes
 
 ### Deferred Tool Serialization
 
@@ -137,6 +139,9 @@ that execute work items from the queue.
 
 ## Change Log
 
+- 2026-02-16: Replaced module-global active checkpoint state with
+  context-local `ContextVar` storage for safer worker execution.
+  (Issue #21, PR #23)
 - 2026-02-15: Skills now load from two places: shipped skills (`SKILLS_DIR`,
   repo-relative by default) and custom workspace skills (`CUSTOM_SKILLS_DIR`,
   workspace-relative by default). Custom skills override shipped skills by name.

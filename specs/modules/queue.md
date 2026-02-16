@@ -7,7 +7,7 @@ chat, background research, code generation, reviews. One queue, one path.
 
 ## Status
 
-- **Last updated:** 2026-02-15 (Issue #8)
+- **Last updated:** 2026-02-15 (Issue #21)
 - **Source:** `models.py`, `work_queue.py`, `streaming.py`, `chat.py`
 
 ## Core Concept: WorkItem
@@ -99,6 +99,26 @@ either way.
 5. Worker checks for stream handle: if present → `run_stream()`, else → `run_sync()`
 6. Returns `WorkItemOutput` as durable result
 
+## History Checkpointing
+
+History checkpointing adds per-round persistence for in-flight work item
+execution so DBOS replay can resume with minimal repeated model work.
+
+- **How it works:** Agent `history_processors` persist serialized message
+  history to SQLite after each model round during `run_sync()` / `run_stream()`.
+- **Recovery flow:** On `run_agent_step()` start, worker loads checkpoint by
+  `work_item_id` and prefers it over `WorkItemInput.message_history_json`.
+  After successful completion, checkpoint row is cleared.
+- **Version handling:** Checkpoint rows with a mismatched
+  `checkpoint_version` are treated as stale and ignored. Execution falls back
+  to `WorkItemInput.message_history_json`.
+- **Storage:** Checkpoints live in `agent_history_checkpoints` in SQLite.
+  For SQLite DBOS URLs, the file is colocated with DBOS system DB using
+  `*_history.sqlite`; for Postgres DBOS URLs, fallback path is
+  `data/history.sqlite`.
+- **Limitations:** A crash can still replay at most one model call between the
+  last persisted round and failure boundary.
+
 ## Known Limitations (v1)
 
 - **SQLite degrades queue concurrency** — `SKIP LOCKED` is Postgres-native.
@@ -110,4 +130,9 @@ either way.
 
 ## Change Log
 
+- 2026-02-16: Checkpoint loading now validates `checkpoint_version` and falls
+  back to input history on mismatch. Active checkpoint state in workers is
+  context-local (`ContextVar`) instead of module-global mutable state.
+  (Issue #21, PR #23)
 - 2026-02-15: Created. WorkItem model, stream handles, unified queue path. (Issue #8)
+- 2026-02-15: Added history checkpoint persistence + crash recovery resume flow. (Issue #21)
