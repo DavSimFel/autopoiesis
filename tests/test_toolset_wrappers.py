@@ -45,6 +45,6 @@ def test_wrap_toolsets_wraps_all() -> None:
     ts1 = MagicMock()
     ts2 = MagicMock()
     expected_count = 2
-    wrapped = wrap_toolsets([ts1, ts2])  # type: ignore[arg-type]
+    wrapped = wrap_toolsets([ts1, ts2])
     assert len(wrapped) == expected_count
     assert all(isinstance(w, ObservableToolset) for w in wrapped)

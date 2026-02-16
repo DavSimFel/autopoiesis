@@ -41,26 +41,12 @@ def _make_payload(requests: list[dict[str, Any]], nonce: str = "n1") -> dict[str
     return {"nonce": nonce, "plan_hash_prefix": "abcd1234", "requests": requests}
 
 
-class _FakeApprovalStore:
-    """Minimal stub that records store_signed_approval calls."""
-
-    def __init__(self) -> None:
-        self.calls: list[dict[str, Any]] = []
-
-    def store_signed_approval(self, **kwargs: Any) -> None:
-        self.calls.append(kwargs)
-
-
-class _FakeKeyManager:
-    pass
-
-
 def _gather(payload: dict[str, Any]) -> str:
-    store = _FakeApprovalStore()
+    store = MagicMock()
     result = chat_approval.gather_approvals(
         payload,
-        approval_store=store,  # type: ignore[arg-type]
-        key_manager=_FakeKeyManager(),  # type: ignore[arg-type]
+        approval_store=store,
+        key_manager=MagicMock(),
     )
     return result
 
