@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 from datetime import UTC, datetime
+from typing import cast
 from uuid import uuid4
 
 
@@ -47,13 +48,16 @@ def _migrate_legacy_schema(conn: sqlite3.Connection) -> None:
     conn.execute("ALTER TABLE approval_envelopes RENAME TO approval_envelopes_legacy")
     _create_schema(conn)
     now = utc_now_epoch()
-    rows = conn.execute(
-        """
+    rows = cast(
+        list[sqlite3.Row],
+        conn.execute(
+            """
         SELECT nonce, scope_json, tool_calls_json, plan_hash, state,
                issued_at, expires_at, consumed_at
         FROM approval_envelopes_legacy
         """
-    ).fetchall()
+        ).fetchall(),
+    )
     for row in rows:
         state = str(row["state"])
         migrated_state = "expired" if state == "pending" else state
