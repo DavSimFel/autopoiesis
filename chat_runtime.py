@@ -240,7 +240,7 @@ def build_toolsets(
     return wrap_toolsets(toolsets), compose_system_prompt(system_prompt_fragments)
 
 
-async def _strict_tool_definitions(
+async def strict_tool_definitions(
     ctx: RunContext[AgentDeps],
     tool_defs: list[ToolDefinition],
 ) -> list[ToolDefinition] | None:
@@ -345,7 +345,7 @@ def build_agent(
         instructions=dynamic_instructions,
         history_processors=hp,
         name=agent_name,
-        prepare_tools=_strict_tool_definitions,
+        prepare_tools=strict_tool_definitions,
         model_settings=effective_settings,
         end_strategy="exhaustive",
     )

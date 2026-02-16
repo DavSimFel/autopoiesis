@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock
 
 from pydantic_ai.messages import ToolReturn
@@ -26,7 +26,7 @@ def _fake_process(
     proc.stdin = stdin
     proc.send_signal = MagicMock()
     proc.wait = AsyncMock(return_value=returncode if returncode is not None else 0)
-    return proc  # type: ignore[no-any-return]
+    return cast(asyncio.subprocess.Process, proc)
 
 
 def _make_session(
