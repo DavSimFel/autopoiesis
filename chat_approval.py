@@ -86,7 +86,7 @@ def deserialize_deferred_results(
         message = (
             denial_message
             if isinstance(denial_message, str) and denial_message
-            else "User denied this tool call."
+            else _DEFAULT_DENIAL_MESSAGE
         )
         results.approvals[tool_call_id] = ToolDenied(message)
     return results
@@ -122,9 +122,9 @@ def gather_approvals(
 
     requests = cast(list[dict[str, Any]], payload["requests"])
     decisions = (
-        collect_single_decision(requests[0])
+        _collect_single_decision(requests[0])
         if len(requests) == 1
-        else collect_batch_decisions(requests)
+        else _collect_batch_decisions(requests)
     )
     signed_decisions: list[SignedDecision] = [
         {"tool_call_id": str(item["tool_call_id"]), "approved": bool(item["approved"])}
@@ -156,21 +156,21 @@ def _decision_entry(
     }
 
 
-def collect_single_decision(request: dict[str, Any]) -> list[dict[str, Any]]:
+def _collect_single_decision(request: dict[str, Any]) -> list[dict[str, Any]]:
     try:
         answer = input("  Approve? [Y/n] ").strip().lower()
     except (EOFError, KeyboardInterrupt):
-        answer = "n"
+        return [_decision_entry(str(request["tool_call_id"]), False)]
     approved = answer in _APPROVE_CHOICES
-    denial_message = _prompt_denial_reason() if answer in _DENY_CHOICES else None
+    denial_message = _prompt_denial_reason() if not approved else None
     return [_decision_entry(str(request["tool_call_id"]), approved, denial_message)]
 
 
-def collect_batch_decisions(requests: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _collect_batch_decisions(requests: list[dict[str, Any]]) -> list[dict[str, Any]]:
     try:
         answer = input("  Approve all? [Y/n/pick] ").strip().lower()
     except (EOFError, KeyboardInterrupt):
-        answer = "n"
+        return [_decision_entry(str(req["tool_call_id"]), False) for req in requests]
 
     if answer in _APPROVE_CHOICES:
         return [_decision_entry(str(req["tool_call_id"]), True) for req in requests]
@@ -181,19 +181,17 @@ def collect_batch_decisions(requests: list[dict[str, Any]]) -> list[dict[str, An
             try:
                 choice = input(f"  [{i}] {req['tool_name']} - approve? [Y/n] ").strip().lower()
             except (EOFError, KeyboardInterrupt):
-                choice = "n"
+                decisions.append(_decision_entry(str(req["tool_call_id"]), False))
+                continue
             approved = choice in _APPROVE_CHOICES
-            denial_message = _prompt_denial_reason() if choice in _DENY_CHOICES else None
+            denial_message = _prompt_denial_reason() if not approved else None
             decisions.append(_decision_entry(str(req["tool_call_id"]), approved, denial_message))
         return decisions
 
-    if answer in _DENY_CHOICES:
-        denial_message = _prompt_denial_reason()
-        return [
-            _decision_entry(str(req["tool_call_id"]), False, denial_message) for req in requests
-        ]
-
-    return [_decision_entry(str(req["tool_call_id"]), False) for req in requests]
+    denial_message = _prompt_denial_reason()
+    return [
+        _decision_entry(str(req["tool_call_id"]), False, denial_message) for req in requests
+    ]
 
 
 def _prompt_denial_reason() -> str | None:
