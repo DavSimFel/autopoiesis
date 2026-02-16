@@ -73,6 +73,8 @@ Startup order (sequence matters):
 - Add changelog entry with date and PR/issue number
 
 ## Git Workflow
+See [WORKFLOW.md](WORKFLOW.md) for the full issue pipeline (creation → review → implement → PR review → merge).
+
 - Branch from `main`: `{type}/issue-{number}-{slug}`
 - Types: feat, fix, chore, refactor, docs
 - Squash merge to `main` only — no direct pushes
