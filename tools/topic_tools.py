@@ -10,7 +10,7 @@ from pydantic_ai import RunContext
 from pydantic_ai.toolsets import FunctionToolset
 
 from models import AgentDeps
-from topic_manager import TopicRegistry
+from topic_manager import Topic, TopicRegistry
 
 _TOPIC_INSTRUCTIONS = """\
 ## Topics
@@ -19,6 +19,29 @@ and subscriptions when activated.
 - `activate_topic` — activate a topic for the current session
 - `deactivate_topic` — deactivate a topic
 - `list_topics` — show all available topics with status"""
+
+
+def _try_activate(registry: TopicRegistry, name: str) -> str | None:
+    """Attempt activation, returning error string or None on success."""
+    try:
+        registry.activate(name)
+    except ValueError as exc:
+        return str(exc)
+    return None
+
+
+def _format_topic_list(registry: TopicRegistry, topics: list[Topic]) -> str:
+    """Format all topics for display."""
+    lines: list[str] = []
+    for topic in topics:
+        status = "🟢 active" if registry.is_active(topic.name) else "⚪ inactive"
+        enabled = "enabled" if topic.enabled else "disabled"
+        trigger_types = ", ".join(t.type for t in topic.triggers) or "none"
+        lines.append(
+            f"- **{topic.name}** [{status}] ({enabled}) "
+            f"triggers: {trigger_types} | priority: {topic.priority}"
+        )
+    return "\n".join(lines)
 
 
 def _register_tools(
@@ -46,7 +69,9 @@ def _register_tools(
             return f"Topic '{name}' is disabled."
         if registry.is_active(name):
             return f"Topic '{name}' is already active."
-        registry.activate(name)
+        error = _try_activate(registry, name)
+        if error is not None:
+            return error
         return f"Activated topic '{name}'. Its instructions are now in context."
 
     @toolset.tool(metadata=topic_meta)
@@ -72,16 +97,7 @@ def _register_tools(
         topics = registry.list_topics()
         if not topics:
             return "No topics found."
-        lines: list[str] = []
-        for topic in topics:
-            status = "🟢 active" if registry.is_active(topic.name) else "⚪ inactive"
-            enabled = "enabled" if topic.enabled else "disabled"
-            trigger_types = ", ".join(t.type for t in topic.triggers) or "none"
-            lines.append(
-                f"- **{topic.name}** [{status}] ({enabled}) "
-                f"triggers: {trigger_types} | priority: {topic.priority}"
-            )
-        return "\n".join(lines)
+        return _format_topic_list(registry, topics)
 
     # Ensure closures are retained
     _ = (activate_topic, deactivate_topic, list_topics)

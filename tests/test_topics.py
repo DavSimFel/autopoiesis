@@ -9,6 +9,8 @@ from pydantic_ai.messages import ModelMessage, ModelRequest, UserPromptPart
 
 from infra.topic_processor import inject_topic_context, is_topic_injection
 from topic_manager import (
+    MAX_ACTIVE_TOPICS,
+    MAX_TOPIC_CONTEXT_BYTES,
     TopicRegistry,
     build_topic_context,
     parse_topic,
@@ -247,3 +249,143 @@ class TestTopicContextInjection:
     def test_is_topic_injection_false_for_normal(self) -> None:
         msg = ModelRequest(parts=[UserPromptPart(content="hi")])
         assert not is_topic_injection(msg)
+
+
+# --- P1/P3: Malformed frontmatter tests ---
+
+_TRIGGERS_AS_STRING = """\
+---
+triggers: "not-a-list"
+subscriptions: "also-not-a-list"
+---
+
+# Bad types
+
+Instructions here.
+"""
+
+_INVALID_YAML = """\
+---
+triggers: [
+  broken yaml here
+  : missing
+---
+
+Body text.
+"""
+
+_EMPTY_BODY = """\
+---
+triggers: []
+---
+"""
+
+_TRIGGER_WITH_BAD_ITEMS = """\
+---
+triggers:
+  - "just a string"
+  - type: manual
+---
+
+Instructions.
+"""
+
+
+class TestMalformedTopics:
+    def test_triggers_as_string_skipped(self, topics_dir: Path) -> None:
+        path = _write_topic(topics_dir, "bad-triggers", _TRIGGERS_AS_STRING)
+        topic = parse_topic(path)
+        assert topic.triggers == ()
+        assert topic.subscriptions == ()
+        assert "Bad types" not in topic.name
+
+    def test_invalid_yaml_falls_back(self, topics_dir: Path) -> None:
+        path = _write_topic(topics_dir, "bad-yaml", _INVALID_YAML)
+        topic = parse_topic(path)
+        # Should not crash; falls back to no frontmatter
+        assert topic.name == "bad-yaml"
+        assert topic.triggers == ()
+
+    def test_empty_body(self, topics_dir: Path) -> None:
+        path = _write_topic(topics_dir, "empty-body", _EMPTY_BODY)
+        topic = parse_topic(path)
+        assert topic.instructions.strip() == ""
+
+    def test_non_dict_trigger_items_skipped(self, topics_dir: Path) -> None:
+        path = _write_topic(topics_dir, "mixed-triggers", _TRIGGER_WITH_BAD_ITEMS)
+        topic = parse_topic(path)
+        # Only the dict trigger should survive
+        assert len(topic.triggers) == 1
+        assert topic.triggers[0].type == "manual"
+
+    def test_missing_all_fields(self, topics_dir: Path) -> None:
+        path = _write_topic(topics_dir, "bare", "---\n---\nJust text.")
+        topic = parse_topic(path)
+        assert topic.triggers == ()
+        assert topic.subscriptions == ()
+        assert topic.approval == "auto"
+        assert topic.enabled is True
+        assert topic.priority == "normal"
+
+    def test_registry_skips_unparseable(self, topics_dir: Path) -> None:
+        # Write a file that's not valid UTF-8... use invalid yaml instead
+        _write_topic(topics_dir, "good", _SAMPLE_TOPIC)
+        _write_topic(topics_dir, "bad", _INVALID_YAML)
+        registry = TopicRegistry(topics_dir)
+        # At least the good one should load; bad one may or may not depending on yaml
+        names = [t.name for t in registry.list_topics()]
+        assert "good" in names
+
+
+# --- P2: Max concurrent topics ---
+
+
+class TestMaxActiveTopics:
+    def test_cap_enforced(self, topics_dir: Path) -> None:
+        for i in range(MAX_ACTIVE_TOPICS + 2):
+            _write_topic(topics_dir, f"topic-{i}", _MINIMAL_TOPIC)
+        registry = TopicRegistry(topics_dir)
+        for i in range(MAX_ACTIVE_TOPICS):
+            assert registry.activate(f"topic-{i}")
+        with pytest.raises(ValueError, match="max concurrent topics"):
+            registry.activate(f"topic-{MAX_ACTIVE_TOPICS}")
+
+    def test_deactivate_then_activate(self, topics_dir: Path) -> None:
+        for i in range(MAX_ACTIVE_TOPICS + 1):
+            _write_topic(topics_dir, f"topic-{i}", _MINIMAL_TOPIC)
+        registry = TopicRegistry(topics_dir)
+        for i in range(MAX_ACTIVE_TOPICS):
+            registry.activate(f"topic-{i}")
+        registry.deactivate("topic-0")
+        assert registry.activate(f"topic-{MAX_ACTIVE_TOPICS}")
+
+
+# --- P2: Context size limit ---
+
+
+class TestContextSizeLimit:
+    def test_large_topics_truncated(self, topics_dir: Path) -> None:
+        big_body = "x" * (MAX_TOPIC_CONTEXT_BYTES + 1000)
+        content = f"---\ntriggers: []\npriority: normal\n---\n\n{big_body}"
+        _write_topic(topics_dir, "huge", content)
+        registry = TopicRegistry(topics_dir)
+        registry.activate("huge")
+        ctx = build_topic_context(registry)
+        assert ctx is not None
+        size = len(ctx.instructions.encode("utf-8"))
+        assert size <= MAX_TOPIC_CONTEXT_BYTES + 200  # header + marker
+
+    def test_priority_ordering(self, topics_dir: Path) -> None:
+        high = "---\ntriggers: []\npriority: high\n---\n\nHigh priority content."
+        low = "---\ntriggers: []\npriority: low\n---\n\nLow priority content."
+        _write_topic(topics_dir, "high-t", high)
+        _write_topic(topics_dir, "low-t", low)
+        registry = TopicRegistry(topics_dir)
+        registry.activate("high-t")
+        registry.activate("low-t")
+        ctx = build_topic_context(registry)
+        assert ctx is not None
+        # High priority should appear before low
+        high_pos = ctx.instructions.index("high-t")
+        low_pos = ctx.instructions.index("low-t")
+        assert high_pos < low_pos

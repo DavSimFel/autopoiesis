@@ -21,6 +21,8 @@ ApprovalMode = Literal["auto", "prompt", "deny"]
 TopicPriority = Literal["critical", "high", "normal", "low"]
 
 _FRONTMATTER_DELIMITER = "---"
+MAX_ACTIVE_TOPICS = 5
+MAX_TOPIC_CONTEXT_BYTES = 10_240  # 10 KB
 
 
 @dataclass(frozen=True)
@@ -81,7 +83,10 @@ def _parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
     body_start = second_idx + len(f"\n{_FRONTMATTER_DELIMITER}")
     body = rest[body_start:].lstrip("\n")
 
-    parsed: object = yaml.safe_load(yaml_text)
+    try:
+        parsed: object = yaml.safe_load(yaml_text)
+    except yaml.YAMLError:
+        return {}, text
     if not isinstance(parsed, dict):
         return {}, text
     # yaml.safe_load returns dict[str, Any] for valid YAML mappings
@@ -95,10 +100,16 @@ def parse_topic(file_path: Path) -> Topic:
     meta, body = _parse_frontmatter(text)
 
     triggers: list[TopicTrigger] = []
-    for trigger_obj in cast(list[dict[str, str]], meta.get("triggers") or []):
-        triggers.append(_parse_trigger(trigger_obj))
+    raw_triggers: object = meta.get("triggers")
+    if isinstance(raw_triggers, list):
+        for trigger_obj in cast(list[Any], raw_triggers):
+            if isinstance(trigger_obj, dict):
+                triggers.append(_parse_trigger(cast(dict[str, str], trigger_obj)))
 
-    subs: list[str] = [str(s) for s in cast(list[str], meta.get("subscriptions") or [])]
+    subs: list[str] = []
+    raw_subs: object = meta.get("subscriptions")
+    if isinstance(raw_subs, list):
+        subs = [str(s) for s in cast(list[Any], raw_subs)]
 
     raw_approval: str = str(meta.get("approval", "auto"))
     approval: ApprovalMode = raw_approval if raw_approval in ("auto", "prompt", "deny") else "auto"  # type: ignore[assignment]
@@ -171,6 +182,12 @@ class TopicRegistry:
             return False
         if name in self._active:
             return False
+        if len(self._active) >= MAX_ACTIVE_TOPICS:
+            msg = (
+                f"Cannot activate '{name}': max concurrent topics "
+                f"({MAX_ACTIVE_TOPICS}) reached. Deactivate one first."
+            )
+            raise ValueError(msg)
         self._active.add(name)
         return True
 
@@ -213,11 +230,25 @@ def build_topic_context(registry: TopicRegistry) -> TopicContext | None:
     if not active:
         return None
 
+    # Sort by priority so higher-priority topics get included first
+    priority_order = {"critical": 0, "high": 1, "normal": 2, "low": 3}
+    active.sort(key=lambda t: priority_order.get(t.priority, 2))
+
     parts: list[str] = []
     all_subs: list[str] = []
+    total_size = 0
 
     for topic in active:
-        parts.append(f"## Active Topic: {topic.name} (priority: {topic.priority})\n")
+        header = f"## Active Topic: {topic.name} (priority: {topic.priority})\n"
+        section = header + "\n\n" + topic.instructions
+        section_size = len(section.encode("utf-8"))
+        if total_size + section_size > MAX_TOPIC_CONTEXT_BYTES:
+            remaining = MAX_TOPIC_CONTEXT_BYTES - total_size
+            if remaining > 0:
+                parts.append(section[:remaining] + "\n[...truncated]")
+            break
+        total_size += section_size
+        parts.append(header)
         parts.append(topic.instructions)
         all_subs.extend(topic.subscriptions)
 
