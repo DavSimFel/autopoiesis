@@ -113,6 +113,15 @@ def testsandbox_cwd_rejects_traversal(workspace: Path) -> None:
         sandbox_cwd("../../etc", workspace)
 
 
+def testsandbox_cwd_rejects_sibling_prefix_escape(workspace: Path) -> None:
+    root = workspace / "work"
+    root.mkdir()
+    sibling = workspace / "work-escape"
+    sibling.mkdir()
+    with pytest.raises(ValueError, match="escapes workspace"):
+        sandbox_cwd("../work-escape", root)
+
+
 def testsandbox_cwd_allows_subdir(workspace: Path) -> None:
     sub = workspace / "sub"
     sub.mkdir()

@@ -53,7 +53,7 @@ def sandbox_cwd(cwd: str | None, workspace_root: Path) -> str:
     if cwd is None:
         return str(workspace_root)
     resolved = (workspace_root / cwd).resolve()
-    if not str(resolved).startswith(str(workspace_root.resolve())):
+    if not resolved.is_relative_to(workspace_root.resolve()):
         msg = f"Working directory escapes workspace: {cwd}"
         raise ValueError(msg)
     return str(resolved)
