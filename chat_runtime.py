@@ -151,7 +151,7 @@ def _build_exec_toolset() -> tuple[AbstractToolset[AgentDeps] | None, str | None
     """Build the exec/process toolset if enabled via ENABLE_EXECUTE."""
     if not _exec_enabled():
         return None, None
-    from pydantic_ai import FunctionToolset
+    from pydantic_ai import FunctionToolset, Tool
 
     from exec_tool import execute, execute_pty
     from process_tool import (
@@ -163,18 +163,18 @@ def _build_exec_toolset() -> tuple[AbstractToolset[AgentDeps] | None, str | None
         process_write,
     )
 
-    ts: FunctionToolset[AgentDeps] = FunctionToolset()
-    # pydantic-ai's FunctionToolset.tool overloads don't cover all async
-    # signatures with keyword args; runtime registration works correctly.
-    tool = ts.tool
-    tool(execute, requires_approval=True)  # pyright: ignore[reportCallIssue]
-    tool(execute_pty, requires_approval=True)  # pyright: ignore[reportCallIssue]
-    tool(process_list)
-    tool(process_poll)
-    tool(process_log)
-    tool(process_write, requires_approval=True)  # pyright: ignore[reportCallIssue]
-    tool(process_send_keys, requires_approval=True)  # pyright: ignore[reportCallIssue]
-    tool(process_kill, requires_approval=True)  # pyright: ignore[reportCallIssue]
+    ts: FunctionToolset[AgentDeps] = FunctionToolset(
+        tools=[
+            Tool(execute, requires_approval=True),
+            Tool(execute_pty, requires_approval=True),
+            Tool(process_list),
+            Tool(process_poll),
+            Tool(process_log),
+            Tool(process_write, requires_approval=True),
+            Tool(process_send_keys, requires_approval=True),
+            Tool(process_kill, requires_approval=True),
+        ]
+    )
 
     # Clean up old exec logs at startup
     workspace = resolve_workspace_root()

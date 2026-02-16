@@ -97,6 +97,42 @@ async def _spawn_pty_session(
     return pty_proc.process, pty_proc.master_fd
 
 
+async def _close_fh_on_exit(
+    proc: asyncio.subprocess.Process,
+    log_fh: Any,
+) -> None:
+    """Wait for *proc* to exit, then close the log file handle."""
+    await proc.wait()
+    log_fh.close()
+
+
+def _enqueue_exit_callback(session: exec_registry.ProcessSession) -> None:
+    """Enqueue a HIGH-priority work item with exit details."""
+    from chat_worker import enqueue
+    from models import WorkItem, WorkItemInput, WorkItemPriority, WorkItemType
+
+    tail = _tail_lines(session.log_path, _MAX_SUMMARY_LINES)
+    item = WorkItem(
+        type=WorkItemType.EXEC_CALLBACK,
+        priority=WorkItemPriority.HIGH,
+        input=WorkItemInput(prompt=None),
+        payload={
+            "session_id": session.session_id,
+            "exit_code": session.exit_code,
+            "log_path": str(session.log_path),
+            "output_tail": tail,
+        },
+    )
+    enqueue(item)
+
+
+async def _monitor_background(session: exec_registry.ProcessSession) -> None:
+    """Wait for a background process to exit, then record and notify."""
+    code = await session.process.wait()
+    exec_registry.mark_exited(session.session_id, code)
+    _enqueue_exit_callback(session)
+
+
 async def _spawn_subprocess(
     command: str,
     cwd: str,
@@ -113,6 +149,10 @@ async def _spawn_subprocess(
         cwd=cwd,
         env=env,
     )
+    # Ensure the file handle is closed when the process exits.
+    task = asyncio.create_task(_close_fh_on_exit(proc, log_fh))
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
     return proc, None
 
 
@@ -182,6 +222,9 @@ async def execute(
     exec_registry.add(session)
 
     if background:
+        task = asyncio.create_task(_monitor_background(session))
+        _background_tasks.add(task)
+        task.add_done_callback(_background_tasks.discard)
         return _build_summary(session)
     return await _wait_with_timeout(session, timeout)
 
@@ -218,5 +261,8 @@ async def execute_pty(
     exec_registry.add(session)
 
     if background:
+        task = asyncio.create_task(_monitor_background(session))
+        _background_tasks.add(task)
+        task.add_done_callback(_background_tasks.discard)
         return _build_summary(session)
     return await _wait_with_timeout(session, timeout)
