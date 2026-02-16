@@ -6,12 +6,13 @@ import os
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import get_type_hints
+from typing import Any, get_type_hints
 
-from pydantic_ai import AbstractToolset, Agent
+from pydantic_ai import AbstractToolset, Agent, RunContext
 from pydantic_ai._agent_graph import HistoryProcessor
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
+from pydantic_ai.tools import ToolDefinition
 
 from approval_keys import ApprovalKeyManager
 from approval_policy import ToolPolicyRegistry
@@ -135,25 +136,30 @@ _CONSOLE_INSTRUCTIONS = (
     "in the workspace. Write and edit operations require user approval."
 )
 
-_EXEC_INSTRUCTIONS = (
-    "You have shell execution tools: 'execute' runs commands (with optional PTY, "
-    "timeout, background mode); 'process_list', 'process_poll', 'process_log', "
-    "'process_write', 'process_send_keys', and 'process_kill' manage running "
-    "sessions. Commands run with working directory set to the workspace. "
-    "Path arguments are validated against the workspace root. "
-    "This is NOT a security sandbox — do not run untrusted commands. "
-    "Execution requires user approval."
-)
+_READ_ONLY_EXEC_TOOLS: frozenset[str] = frozenset({"process_list", "process_poll", "process_log"})
 
 
-def _exec_enabled() -> bool:
-    return os.getenv("ENABLE_EXECUTE", "").lower() in ("1", "true", "yes")
+def _needs_exec_approval(
+    ctx: RunContext[AgentDeps],
+    tool_def: ToolDefinition,
+    tool_args: dict[str, Any],
+) -> bool:
+    """Require approval for mutating exec tools; skip for read-only ones."""
+    return tool_def.name not in _READ_ONLY_EXEC_TOOLS
 
 
-def _build_exec_toolset() -> tuple[AbstractToolset[AgentDeps] | None, str | None]:
-    """Build the exec/process toolset if enabled via ENABLE_EXECUTE."""
-    if not _exec_enabled():
-        return None, None
+async def _prepare_exec_tools(
+    ctx: RunContext[AgentDeps],
+    tool_defs: list[ToolDefinition],
+) -> list[ToolDefinition] | None:
+    """Hide exec tools when ENABLE_EXECUTE is not set."""
+    if os.getenv("ENABLE_EXECUTE", "").lower() not in ("1", "true", "yes"):
+        return []
+    return tool_defs
+
+
+def _build_exec_toolset() -> AbstractToolset[AgentDeps]:
+    """Build the exec/process toolset with dynamic visibility and approval."""
     from pydantic_ai import FunctionToolset, Tool
 
     from exec_tool import execute, execute_pty
@@ -168,15 +174,17 @@ def _build_exec_toolset() -> tuple[AbstractToolset[AgentDeps] | None, str | None
 
     ts: FunctionToolset[AgentDeps] = FunctionToolset(
         tools=[
-            Tool(execute, requires_approval=True),
-            Tool(execute_pty, requires_approval=True),
+            Tool(execute),
+            Tool(execute_pty),
             Tool(process_list),
             Tool(process_poll),
             Tool(process_log),
-            Tool(process_write, requires_approval=True),
-            Tool(process_send_keys, requires_approval=True),
-            Tool(process_kill, requires_approval=True),
-        ]
+            Tool(process_write),
+            Tool(process_send_keys),
+            Tool(process_kill),
+        ],
+        docstring_format="google",
+        require_parameter_descriptions=True,
     )
 
     # Clean up old exec logs at startup
@@ -185,7 +193,7 @@ def _build_exec_toolset() -> tuple[AbstractToolset[AgentDeps] | None, str | None
 
     cleanup_exec_logs(workspace)
 
-    return ts, _EXEC_INSTRUCTIONS
+    return ts.prepared(_prepare_exec_tools).approval_required(_needs_exec_approval)
 
 
 def build_toolsets(
@@ -198,11 +206,7 @@ def build_toolsets(
     toolsets: list[AbstractToolset[AgentDeps]] = [console, skills_toolset]
     instructions = [i for i in [_CONSOLE_INSTRUCTIONS, skills_instr] if i]
 
-    exec_toolset, exec_instr = _build_exec_toolset()
-    if exec_toolset is not None:
-        toolsets.append(exec_toolset)
-    if exec_instr:
-        instructions.append(exec_instr)
+    toolsets.append(_build_exec_toolset())
 
     if memory_db_path is not None:
         workspace_root = resolve_workspace_root()

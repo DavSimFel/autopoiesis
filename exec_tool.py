@@ -241,6 +241,13 @@ async def execute_pty(
     """Execute a shell command under a pseudo-terminal.
 
     Same as ``execute`` but allocates a PTY for interactive programs.
+
+    Args:
+        command: Shell command to run.
+        cwd: Working directory (relative to workspace root).
+        env: Extra environment variables (dangerous keys blocked).
+        timeout: Seconds before the process is killed (foreground only).
+        background: If True, return immediately with session id.
     """
     workspace_root = Path(ctx.deps.backend.root_dir)
     safe_cwd = sandbox_cwd(cwd, workspace_root)
