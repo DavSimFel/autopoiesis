@@ -95,7 +95,9 @@ def parse_cli_args(repo_root: Path, argv: list[str] | None = None) -> argparse.N
         action="store_true",
         help="Skip approval key unlock (dev mode)",
     )
-    parser.add_argument("command", nargs="?", help="Subcommand: rotate-key")
+    parser.add_argument("command", nargs="?", help="Subcommand: rotate-key | serve")
+    parser.add_argument("--host", default=None, help="Server bind host (serve mode)")
+    parser.add_argument("--port", type=int, default=None, help="Server bind port (serve mode)")
     return parser.parse_args(argv if argv is not None else sys.argv[1:])
 
 
@@ -108,6 +110,12 @@ def main() -> None:
     args = parse_cli_args(base_dir)
     if args.command == "rotate-key":
         _rotate_key(base_dir)
+        return
+
+    if args.command == "serve":
+        from server.cli import run_server
+
+        run_server(host=args.host, port=args.port)
         return
 
     provider = resolve_provider(os.getenv("AI_PROVIDER"))
