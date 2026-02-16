@@ -10,7 +10,9 @@ from __future__ import annotations
 import threading
 import time
 from dataclasses import dataclass
-from typing import Final, Literal
+from typing import Final
+
+from streaming import ChannelStatus
 
 try:
     from rich.console import Console
@@ -21,9 +23,6 @@ except ModuleNotFoundError as exc:
     raise SystemExit(
         "Missing display dependency. Run `uv sync` so `rich>=13.0` is installed."
     ) from exc
-
-
-ChannelStatus = Literal["running", "done", "error"]
 
 _SPINNER_FRAMES: Final[tuple[str, ...]] = ("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧")
 _DONE_ICON: Final[str] = "✔"
