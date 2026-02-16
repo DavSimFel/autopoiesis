@@ -80,7 +80,7 @@ class TestParseTopic:
         path = _write_topic(topics_dir, "email-triage", _SAMPLE_TOPIC)
         topic = parse_topic(path)
         assert topic.name == "email-triage"
-        assert len(topic.triggers) == 2  # noqa: PLR2004
+        assert len(topic.triggers) == 2
         assert topic.triggers[0].type == "manual"
         assert topic.triggers[1].type == "cron"
         assert topic.triggers[1].schedule == "*/5 * * * *"
@@ -221,7 +221,7 @@ class TestTopicContextInjection:
         registry = TopicRegistry(topics_dir)
         msgs = self._make_messages()
         result = inject_topic_context(msgs, registry)
-        assert len(result) == 2  # noqa: PLR2004
+        assert len(result) == 2
 
     def test_active_topic_injected(self, topics_dir: Path) -> None:
         _write_topic(topics_dir, "review", _SAMPLE_TOPIC)
@@ -229,7 +229,7 @@ class TestTopicContextInjection:
         registry.activate("review")
         msgs = self._make_messages()
         result = inject_topic_context(msgs, registry)
-        assert len(result) == 3  # noqa: PLR2004
+        assert len(result) == 3
         # The injection should be before the last message
         injected = result[1]
         assert is_topic_injection(injected)
@@ -241,10 +241,10 @@ class TestTopicContextInjection:
         msgs = self._make_messages()
         # Inject once
         result = inject_topic_context(msgs, registry)
-        assert len(result) == 3  # noqa: PLR2004
+        assert len(result) == 3
         # Inject again — old injection should be replaced, not duplicated
         result2 = inject_topic_context(result, registry)
-        assert len(result2) == 3  # noqa: PLR2004
+        assert len(result2) == 3
 
     def test_is_topic_injection_false_for_normal(self) -> None:
         msg = ModelRequest(parts=[UserPromptPart(content="hi")])
