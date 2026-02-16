@@ -1,8 +1,9 @@
-"""Tests for chat_runtime: _compose_system_prompt, build_toolsets, build_agent."""
+"""Tests for chat_runtime: build_agent, build_toolsets, resolve_workspace_root, required_env."""
 
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -31,29 +32,79 @@ class TestComposeSystemPrompt:
         assert compose_system_prompt(["only"]) == "only"
 
 
+class TestRequiredEnv:
+    """Tests for required_env raising on missing vars."""
+
+    def test_returns_value_when_set(self) -> None:
+        from chat_runtime import required_env
+
+        with patch.dict(os.environ, {"TEST_VAR_XYZ": "hello"}):
+            assert required_env("TEST_VAR_XYZ") == "hello"
+
+    def test_raises_system_exit_when_missing(self) -> None:
+        from chat_runtime import required_env
+
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("MISSING_VAR_ABC", None)
+            with pytest.raises(SystemExit, match="Missing required environment variable"):
+                required_env("MISSING_VAR_ABC")
+
+    def test_raises_on_empty_string(self) -> None:
+        from chat_runtime import required_env
+
+        with (
+            patch.dict(os.environ, {"EMPTY_VAR": ""}),
+            pytest.raises(SystemExit, match="Missing required"),
+        ):
+            required_env("EMPTY_VAR")
+
+
+class TestResolveWorkspaceRoot:
+    """Tests for resolve_workspace_root with various env configs."""
+
+    def test_absolute_path_used_directly(self, tmp_path: Path) -> None:
+        from chat_runtime import resolve_workspace_root
+
+        target = tmp_path / "workspace"
+        with patch.dict(os.environ, {"AGENT_WORKSPACE_ROOT": str(target)}):
+            result = resolve_workspace_root()
+            assert result == target
+            assert result.is_dir()
+
+    def test_relative_path_resolved_from_module(self) -> None:
+        from chat_runtime import resolve_workspace_root
+
+        with patch.dict(os.environ, {"AGENT_WORKSPACE_ROOT": "data/test-ws"}):
+            result = resolve_workspace_root()
+            assert result.is_absolute()
+            assert result.name == "test-ws"
+            assert result.is_dir()
+
+    def test_default_when_unset(self) -> None:
+        from chat_runtime import resolve_workspace_root
+
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("AGENT_WORKSPACE_ROOT", None)
+            result = resolve_workspace_root()
+            assert result.is_absolute()
+            assert result.name == "agent-workspace"
+
+    def test_creates_directory(self, tmp_path: Path) -> None:
+        from chat_runtime import resolve_workspace_root
+
+        target = tmp_path / "new" / "deep" / "ws"
+        with patch.dict(os.environ, {"AGENT_WORKSPACE_ROOT": str(target)}):
+            result = resolve_workspace_root()
+            assert result.is_dir()
+
+
 class TestBuildToolsets:
-    """Tests for build_toolsets return type and system prompt."""
+    """Tests for build_toolsets return type, toolset count, and system prompt."""
 
     @pytest.fixture(autouse=True)
-    def _env(self, tmp_path: pytest.TempPathFactory) -> None:  # type: ignore[override]
-        workspace = str(tmp_path)
-        self._patches = [
-            patch.dict(
-                os.environ,
-                {
-                    "AGENT_WORKSPACE_ROOT": workspace,
-                    "ANTHROPIC_API_KEY": "test-key",
-                },
-            ),
-        ]
-        for p in self._patches:
-            p.start()
-
-    @pytest.fixture(autouse=True)
-    def _cleanup(self) -> None:  # type: ignore[override]
-        yield  # type: ignore[misc]
-        for p in self._patches:
-            p.stop()
+    def _env(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("AGENT_WORKSPACE_ROOT", str(tmp_path))
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
 
     def test_returns_tuple(self) -> None:
         from chat_runtime import build_toolsets
@@ -64,6 +115,27 @@ class TestBuildToolsets:
         assert isinstance(toolsets, list)
         assert isinstance(system_prompt, str)
         assert len(system_prompt) > 0
+
+    def test_toolset_count_without_memory(self) -> None:
+        from chat_runtime import build_toolsets
+
+        with patch.dict(os.environ, {"ENABLE_EXECUTE": ""}):
+            toolsets, _ = build_toolsets()
+            # console + skills + exec (hidden) = 3, wrapped
+            min_toolsets = 3
+            assert len(toolsets) >= min_toolsets
+
+    def test_toolset_count_with_memory(self, tmp_path: Path) -> None:
+        from chat_runtime import build_toolsets
+
+        db_path = str(tmp_path / "mem.sqlite")
+        from memory_store import init_memory_store
+
+        init_memory_store(db_path)
+        toolsets, prompt = build_toolsets(memory_db_path=db_path)
+        min_toolsets_with_memory = 4
+        assert len(toolsets) >= min_toolsets_with_memory
+        assert "memory" in prompt.lower()
 
     def test_exec_instructions_absent_when_disabled(self) -> None:
         with patch.dict(os.environ, {"ENABLE_EXECUTE": ""}):
@@ -81,17 +153,11 @@ class TestBuildToolsets:
 
 
 class TestBuildAgent:
-    """Tests for build_agent signature and behavior."""
+    """Tests for build_agent with different providers."""
 
     @pytest.fixture(autouse=True)
-    def _env(self) -> None:  # type: ignore[override]
-        self._patch = patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"})
-        self._patch.start()
-
-    @pytest.fixture(autouse=True)
-    def _cleanup(self) -> None:  # type: ignore[override]
-        yield  # type: ignore[misc]
-        self._patch.stop()
+    def _env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
 
     def test_creates_anthropic_agent(self) -> None:
         from chat_runtime import build_agent
@@ -99,6 +165,22 @@ class TestBuildAgent:
         agent = build_agent("anthropic", "test", [], "You are helpful.")
         assert agent is not None
         assert agent.name == "test"
+
+    def test_creates_openrouter_agent(self) -> None:
+        from chat_runtime import build_agent
+
+        with patch.dict(os.environ, {"OPENROUTER_API_KEY": "or-key"}):
+            agent = build_agent("openrouter", "or-test", [], "prompt")
+            assert agent is not None
+            assert agent.name == "or-test"
+
+    def test_openrouter_missing_key_exits(self) -> None:
+        from chat_runtime import build_agent
+
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("OPENROUTER_API_KEY", None)
+            with pytest.raises(SystemExit, match="Missing required"):
+                build_agent("openrouter", "test", [], "prompt")
 
     def test_unsupported_provider_exits(self) -> None:
         from chat_runtime import build_agent
@@ -117,5 +199,12 @@ class TestBuildAgent:
             "prompt",
             options=AgentOptions(instructions=[]),
         )
-        # The key assertion: empty list should not be truthy-coerced to None
         assert agent is not None
+
+    def test_anthropic_missing_key_exits(self) -> None:
+        from chat_runtime import build_agent
+
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("ANTHROPIC_API_KEY", None)
+            with pytest.raises(SystemExit, match="Missing required"):
+                build_agent("anthropic", "test", [], "prompt")
