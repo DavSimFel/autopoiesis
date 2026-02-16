@@ -82,3 +82,4 @@ Uses stdlib `pty.openpty()` — zero external dependencies. Enables interactive 
 
 ### Changelog
 - 2026-02-16: Modules moved into subdirectories (`agent/`, `approval/`, `display/`, `infra/`, `store/`, `tools/`) as part of subdirectory restructuring (#119)
+- 2026-02-16: Added Dependencies/Wired-in docstring headers as part of #121 documentation update
