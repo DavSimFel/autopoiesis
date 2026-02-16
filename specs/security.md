@@ -8,7 +8,7 @@ cryptographically signed, single-use, unexpired human authorization bound
 to the exact execution context shown to the human.
 
 ## Status
-- **Last updated:** 2026-02-15 (Phase 1 implemented: R1-R7, R9-R11)
+- **Last updated:** 2026-02-16 (Phase 1 implemented: R1-R7, R9-R11)
 - **Revision:** v3
 - **Threat model:** Single-user CLI today, networked multi-surface later
 
@@ -378,7 +378,8 @@ reclassification.
 automatically deny others in the same batch.
 
 **R11.2** Denied tools are passed back to the agent as `ToolDenied`
-with the human's denial message. The agent can adjust its plan.
+with the human's denial message when provided. If no reason is
+provided, the default denial text is used. The agent can adjust its plan.
 
 **R11.3** If ALL tools in a batch are denied, the agent receives all
 denials and can respond with text or a revised plan.
