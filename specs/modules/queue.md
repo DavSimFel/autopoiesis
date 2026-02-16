@@ -153,3 +153,4 @@ execution so DBOS replay can resume with minimal repeated model work.
 
 ### Changelog
 - 2026-02-16: Modules moved into subdirectories (`agent/`, `approval/`, `display/`, `infra/`, `store/`, `tools/`) as part of subdirectory restructuring (#119)
+- 2026-02-16: Added Dependencies/Wired-in docstring headers (#121)
