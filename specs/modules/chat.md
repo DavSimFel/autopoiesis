@@ -177,6 +177,8 @@ split into focused companion modules.
 
 ## Change Log
 
+- 2026-02-16: Enable strict tool definitions for OpenRouter provider via
+  `prepare_tools` callback, reducing malformed tool-call arguments. (Issue #33)
 - 2026-02-16: Hardened SQLite reliability in approval, memory, and history stores.
   Connections now use explicit close semantics (`contextlib.closing` with
   transactional context), and each connection sets `PRAGMA journal_mode=WAL`
@@ -217,8 +219,6 @@ split into focused companion modules.
   `build_toolsets()` returns `(toolsets, instructions)`. `build_agent()`
   accepts instructions list, passes to PydanticAI `instructions` param.
   `SKILLS_DIR` env var. (Issue #9)
-- 2026-02-16: Enable strict tool definitions for OpenRouter provider via
-  `prepare_tools` callback, reducing malformed tool-call arguments. (Issue #33)
 - 2026-02-15: Deferred tool approval flow. Agent calls with
   `output_type=[str, DeferredToolRequests]`. CLI gathers human approval
   and re-enqueues. `WorkItemInput` gains `deferred_tool_results_json`,

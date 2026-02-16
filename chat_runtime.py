@@ -228,6 +228,12 @@ async def _strict_tool_definitions(
 
     OpenRouter and OpenAI-compatible providers produce fewer malformed
     tool-call arguments when tool schemas are marked ``strict=True``.
+
+    This is OpenRouter-only because Anthropic's native API does not support
+    the ``strict`` field on tool definitions — it is an OpenAI-compatible
+    extension.  The callback must be async (returning ``Awaitable``) to
+    satisfy PydanticAI's ``ToolsPrepareFunc`` type signature, even though
+    the body performs no I/O.
     """
     return [replace(td, strict=True) for td in tool_defs]
 
