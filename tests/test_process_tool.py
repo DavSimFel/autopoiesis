@@ -68,9 +68,7 @@ async def test_process_list_empty(mock_deps: AgentDeps) -> None:
     assert result == []
 
 
-async def test_process_list_returns_sessions(
-    mock_deps: AgentDeps, tmp_path: Path
-) -> None:
+async def test_process_list_returns_sessions(mock_deps: AgentDeps, tmp_path: Path) -> None:
     _reset_registry()
     _make_session(tmp_path, session_id="s1")
     _make_session(tmp_path, session_id="s2")
@@ -81,9 +79,7 @@ async def test_process_list_returns_sessions(
     assert ids == {"s1", "s2"}
 
 
-async def test_process_poll_running(
-    mock_deps: AgentDeps, tmp_path: Path
-) -> None:
+async def test_process_poll_running(mock_deps: AgentDeps, tmp_path: Path) -> None:
     _reset_registry()
     _make_session(tmp_path, log_content="line1\nline2\nline3\n")
     result = await process_poll(_mock_ctx(mock_deps), "abc123")
@@ -92,9 +88,7 @@ async def test_process_poll_running(
     assert "line" in result.return_value
 
 
-async def test_process_poll_marks_exited(
-    mock_deps: AgentDeps, tmp_path: Path
-) -> None:
+async def test_process_poll_marks_exited(mock_deps: AgentDeps, tmp_path: Path) -> None:
     _reset_registry()
     session = _make_session(tmp_path, returncode=0, log_content="done\n")
     await process_poll(_mock_ctx(mock_deps), "abc123")
@@ -110,9 +104,7 @@ async def test_process_poll_unknown_session(mock_deps: AgentDeps) -> None:
         assert "Unknown session" in str(exc)
 
 
-async def test_process_write_sends_data(
-    mock_deps: AgentDeps, tmp_path: Path
-) -> None:
+async def test_process_write_sends_data(mock_deps: AgentDeps, tmp_path: Path) -> None:
     _reset_registry()
     stdin_mock = AsyncMock()
     stdin_mock.write = MagicMock()
@@ -125,9 +117,7 @@ async def test_process_write_sends_data(
     stdin_mock.drain.assert_awaited_once()
 
 
-async def test_process_write_no_stdin_raises(
-    mock_deps: AgentDeps, tmp_path: Path
-) -> None:
+async def test_process_write_no_stdin_raises(mock_deps: AgentDeps, tmp_path: Path) -> None:
     _reset_registry()
     _make_session(tmp_path, stdin=None)
     try:
@@ -137,9 +127,7 @@ async def test_process_write_no_stdin_raises(
         assert "no stdin" in str(exc)
 
 
-async def test_process_kill_running(
-    mock_deps: AgentDeps, tmp_path: Path
-) -> None:
+async def test_process_kill_running(mock_deps: AgentDeps, tmp_path: Path) -> None:
     _reset_registry()
     session = _make_session(tmp_path)
     result = await process_kill(_mock_ctx(mock_deps), "abc123")
@@ -150,9 +138,7 @@ async def test_process_kill_running(
     mock_proc.send_signal.assert_called_once()
 
 
-async def test_process_kill_already_exited(
-    mock_deps: AgentDeps, tmp_path: Path
-) -> None:
+async def test_process_kill_already_exited(mock_deps: AgentDeps, tmp_path: Path) -> None:
     _reset_registry()
     session = _make_session(tmp_path, returncode=0)
     session.exit_code = 0
