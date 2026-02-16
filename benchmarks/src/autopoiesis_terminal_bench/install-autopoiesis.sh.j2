@@ -1,0 +1,27 @@
+#!/bin/bash
+set -e
+
+apt-get update
+apt-get install -y git python3 python3-pip python3-venv curl
+
+# Install uv for fast dependency resolution
+curl -LsSf https://astral.sh/uv/install.sh | sh
+export PATH="$HOME/.local/bin:$PATH"
+
+# Clone autopoiesis at the specified version (or latest)
+cd /installed-agent
+{% if version %}
+git clone --depth 1 --branch {{ version }} https://github.com/DavSimFel/autopoiesis.git
+{% else %}
+git clone --depth 1 https://github.com/DavSimFel/autopoiesis.git
+{% endif %}
+
+cd autopoiesis
+
+# Install dependencies
+uv venv
+source .venv/bin/activate
+uv pip install -e .
+
+# Verify installation
+python chat.py run --help
