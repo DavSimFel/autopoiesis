@@ -6,8 +6,8 @@ Wired in: chat.py → main() (via ``run`` subcommand)
 
 from __future__ import annotations
 
-import os
 import json
+import os
 import signal
 import sys
 import time

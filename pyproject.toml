@@ -60,6 +60,7 @@ max-complexity = 10
 
 [tool.pyright]
 include = ["."]
+exclude = ["benchmarks"]
 typeCheckingMode = "strict"
 pythonVersion = "3.12"
 reportMissingTypeStubs = false

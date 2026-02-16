@@ -130,7 +130,8 @@ split into focused companion modules.
 - `run_batch(task, output_path, timeout)` — execute a single task non-interactively
   using `run_simple()` for auto-approval, produce structured JSON output, and exit
   with code 0 (success) or 1 (failure). Supports stdin input (`--task -`), file output
-  (`--output`), and SIGALRM-based timeout (`--timeout`).
+  (`--output`), and SIGALRM-based timeout (`--timeout`). Uses `os._exit()` for hard
+  termination to avoid hanging on background HTTP client threads after timeout.
 - `format_output(result)` — serialize `BatchResult` to JSON
 - `BatchResult` dataclass — success, result text, error, approval_rounds, elapsed_seconds
 
