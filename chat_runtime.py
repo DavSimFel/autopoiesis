@@ -132,17 +132,8 @@ def _build_skill_directories() -> list[SkillDirectory]:
 
 
 _CONSOLE_INSTRUCTIONS = (
-    "You have filesystem tools (ls, read_file, write_file, edit_file, glob, grep) "
-    "and shell execution tools (execute, process_list, process_poll, etc.).\n\n"
-    "Common workflows:\n"
-    "- To run code: write it with write_file, then run with execute. "
-    "Example: write_file('script.py', 'import datetime\\nprint(datetime.datetime.now())') "
-    "then execute('python script.py').\n"
-    "- To check results: read_file to see output files, grep to search for patterns.\n"
-    "- To run tests: execute('python -m pytest -v').\n"
-    "- For long-running tasks: execute with background=True, then process_poll to check status.\n\n"
-    "Write and edit operations require user approval. "
-    "Shell commands require approval except read-only process tools (list/poll/log)."
+    "You have filesystem tools for reading, writing, and editing files "
+    "in the workspace. Write and edit operations require user approval."
 )
 
 _READ_ONLY_EXEC_TOOLS: frozenset[str] = frozenset({"process_list", "process_poll", "process_log"})
@@ -235,12 +226,7 @@ def build_agent(
 ) -> Agent[AgentDeps, str]:
     """Create the configured agent from explicit provider/name/toolset/instructions."""
     all_instructions: list[str] = [
-        "You are a helpful coding assistant. "
-        "Always use your tools to accomplish tasks — do not describe what you would do, "
-        "just do it. Never promise capabilities you don't have — check your available "
-        "tools before offering to do something. If you don't have a tool for it, say so "
-        "immediately instead of offering a workaround you can't complete. "
-        "Act, don't narrate.",
+        "You are a helpful coding assistant with filesystem and skill tools.",
         *instructions,
     ]
     hp = history_processors or []

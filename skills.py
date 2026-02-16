@@ -1,7 +1,8 @@
 """Filesystem-based skill system with progressive disclosure.
 
-Skills are folders containing ``SKILL.md`` with YAML frontmatter and markdown body.
-Frontmatter is scanned at startup; full instructions are loaded on demand.
+Skills are folders containing a ``SKILL.md`` with YAML frontmatter (metadata)
+and markdown body (instructions). The agent discovers skills at startup by
+scanning frontmatter only — full instructions are loaded on demand to keep token usage low.
 """
 
 from __future__ import annotations
@@ -69,19 +70,25 @@ def parse_skill_md(content: str) -> tuple[dict[str, Any], str]:
     frontmatter_yaml = "".join(lines[1:closing_idx]).strip()
     instructions = "".join(lines[closing_idx + 1 :]).strip()
 
-    safe_load_fn = getattr(yaml, "safe_load", None)
-    if not callable(safe_load_fn):
+    safe_load_obj = getattr(yaml, "safe_load", None)
+    if not callable(safe_load_obj):
         raise ValueError("PyYAML safe_load is unavailable.")
-    safe_load = cast(Callable[[str], object], safe_load_fn)
-    loaded: object = safe_load(frontmatter_yaml) if frontmatter_yaml else {}
-    if not isinstance(loaded, dict):
+    safe_load = cast(Callable[[str], object], safe_load_obj)
+    loaded_frontmatter: object = safe_load(frontmatter_yaml) if frontmatter_yaml else {}
+    if not isinstance(loaded_frontmatter, dict):
         raise ValueError("SKILL.md frontmatter must be a mapping.")
-    return cast(dict[str, Any], loaded), instructions
+    frontmatter = cast(dict[str, Any], loaded_frontmatter)
+    return frontmatter, instructions
 
 
 def discover_skills(directories: list[SkillDirectory]) -> list[Skill]:
-    """Discover skills from SKILL.md frontmatter, skipping parse errors."""
+    """Discover skills and build metadata cache from SKILL frontmatter.
+
+    Discovery is resilient: parse errors in individual skill folders are logged
+    and skipped so one bad skill file does not prevent startup.
+    """
     skills: list[Skill] = []
+
     for skill_dir in directories:
         dir_path = skill_dir.path.expanduser()
         if not dir_path.exists():
@@ -135,10 +142,9 @@ def _format_skill_list(cache: dict[str, Skill]) -> str:
     if not cache:
         return "No skills available."
     lines = ["Available Skills:", ""]
-    lines.extend(
-        f"- **{n}** (v{s.version}): {s.description} [{', '.join(s.tags) or 'none'}]"
-        for n, s in sorted(cache.items())
-    )
+    for name, skill in sorted(cache.items()):
+        tags = ", ".join(skill.tags) if skill.tags else "none"
+        lines.append(f"- **{name}** (v{skill.version}): {skill.description} [{tags}]")
     return "\n".join(lines)
 
 
@@ -151,6 +157,7 @@ def load_skill_instructions(cache: dict[str, Skill], skill_name: str) -> str:
     if skill_name not in cache:
         available = ", ".join(sorted(cache.keys())) if cache else "none"
         return f"Skill '{skill_name}' not found. Available: {available}"
+
     skill = cache[skill_name]
     skill_file = skill.path / "SKILL.md"
 
@@ -182,11 +189,33 @@ def _read_resource(cache: dict[str, Skill], skill_name: str, resource_name: str)
     skill = cache.get(skill_name)
     if skill is None:
         return f"Skill '{skill_name}' not found."
-    available = ", ".join(sorted(skill.resources)) if skill.resources else "none"
-    error = _validate_resource_path(skill, resource_name, available)
-    if error is not None:
-        return error
-    resolved_path = (skill.path / resource_name).resolve()
+
+    error_message: str | None = None
+    resolved_path: Path | None = None
+
+    if resource_name not in skill.resources:
+        error_message = (
+            f"Resource '{resource_name}' is not listed for skill '{skill_name}'. "
+            f"Available: {_format_available_resources(skill.resources)}"
+        )
+    else:
+        resolved_path = (skill.path / resource_name).resolve()
+        skill_dir_resolved = skill.path.resolve()
+        if not resolved_path.is_relative_to(skill_dir_resolved):
+            error_message = "Error: resource path escapes skill directory."
+        elif not resolved_path.exists():
+            error_message = (
+                f"Resource '{resource_name}' not found. "
+                f"Available: {_format_available_resources(skill.resources)}"
+            )
+        elif not resolved_path.is_file():
+            error_message = f"Resource '{resource_name}' is not a file."
+
+    if error_message is not None:
+        return error_message
+
+    if resolved_path is None:
+        return f"Resource '{resource_name}' could not be resolved."
     try:
         return resolved_path.read_text()
     except (OSError, UnicodeDecodeError):
@@ -194,18 +223,11 @@ def _read_resource(cache: dict[str, Skill], skill_name: str, resource_name: str)
         return f"Error reading resource '{resource_name}'."
 
 
-def _validate_resource_path(skill: Skill, resource_name: str, available: str) -> str | None:
-    """Check resource validity; return error message or None if OK."""
-    if resource_name not in skill.resources:
-        return f"Resource '{resource_name}' not listed for '{skill.name}'. Available: {available}"
-    resolved_path = (skill.path / resource_name).resolve()
-    if not resolved_path.is_relative_to(skill.path.resolve()):
-        return "Error: resource path escapes skill directory."
-    if not resolved_path.exists():
-        return f"Resource '{resource_name}' not found. Available: {available}"
-    if not resolved_path.is_file():
-        return f"Resource '{resource_name}' is not a file."
-    return None
+def _format_available_resources(resources: list[str]) -> str:
+    """Format a stable resource list for user-facing error messages."""
+    if not resources:
+        return "none"
+    return ", ".join(sorted(resources))
 
 
 def _load_skill_parts(skill: Skill) -> tuple[dict[str, Any], str]:
@@ -242,12 +264,11 @@ def skills_instructions(cache: dict[str, Skill]) -> str:
     """Generate a compact system prompt fragment for skill tool discovery."""
     if not cache:
         return ""
-    skill_list = "\n".join(f"  - {n}: {cache[n].description}" for n in sorted(cache))
+    names = ", ".join(sorted(cache.keys()))
     return (
-        f"Skills extend your capabilities:\n{skill_list}\n\n"
-        "When a task matches a skill, call load_skill(name) to get full instructions, "
-        "then follow them. Skills may reference resource files — use "
-        "read_skill_resource to access scripts, templates, or reference data."
+        f"You have skills available: {names}. "
+        "Use list_skills to see details, load_skill to get full instructions, "
+        "and validate_skill/lint_skill when editing skills."
     )
 
 
@@ -264,7 +285,8 @@ def create_skills_toolset(
         require_parameter_descriptions=True,
     )
 
-    cache: dict[str, Skill] = {s.name: s for s in discover_skills(directories)}
+    discovered = discover_skills(directories)
+    cache: dict[str, Skill] = {s.name: s for s in discovered}
 
     @toolset.tool
     async def list_skills(ctx: RunContext[AgentDeps]) -> str:
