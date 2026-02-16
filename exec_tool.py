@@ -11,6 +11,7 @@ from pydantic_ai import RunContext
 from pydantic_ai.messages import ToolReturn
 
 import exec_registry
+from io_utils import tail_lines
 from models import AgentDeps
 from pty_spawn import PtyProcess, read_master, spawn_pty
 
@@ -18,22 +19,23 @@ _background_tasks: set[asyncio.Task[None]] = set()
 
 _DANGEROUS_ENV_VARS: frozenset[str] = frozenset(
     {
+        "ANTHROPIC_API_KEY",
         "AWS_SECRET_ACCESS_KEY",
         "DATABASE_URL",
         "DB_PASSWORD",
         "GITHUB_TOKEN",
+        "LD_PRELOAD",
         "OPENAI_API_KEY",
-        "ANTHROPIC_API_KEY",
         "OPENROUTER_API_KEY",
-        "SECRET_KEY",
-        "PRIVATE_KEY",
         "PASSWORD",
+        "PRIVATE_KEY",
+        "PYTHONPATH",
+        "SECRET_KEY",
     }
 )
 
 _DEFAULT_TIMEOUT: float = 30.0
 _MAX_SUMMARY_LINES: int = 5
-_TAIL_BYTES_PER_LINE: int = 256
 
 
 def validate_env(env: dict[str, str] | None) -> dict[str, str] | None:
@@ -46,6 +48,14 @@ def validate_env(env: dict[str, str] | None) -> dict[str, str] | None:
     return env
 
 
+def resolve_env(env: dict[str, str] | None) -> dict[str, str]:
+    """Return a subprocess env with dangerous inherited variables removed."""
+    safe_env = validate_env(env)
+    if safe_env is not None:
+        return safe_env
+    return {k: v for k, v in os.environ.items() if k not in _DANGEROUS_ENV_VARS}
+
+
 def sandbox_cwd(cwd: str | None, workspace_root: Path) -> str:
     """Resolve and validate the working directory stays inside workspace."""
     if cwd is None:
@@ -55,33 +65,6 @@ def sandbox_cwd(cwd: str | None, workspace_root: Path) -> str:
         msg = f"Working directory escapes workspace: {cwd}"
         raise ValueError(msg)
     return str(resolved)
-
-
-def _tail_lines(path: Path, n: int) -> list[str]:
-    """Return the last *n* lines from a file."""
-    if n <= 0:
-        return []
-    data = _read_tail_bytes(path, n * _TAIL_BYTES_PER_LINE)
-    if not data:
-        return []
-    lines = data.decode("utf-8", errors="replace").splitlines()
-    return lines[-n:] if len(lines) > n else lines
-
-
-def _read_tail_bytes(path: Path, max_bytes: int) -> bytes:
-    if max_bytes <= 0:
-        return b""
-    try:
-        with path.open("rb") as log_file:
-            log_file.seek(0, os.SEEK_END)
-            size = log_file.tell()
-            if size == 0:
-                return b""
-            read_size = min(size, max_bytes)
-            log_file.seek(-read_size, os.SEEK_END)
-            return log_file.read(read_size)
-    except OSError:
-        return b""
 
 
 async def _read_pty_output(pty_proc: PtyProcess, log_path: Path) -> None:
@@ -127,7 +110,7 @@ def _enqueue_exit_callback(session: exec_registry.ProcessSession) -> None:
     from chat_worker import enqueue
     from models import WorkItem, WorkItemInput, WorkItemPriority, WorkItemType
 
-    tail = _tail_lines(session.log_path, _MAX_SUMMARY_LINES)
+    tail = tail_lines(session.log_path, _MAX_SUMMARY_LINES)
     item = WorkItem(
         type=WorkItemType.EXEC_CALLBACK,
         priority=WorkItemPriority.HIGH,
@@ -187,7 +170,7 @@ def _to_tool_return(summary: dict[str, Any]) -> ToolReturn:
 
 
 def _build_summary(session: exec_registry.ProcessSession) -> dict[str, Any]:
-    tail = _tail_lines(session.log_path, _MAX_SUMMARY_LINES)
+    tail = tail_lines(session.log_path, _MAX_SUMMARY_LINES)
     return {
         "session_id": session.session_id,
         "command": session.command,
@@ -248,7 +231,7 @@ async def execute(
     """
     workspace_root = Path(ctx.deps.backend.root_dir)
     safe_cwd = sandbox_cwd(cwd, workspace_root)
-    safe_env = validate_env(env)
+    safe_env = resolve_env(env)
     session_id = exec_registry.new_session_id()
     log_path = exec_registry.log_path_for(workspace_root, session_id)
     proc, master_fd = await _spawn_subprocess(command, safe_cwd, safe_env, log_path)
@@ -283,7 +266,7 @@ async def execute_pty(
     """
     workspace_root = Path(ctx.deps.backend.root_dir)
     safe_cwd = sandbox_cwd(cwd, workspace_root)
-    safe_env = validate_env(env)
+    safe_env = resolve_env(env)
     session_id = exec_registry.new_session_id()
     log_path = exec_registry.log_path_for(workspace_root, session_id)
     proc, master_fd = await _spawn_pty_session(command, safe_cwd, safe_env, log_path)

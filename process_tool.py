@@ -12,9 +12,8 @@ from pydantic_ai import RunContext
 from pydantic_ai.messages import ToolReturn
 
 import exec_registry
+from io_utils import tail_lines
 from models import AgentDeps
-
-_TAIL_BYTES_PER_LINE: int = 256
 
 
 def _session_info(s: exec_registry.ProcessSession) -> dict[str, Any]:
@@ -55,7 +54,7 @@ async def process_poll(
     code = session.process.returncode
     if code is not None and session.exit_code is None:
         exec_registry.mark_exited(session_id, code)
-    tail = _read_tail(session.log_path, 5)
+    tail = tail_lines(session.log_path, 5)
     info = _session_info(session)
     tail_text = "\n".join(tail) if tail else "(no output)"
     return ToolReturn(return_value=tail_text, metadata={**info, "session_id": session_id})
@@ -167,32 +166,6 @@ async def process_kill(
         return_value="killed",
         metadata={**_session_info(session), "session_id": session_id},
     )
-
-
-def _read_tail(path: Path, n: int) -> list[str]:
-    if n <= 0:
-        return []
-    data = _read_tail_bytes(path, n * _TAIL_BYTES_PER_LINE)
-    if not data:
-        return []
-    lines = data.decode("utf-8", errors="replace").splitlines()
-    return lines[-n:] if len(lines) > n else lines
-
-
-def _read_tail_bytes(path: Path, max_bytes: int) -> bytes:
-    if max_bytes <= 0:
-        return b""
-    try:
-        with path.open("rb") as log_file:
-            log_file.seek(0, os.SEEK_END)
-            size = log_file.tell()
-            if size == 0:
-                return b""
-            read_size = min(size, max_bytes)
-            log_file.seek(-read_size, os.SEEK_END)
-            return log_file.read(read_size)
-    except OSError:
-        return b""
 
 
 def _count_lines(path: Path) -> int:
