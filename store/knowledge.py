@@ -73,8 +73,8 @@ CREATE TABLE IF NOT EXISTS knowledge_file_meta (
 CHUNK_SIZE_LINES = 30
 """Number of lines per chunk when splitting files for indexing."""
 
-CONTEXT_BUDGET_BYTES = 25_000
-"""Maximum bytes of auto-loaded context (~25 KB)."""
+CONTEXT_BUDGET_CHARS = 25_000
+"""Maximum characters of auto-loaded context (~25 KB for ASCII)."""
 
 _JOURNAL_TEMPLATE = """\
 # {date}
@@ -204,7 +204,7 @@ def reindex_knowledge(db_path: str, knowledge_root: Path) -> int:
 _FTS5_KEYWORDS = frozenset({"AND", "OR", "NOT", "NEAR"})
 
 
-def _sanitize_fts_query(query: str) -> str:
+def sanitize_fts_query(query: str) -> str:
     """Turn user input into a safe FTS5 query string."""
     cleaned = re.sub(r"[^\w\s]", " ", query)
     tokens = [t for t in cleaned.split() if t.upper() not in _FTS5_KEYWORDS]
@@ -219,7 +219,7 @@ def search_knowledge(
     limit: int = 10,
 ) -> list[SearchResult]:
     """Search the knowledge index using FTS5 BM25 ranking."""
-    fts_query = _sanitize_fts_query(query)
+    fts_query = sanitize_fts_query(query)
     if not fts_query:
         return []
     with closing(open_db(Path(db_path))) as conn:
@@ -293,7 +293,7 @@ def load_knowledge_context(knowledge_root: Path) -> str:
     if not knowledge_root.is_dir():
         return ""
 
-    budget = CONTEXT_BUDGET_BYTES
+    budget = CONTEXT_BUDGET_CHARS
     sections: list[str] = []
 
     # Identity files (always loaded)
@@ -337,46 +337,4 @@ def ensure_journal_entry(knowledge_root: Path) -> Path:
     return journal_path
 
 
-# ---------------------------------------------------------------------------
-# Migration
-# ---------------------------------------------------------------------------
-
-
-def migrate_memory_to_knowledge(
-    memory_db_path: str,
-    knowledge_root: Path,
-) -> int:
-    """Export SQLite memory entries to knowledge/memory/MEMORY.md.
-
-    Appends entries below existing content.  Returns the number of entries
-    migrated.
-    """
-    memory_file = knowledge_root / "memory" / "MEMORY.md"
-    memory_file.parent.mkdir(parents=True, exist_ok=True)
-
-    try:
-        with closing(open_db(Path(memory_db_path))) as conn:
-            rows = conn.execute(
-                "SELECT timestamp, summary, topics FROM memory_entries ORDER BY timestamp"
-            ).fetchall()
-    except Exception:
-        logger.warning("Could not read memory entries from %s", memory_db_path)
-        return 0
-
-    if not rows:
-        return 0
-
-    lines: list[str] = []
-    if memory_file.is_file():
-        lines.append(memory_file.read_text(encoding="utf-8").rstrip())
-        lines.append("")
-
-    lines.append("## Migrated from SQLite")
-    lines.append("")
-    for row in rows:
-        topics = row["topics"]
-        tag = f" [{topics}]" if topics else ""
-        lines.append(f"- [{row['timestamp']}]{tag} {row['summary']}")
-
-    memory_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    return len(rows)
+# Migration logic lives in store/knowledge_migration.py

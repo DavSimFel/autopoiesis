@@ -10,16 +10,17 @@ from pathlib import Path
 import pytest
 
 from store.knowledge import (
-    CONTEXT_BUDGET_BYTES,
+    CONTEXT_BUDGET_CHARS,
     SearchResult,
     ensure_journal_entry,
     format_search_results,
     init_knowledge_index,
     load_knowledge_context,
-    migrate_memory_to_knowledge,
     reindex_knowledge,
+    sanitize_fts_query,
     search_knowledge,
 )
+from store.knowledge_migration import migrate_memory_to_knowledge
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -184,7 +185,7 @@ class TestContextInjection:
         (knowledge_root / "identity" / "SOUL.md").write_text("x" * 30_000)
 
         context = load_knowledge_context(knowledge_root)
-        assert len(context) <= CONTEXT_BUDGET_BYTES + 500  # small overhead for separator/truncation
+        assert len(context) <= CONTEXT_BUDGET_CHARS + 500  # small overhead for separator/truncation
 
     def test_nonexistent_root(self, tmp_path: Path) -> None:
         context = load_knowledge_context(tmp_path / "nonexistent")
@@ -211,6 +212,80 @@ class TestJournal:
         path2 = ensure_journal_entry(knowledge_root)
         assert path1 == path2
         assert path2.read_text() == "# Custom content\n"
+
+
+# ---------------------------------------------------------------------------
+# Migration tests
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# FTS sanitize query tests
+# ---------------------------------------------------------------------------
+
+
+class TestSanitizeFtsQuery:
+    def test_normal_query(self) -> None:
+        result = sanitize_fts_query("hello world")
+        assert "hello*" in result
+        assert "world*" in result
+
+    def test_fts_operators_stripped(self) -> None:
+        result = sanitize_fts_query("hello AND world OR NOT test NEAR foo")
+        # FTS keywords should be removed
+        assert "AND" not in result.split()
+        assert "OR" not in result.replace(" OR ", "|").split("|")  # OR is used as joiner
+        assert "NOT*" not in result
+        assert "NEAR*" not in result
+        assert "hello*" in result
+        assert "world*" in result
+        assert "foo*" in result
+
+    def test_special_characters_removed(self) -> None:
+        result = sanitize_fts_query('hello "world" (test) {foo} [bar]')
+        assert '"' not in result
+        assert "(" not in result
+        assert "{" not in result
+        assert "[" not in result
+        assert "hello*" in result
+        assert "world*" in result
+
+    def test_empty_string(self) -> None:
+        assert sanitize_fts_query("") == ""
+
+    def test_only_operators(self) -> None:
+        assert sanitize_fts_query("AND OR NOT NEAR") == ""
+
+    def test_only_special_chars(self) -> None:
+        assert sanitize_fts_query("!@#$%^&*()") == ""
+
+    def test_very_long_string(self) -> None:
+        long_query = "word " * 1000
+        result = sanitize_fts_query(long_query)
+        assert isinstance(result, str)
+        assert "word*" in result
+
+    def test_unicode_tokens(self) -> None:
+        result = sanitize_fts_query("über café naïve")
+        assert result  # should produce some tokens
+        assert "ber*" in result or "über*" in result  # depends on \w matching
+
+    def test_mixed_case_operators(self) -> None:
+        # Operators are matched case-insensitively via .upper()
+        result = sanitize_fts_query("and or not near")
+        assert result == ""  # all are FTS keywords regardless of case
+
+    def test_single_word(self) -> None:
+        result = sanitize_fts_query("python")
+        assert result == "python*"
+
+    def test_fts_injection_attempt(self) -> None:
+        # Attempt column filter syntax
+        result = sanitize_fts_query('file_path:"../../etc/passwd"')
+        assert "file_path" in result  # treated as normal word
+        assert "passwd" in result
+        assert ":" not in result
+        assert '"' not in result
 
 
 # ---------------------------------------------------------------------------
@@ -255,3 +330,24 @@ class TestMigration:
     def test_migrate_nonexistent_db(self, knowledge_root: Path) -> None:
         count = migrate_memory_to_knowledge("/tmp/nonexistent.sqlite", knowledge_root)
         assert count == 0
+
+    def test_migrate_idempotent(self, knowledge_root: Path) -> None:
+        """Running migration twice should not duplicate entries."""
+        from store.memory import init_memory_store, save_memory
+
+        with tempfile.NamedTemporaryFile(suffix=".sqlite", delete=False) as f:
+            mem_db = f.name
+        try:
+            init_memory_store(mem_db)
+            save_memory(mem_db, "JWT tokens expire after 1 hour", ["auth"])
+
+            first = migrate_memory_to_knowledge(mem_db, knowledge_root)
+            assert first == 1
+
+            second = migrate_memory_to_knowledge(mem_db, knowledge_root)
+            assert second == 0  # no new entries
+
+            content = (knowledge_root / "memory" / "MEMORY.md").read_text()
+            assert content.count("JWT tokens expire after 1 hour") == 1
+        finally:
+            os.unlink(mem_db)

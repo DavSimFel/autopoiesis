@@ -23,10 +23,10 @@ from store.knowledge import (
     format_search_results,
     init_knowledge_index,
     load_knowledge_context,
-    migrate_memory_to_knowledge,
     reindex_knowledge,
     search_knowledge,
 )
+from store.knowledge_migration import migrate_memory_to_knowledge
 from store.memory import (
     combined_search,
     get_memory_file_snippet,
