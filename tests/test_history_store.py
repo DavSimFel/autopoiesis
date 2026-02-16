@@ -9,91 +9,60 @@ from pathlib import Path
 from history_store import (
     cleanup_stale_checkpoints,
     clear_checkpoint,
-    init_history_store,
     load_checkpoint,
     resolve_history_db_path,
     save_checkpoint,
 )
 
 
-def test_save_and_load_checkpoint_round_trip(tmp_path: Path) -> None:
-    db_path = tmp_path / "history.sqlite"
-    init_history_store(str(db_path))
-
-    save_checkpoint(str(db_path), "item-1", '{"messages":[]}', 2)
-
-    assert load_checkpoint(str(db_path), "item-1") == '{"messages":[]}'
+def test_save_and_load_checkpoint_round_trip(history_db: str) -> None:
+    save_checkpoint(history_db, "item-1", '{"messages":[]}', 2)
+    assert load_checkpoint(history_db, "item-1") == '{"messages":[]}'
 
 
-def test_load_checkpoint_returns_none_for_unknown_id(tmp_path: Path) -> None:
-    db_path = tmp_path / "history.sqlite"
-    init_history_store(str(db_path))
-
-    assert load_checkpoint(str(db_path), "missing-item") is None
+def test_load_checkpoint_returns_none_for_unknown_id(history_db: str) -> None:
+    assert load_checkpoint(history_db, "missing-item") is None
 
 
-def test_save_checkpoint_upserts_existing_row(tmp_path: Path) -> None:
-    db_path = tmp_path / "history.sqlite"
-    init_history_store(str(db_path))
-
-    save_checkpoint(str(db_path), "item-2", '{"messages":["a"]}', 1)
-    save_checkpoint(str(db_path), "item-2", '{"messages":["b"]}', 3)
-
-    assert load_checkpoint(str(db_path), "item-2") == '{"messages":["b"]}'
+def test_save_checkpoint_upserts_existing_row(history_db: str) -> None:
+    save_checkpoint(history_db, "item-2", '{"messages":["a"]}', 1)
+    save_checkpoint(history_db, "item-2", '{"messages":["b"]}', 3)
+    assert load_checkpoint(history_db, "item-2") == '{"messages":["b"]}'
 
 
-def test_clear_checkpoint_removes_entry(tmp_path: Path) -> None:
-    db_path = tmp_path / "history.sqlite"
-    init_history_store(str(db_path))
-    save_checkpoint(str(db_path), "item-3", '{"messages":[]}', 1)
-
-    clear_checkpoint(str(db_path), "item-3")
-
-    assert load_checkpoint(str(db_path), "item-3") is None
+def test_clear_checkpoint_removes_entry(history_db: str) -> None:
+    save_checkpoint(history_db, "item-3", '{"messages":[]}', 1)
+    clear_checkpoint(history_db, "item-3")
+    assert load_checkpoint(history_db, "item-3") is None
 
 
-def test_cleanup_stale_checkpoints_removes_old_rows(tmp_path: Path) -> None:
-    db_path = tmp_path / "history.sqlite"
-    init_history_store(str(db_path))
-    save_checkpoint(str(db_path), "old-item", '{"messages":[]}', 1)
-    save_checkpoint(str(db_path), "new-item", '{"messages":[]}', 1)
+def test_cleanup_stale_checkpoints_removes_old_rows(history_db: str) -> None:
+    save_checkpoint(history_db, "old-item", '{"messages":[]}', 1)
+    save_checkpoint(history_db, "new-item", '{"messages":[]}', 1)
 
     stale_time = (datetime.now(UTC) - timedelta(hours=48)).isoformat()
-    with sqlite3.connect(db_path) as conn:
+    with sqlite3.connect(history_db) as conn:
         conn.execute(
-            """
-            UPDATE agent_history_checkpoints
-            SET updated_at = ?
-            WHERE work_item_id = ?
-            """,
+            "UPDATE agent_history_checkpoints SET updated_at = ? WHERE work_item_id = ?",
             (stale_time, "old-item"),
         )
         conn.commit()
 
-    deleted = cleanup_stale_checkpoints(str(db_path), max_age_hours=24)
-
+    deleted = cleanup_stale_checkpoints(history_db, max_age_hours=24)
     assert deleted == 1
-    assert load_checkpoint(str(db_path), "old-item") is None
-    assert load_checkpoint(str(db_path), "new-item") == '{"messages":[]}'
+    assert load_checkpoint(history_db, "old-item") is None
+    assert load_checkpoint(history_db, "new-item") == '{"messages":[]}'
 
 
-def test_load_checkpoint_returns_none_for_stale_checkpoint_version(tmp_path: Path) -> None:
-    db_path = tmp_path / "history.sqlite"
-    init_history_store(str(db_path))
-    save_checkpoint(str(db_path), "item-4", '{"messages":[]}', 1)
-
-    with sqlite3.connect(db_path) as conn:
+def test_load_checkpoint_returns_none_for_stale_checkpoint_version(history_db: str) -> None:
+    save_checkpoint(history_db, "item-4", '{"messages":[]}', 1)
+    with sqlite3.connect(history_db) as conn:
         conn.execute(
-            """
-            UPDATE agent_history_checkpoints
-            SET checkpoint_version = ?
-            WHERE work_item_id = ?
-            """,
+            "UPDATE agent_history_checkpoints SET checkpoint_version = ? WHERE work_item_id = ?",
             (999, "item-4"),
         )
         conn.commit()
-
-    assert load_checkpoint(str(db_path), "item-4") is None
+    assert load_checkpoint(history_db, "item-4") is None
 
 
 def test_resolve_history_db_path_handles_sqlite_and_postgres(tmp_path: Path) -> None:
