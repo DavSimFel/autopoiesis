@@ -29,6 +29,8 @@ from prompts import (
     compose_system_prompt,
 )
 from skills import SkillDirectory, create_skills_toolset
+from subscription_tools import create_subscription_toolset
+from subscriptions import SubscriptionRegistry
 from toolset_wrappers import wrap_toolsets
 
 try:
@@ -47,6 +49,7 @@ class Runtime:
     backend: LocalBackend
     history_db_path: str
     memory_db_path: str
+    subscription_registry: SubscriptionRegistry | None
     approval_store: ApprovalStore
     key_manager: ApprovalKeyManager
     tool_policy: ToolPolicyRegistry
@@ -205,6 +208,7 @@ def _build_exec_toolset() -> AbstractToolset[AgentDeps]:
 
 def build_toolsets(
     memory_db_path: str | None = None,
+    subscription_registry: SubscriptionRegistry | None = None,
 ) -> tuple[list[AbstractToolset[AgentDeps]], str]:
     """Build all toolsets and return their static capability system prompt."""
     validate_console_deps_contract()
@@ -227,6 +231,11 @@ def build_toolsets(
         memory_toolset, memory_instr = create_memory_toolset(memory_db_path, workspace_root)
         toolsets.append(memory_toolset)
         system_prompt_fragments.append(memory_instr)
+
+    if subscription_registry is not None:
+        sub_toolset, sub_instr = create_subscription_toolset(subscription_registry)
+        toolsets.append(sub_toolset)
+        system_prompt_fragments.append(sub_instr)
 
     return wrap_toolsets(toolsets), compose_system_prompt(system_prompt_fragments)
 

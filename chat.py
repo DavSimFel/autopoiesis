@@ -32,6 +32,8 @@ from history_store import (
     resolve_history_db_path,
 )
 from memory_store import init_memory_store, resolve_memory_db_path
+from subscription_processor import materialize_subscriptions
+from subscriptions import SubscriptionRegistry
 from tool_result_truncation import truncate_tool_results
 
 try:
@@ -95,7 +97,22 @@ def main() -> None:
         os.getenv("DBOS_SYSTEM_DATABASE_URL", "sqlite:///dbostest.sqlite")
     )
     init_memory_store(memory_db_path)
-    toolsets, system_prompt = build_toolsets(memory_db_path=memory_db_path)
+    workspace_root = resolve_workspace_root()
+    sub_db_path = str(Path(memory_db_path).with_name("subscriptions.sqlite"))
+    subscription_registry = SubscriptionRegistry(sub_db_path)
+    toolsets, system_prompt = build_toolsets(
+        memory_db_path=memory_db_path,
+        subscription_registry=subscription_registry,
+    )
+
+    def _subscription_processor(msgs: list[ModelMessage]) -> list[ModelMessage]:
+        return materialize_subscriptions(
+            msgs,
+            subscription_registry,
+            workspace_root,
+            memory_db_path,
+        )
+
     agent = build_agent(
         provider,
         agent_name,
@@ -105,6 +122,7 @@ def main() -> None:
             history_processors=[
                 _truncate_processor,
                 _compact_processor,
+                _subscription_processor,
                 checkpoint_history_processor,
             ],
         ),
@@ -123,6 +141,7 @@ def main() -> None:
             backend=backend,
             history_db_path=history_db_path,
             memory_db_path=memory_db_path,
+            subscription_registry=subscription_registry,
             approval_store=approval_store,
             key_manager=key_manager,
             tool_policy=tool_policy,
