@@ -6,6 +6,7 @@ Wired in: chat.py → main() (via ``run`` subcommand)
 
 from __future__ import annotations
 
+import os
 import json
 import signal
 import sys
@@ -112,4 +113,7 @@ def run_batch(
     else:
         print(output_json)
 
-    sys.exit(0 if batch_result.success else 1)
+    exit_code = 0 if batch_result.success else 1
+    # Use os._exit for hard termination — httpx/anyio background threads
+    # can prevent clean shutdown after a SIGALRM timeout.
+    os._exit(exit_code)

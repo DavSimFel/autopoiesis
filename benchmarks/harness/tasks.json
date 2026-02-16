@@ -6,14 +6,16 @@
   },
   {
     "id": "file_write",
-    "instruction": "Create a file at /tmp/e2e_test.txt containing the text 'hello autopoiesis'. Use your tools.",
-    "validate": "grep -q 'hello autopoiesis' /tmp/e2e_test.txt"
+    "instruction": "Create a file called e2e_test.txt in your workspace containing the text 'hello autopoiesis'.",
+    "validate": "find data/agent-workspace -name e2e_test.txt -exec grep -q 'hello autopoiesis' {} \\;",
+    "teardown": "find data/agent-workspace -name e2e_test.txt -delete"
   },
   {
     "id": "file_read",
-    "setup": "echo 'canary_value_42' > /tmp/e2e_readable.txt",
-    "instruction": "Read the file /tmp/e2e_readable.txt and tell me what it contains.",
-    "validate": "jq -r .result $OUTPUT_FILE | grep -qi 'canary_value_42'"
+    "setup": "echo 'canary_value_42' > data/agent-workspace/e2e_readable.txt",
+    "instruction": "Read the file e2e_readable.txt in your workspace and tell me what it contains.",
+    "validate": "jq -r .result $OUTPUT_FILE | grep -qi 'canary_value_42'",
+    "teardown": "rm -f data/agent-workspace/e2e_readable.txt"
   },
   {
     "id": "memory_store",
@@ -27,20 +29,22 @@
   },
   {
     "id": "knowledge_search",
-    "setup": "mkdir -p knowledge/reference && echo 'The capital of Freedonia is Glorpville.' > knowledge/reference/e2e_fact.md",
+    "setup": "mkdir -p data/agent-workspace/knowledge/reference && echo '# Freedonia\nThe capital of Freedonia is Glorpville.' > data/agent-workspace/knowledge/reference/e2e_fact.md",
     "instruction": "Search your knowledge base for information about Freedonia.",
     "validate": "jq -r .result $OUTPUT_FILE | grep -qi 'Glorpville'",
-    "teardown": "rm -f knowledge/reference/e2e_fact.md"
+    "teardown": "rm -f data/agent-workspace/knowledge/reference/e2e_fact.md"
   },
   {
     "id": "topic_list",
+    "setup": "mkdir -p data/agent-workspace/topics && cp topics/*.md data/agent-workspace/topics/ 2>/dev/null || true",
     "instruction": "List all available topics.",
-    "validate": "jq -r .result $OUTPUT_FILE | grep -qi 'research\\|code.review\\|writing'"
+    "validate": "jq -r .result $OUTPUT_FILE | grep -qi 'research\\|code.review\\|writing'",
+    "teardown": "rm -rf data/agent-workspace/topics"
   },
   {
     "id": "timeout_handling",
     "instruction": "Write a 10000-word essay about every planet in the solar system in extreme detail.",
-    "timeout": 5,
+    "timeout": 10,
     "expect_failure": true,
     "validate": "jq -r .success $OUTPUT_FILE | grep -q 'false'"
   }
