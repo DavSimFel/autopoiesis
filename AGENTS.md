@@ -79,6 +79,15 @@ Startup order (sequence matters):
 - Delete branch after merge
 - Commit format: `feat(chat): add provider caching (#42)`
 
+## Post-Merge Smoke Test (MANDATORY)
+After every merge to `main`, run a smoke test before declaring success:
+1. `git pull origin main`
+2. `ruff check . && ruff format --check .`
+3. `pyright`
+4. `python -m pytest` (full suite)
+5. If ANY check fails → fix immediately on a hotfix branch, do NOT leave main broken
+Never merge the next PR until main is green.
+
 ## Security
 - Never commit secrets or tokens
 - `.env`, sqlite artifacts, caches, virtualenv must stay in `.gitignore`
