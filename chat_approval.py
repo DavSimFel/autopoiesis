@@ -189,9 +189,7 @@ def _collect_batch_decisions(requests: list[dict[str, Any]]) -> list[dict[str, A
         return decisions
 
     denial_message = _prompt_denial_reason()
-    return [
-        _decision_entry(str(req["tool_call_id"]), False, denial_message) for req in requests
-    ]
+    return [_decision_entry(str(req["tool_call_id"]), False, denial_message) for req in requests]
 
 
 def _prompt_denial_reason() -> str | None:

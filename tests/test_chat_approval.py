@@ -89,7 +89,8 @@ class TestSingleDecision:
         assert result["decisions"][0]["denial_message"] == "User denied this action."
 
     def test_unrecognized_input_denies_with_reason(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setattr("builtins.input", _input_feeder(["maybe", "Changed my mind"]))
         payload = _make_payload([_request("c1", "run")])
@@ -170,7 +171,6 @@ class TestDeserializeConsistency:
     """Ensure deserialize uses the same default denial message."""
 
     def test_missing_denial_message_uses_default(self) -> None:
-
 
         store = MagicMock()
         store.verify_and_consume.return_value = [
