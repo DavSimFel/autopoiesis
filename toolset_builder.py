@@ -166,7 +166,7 @@ def _build_exec_toolset() -> AbstractToolset[AgentDeps]:
 def build_toolsets(
     memory_db_path: str | None = None,
     subscription_registry: SubscriptionRegistry | None = None,
-knowledge_db_path: str | None = None,
+    knowledge_db_path: str | None = None,
     knowledge_context: str = "",
     topic_registry: TopicRegistry | None = None,
 ) -> tuple[list[AbstractToolset[AgentDeps]], str]:
