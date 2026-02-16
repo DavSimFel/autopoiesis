@@ -744,7 +744,9 @@ def cli_chat_loop() -> None:
 def _rotate_key(base_dir: Path) -> None:
     approval_store = ApprovalStore.from_env(base_dir=base_dir)
     key_manager = ApprovalKeyManager.from_env(base_dir=base_dir)
-    key_manager.rotate_key_interactive(expire_pending_envelopes=approval_store.expire_pending_envelopes)
+    key_manager.rotate_key_interactive(
+        expire_pending_envelopes=approval_store.expire_pending_envelopes
+    )
     print("Approval signing key rotated. Pending approvals were expired.")
 
 

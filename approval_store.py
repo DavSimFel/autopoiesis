@@ -167,9 +167,7 @@ class ApprovalStore:
             if row is None:
                 raise ApprovalVerificationError("unknown_nonce", "Approval nonce was not found.")
             self._verify_signature_stage(row=row, key_manager=key_manager)
-            tool_calls = cast(
-                list[DeferredToolCall], json.loads(str(row["tool_calls_json"]))
-            )
+            tool_calls = cast(list[DeferredToolCall], json.loads(str(row["tool_calls_json"])))
             stored_scope = ApprovalScope.from_dict(
                 cast(dict[str, Any], json.loads(str(row["scope_json"])))
             )
@@ -226,9 +224,7 @@ class ApprovalStore:
                 (cutoff,),
             )
 
-    def _verify_signature_stage(
-        self, *, row: sqlite3.Row, key_manager: ApprovalKeyManager
-    ) -> None:
+    def _verify_signature_stage(self, *, row: sqlite3.Row, key_manager: ApprovalKeyManager) -> None:
         key_id = str(row["key_id"])
         signed_payload = row["signed_object_json"]
         signature_hex = row["signature_hex"]
@@ -399,7 +395,9 @@ class ApprovalStore:
             migrated_consumed_at = (
                 now
                 if state == "pending"
-                else int(row["consumed_at"]) if row["consumed_at"] is not None else None
+                else int(row["consumed_at"])
+                if row["consumed_at"] is not None
+                else None
             )
             conn.execute(
                 """
@@ -452,13 +450,7 @@ def _resolve_approval_db_path(base_dir: Path) -> Path:
         path = Path(explicit)
         resolved = path if path.is_absolute() else (base_dir / path)
         return resolved.resolve()
-    db_url = os.getenv("DBOS_SYSTEM_DATABASE_URL", "sqlite:///dbostest.sqlite")
-    if db_url.startswith("sqlite:///"):
-        return Path(db_url.removeprefix("sqlite:///")).resolve()
-    raise SystemExit(
-        "Approval store requires SQLite. Set APPROVAL_DB_PATH "
-        "or use sqlite:/// DBOS_SYSTEM_DATABASE_URL."
-    )
+    return (base_dir / "data/approvals.sqlite").resolve()
 
 
 def _table_exists(conn: sqlite3.Connection, table_name: str) -> bool:

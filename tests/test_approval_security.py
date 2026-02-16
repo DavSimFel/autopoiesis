@@ -55,7 +55,9 @@ def _paths(tmp_path: Path) -> KeyPaths:
     )
 
 
-def _unlocked_key_manager(tmp_path: Path, *, passphrase: str = "passphrase") -> ApprovalKeyManager:
+def _unlocked_key_manager(
+    tmp_path: Path, *, passphrase: str = "passphrase-123"
+) -> ApprovalKeyManager:
     manager = ApprovalKeyManager(_paths(tmp_path))
     manager.create_initial_key(passphrase)
     manager.unlock(passphrase)
@@ -365,6 +367,13 @@ def test_unlock_rejects_wrong_passphrase(tmp_path: Path) -> None:
     with pytest.raises(SystemExit) as exc:
         manager.unlock("wrong-passphrase")
     assert "Invalid approval passphrase." in str(exc.value)
+
+
+def test_create_key_rejects_short_passphrase(tmp_path: Path) -> None:
+    manager = ApprovalKeyManager(_paths(tmp_path))
+    with pytest.raises(SystemExit) as exc:
+        manager.create_initial_key("short")
+    assert "at least" in str(exc.value)
 
 
 def test_rotation_invalidates_pending_envelopes(tmp_path: Path) -> None:

@@ -41,7 +41,7 @@ class SubmittedDecision(SignedDecision):
     denial_message: str | None
 
 
-def _empty_string_list() -> list[str]:
+def _string_list_default() -> list[str]:
     return []
 
 
@@ -53,7 +53,7 @@ class ApprovalScope:
     workspace_root: str
     agent_name: str
     scope_schema_version: int = SCOPE_SCHEMA_VERSION
-    tool_call_ids: list[str] = field(default_factory=_empty_string_list)
+    tool_call_ids: list[str] = field(default_factory=_string_list_default)
     toolset_mode: str = TOOLSET_MODE
     allowed_paths: list[str] | None = None
     max_cost_cents: int | None = None
@@ -165,8 +165,7 @@ def compute_plan_hash(scope: ApprovalScope, tool_calls: list[DeferredToolCall]) 
 
 def signed_decisions_from_submitted(decisions: list[SubmittedDecision]) -> list[SignedDecision]:
     return [
-        {"tool_call_id": item["tool_call_id"], "approved": item["approved"]}
-        for item in decisions
+        {"tool_call_id": item["tool_call_id"], "approved": item["approved"]} for item in decisions
     ]
 
 

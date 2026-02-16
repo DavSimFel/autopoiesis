@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, TypedDict, cast
+from uuid import uuid4
 
 from cryptography.exceptions import InvalidSignature, InvalidTag
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
@@ -34,6 +35,7 @@ _ARGON2_LANES = 1
 _SCRYPT_N = 2**15
 _SCRYPT_R = 8
 _SCRYPT_P = 1
+_MIN_PASSPHRASE_LENGTH = 12
 
 
 class KeyringEntry(TypedDict):
@@ -95,8 +97,7 @@ class ApprovalKeyManager:
         self.unlock(passphrase)
 
     def create_initial_key(self, passphrase: str) -> None:
-        if not passphrase:
-            raise SystemExit("Approval signing key passphrase cannot be empty.")
+        _validate_new_passphrase(passphrase, "Approval signing key passphrase")
         if self._paths.private_key_path.exists() or self._paths.public_key_path.exists():
             raise SystemExit("Approval key already exists.")
         self._generate_and_store_new_key(passphrase, retire_existing=False)
@@ -114,6 +115,7 @@ class ApprovalKeyManager:
             _write_json_file(
                 self._paths.private_key_path,
                 _encrypt_private_key(private_key, passphrase),
+                file_mode=0o600,
             )
         self._private_key = private_key
         self._active_key_id = derived_key_id
@@ -127,8 +129,7 @@ class ApprovalKeyManager:
     ) -> None:
         if not current_passphrase:
             raise SystemExit("Current approval passphrase cannot be empty.")
-        if not new_passphrase:
-            raise SystemExit("New approval passphrase cannot be empty.")
+        _validate_new_passphrase(new_passphrase, "New approval passphrase")
         self.unlock(current_passphrase)
         self._private_key = None
         self._active_key_id = None
@@ -210,7 +211,7 @@ class ApprovalKeyManager:
             "created_at": created_at,
         }
         self._paths.key_dir.mkdir(parents=True, exist_ok=True)
-        _write_json_file(self._paths.private_key_path, encrypted_private)
+        _write_json_file(self._paths.private_key_path, encrypted_private, file_mode=0o600)
         _write_json_file(self._paths.public_key_path, active_public)
         _upsert_keyring_entry(
             path=self._paths.keyring_path,
@@ -283,9 +284,22 @@ def _read_json_file(path: Path) -> dict[str, Any]:
     return cast(dict[str, Any], data)
 
 
-def _write_json_file(path: Path, payload: dict[str, Any]) -> None:
+def _write_json_file(path: Path, payload: dict[str, Any], *, file_mode: int = 0o644) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, ensure_ascii=True), encoding="utf-8")
+    temp_path = path.with_name(f".{path.name}.{uuid4().hex}.tmp")
+    encoded = json.dumps(payload, indent=2, ensure_ascii=True).encode("utf-8")
+    fd = os.open(temp_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, file_mode)
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(encoded)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.chmod(temp_path, file_mode)
+        os.replace(temp_path, path)
+        os.chmod(path, file_mode)
+    finally:
+        if temp_path.exists():
+            temp_path.unlink()
 
 
 def _encrypt_private_key(private_key: Ed25519PrivateKey, passphrase: str) -> dict[str, Any]:
@@ -311,8 +325,10 @@ def _decrypt_private_key(payload: dict[str, Any], passphrase: str) -> Ed25519Pri
     kdf_data = payload.get("kdf")
     aead_data = payload.get("aead")
     ciphertext_b64 = payload.get("ciphertext_b64")
-    if not isinstance(kdf_data, dict) or not isinstance(aead_data, dict) or not isinstance(
-        ciphertext_b64, str
+    if (
+        not isinstance(kdf_data, dict)
+        or not isinstance(aead_data, dict)
+        or not isinstance(ciphertext_b64, str)
     ):
         raise SystemExit("Approval private key file is malformed.")
     aead_payload = cast(dict[str, Any], aead_data)
@@ -478,3 +494,10 @@ def _b64_decode(value: str) -> bytes:
 
 def _utc_now_iso() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def _validate_new_passphrase(passphrase: str, field_name: str) -> None:
+    if not passphrase:
+        raise SystemExit(f"{field_name} cannot be empty.")
+    if len(passphrase) < _MIN_PASSPHRASE_LENGTH:
+        raise SystemExit(f"{field_name} must be at least {_MIN_PASSPHRASE_LENGTH} characters.")

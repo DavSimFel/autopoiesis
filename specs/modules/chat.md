@@ -34,7 +34,7 @@ that execute work items from the queue.
 | `DBOS_APP_NAME` | No | `pydantic_dbos_agent` | `main()` | DBOS app name |
 | `DBOS_AGENT_NAME` | No | `chat` | `main()` | Agent name |
 | `DBOS_SYSTEM_DATABASE_URL` | No | `sqlite:///dbostest.sqlite` | `main()` | DBOS database URL |
-| `APPROVAL_DB_PATH` | No | derived from `DBOS_SYSTEM_DATABASE_URL` | `ApprovalStore.from_env(base_dir=...)` | Optional SQLite override for approval envelopes |
+| `APPROVAL_DB_PATH` | No | `data/approvals.sqlite` | `ApprovalStore.from_env(base_dir=...)` | Optional SQLite override for approval envelopes |
 | `APPROVAL_TTL_SECONDS` | No | `3600` | `ApprovalStore.from_env(base_dir=...)` | Approval expiry window in seconds |
 | `APPROVAL_KEY_DIR` | No | `data/keys` | `ApprovalKeyManager.from_env(base_dir=...)` | Base directory for approval key material |
 | `APPROVAL_PRIVATE_KEY_PATH` | No | `$APPROVAL_KEY_DIR/approval.key` | `ApprovalKeyManager.from_env(base_dir=...)` | Encrypted Ed25519 private key path |

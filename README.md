@@ -23,7 +23,7 @@ Edit `.env`:
 - `APPROVAL_KEYRING_PATH` sets keyring path for active/retired verification keys (default: `$APPROVAL_KEY_DIR/keyring.json`)
 - `NONCE_RETENTION_PERIOD_SECONDS` sets expired envelope retention (default: `604800`)
 - `APPROVAL_CLOCK_SKEW_SECONDS` sets startup skew margin for retention invariant checks (default: `60`)
-- `APPROVAL_DB_PATH` (optional) overrides where deferred approval envelopes are stored. If unset, uses the SQLite file from `DBOS_SYSTEM_DATABASE_URL`.
+- `APPROVAL_DB_PATH` (optional) overrides where deferred approval envelopes are stored. If unset, uses `data/approvals.sqlite`.
 - Optional DBOS settings:
   - `DBOS_APP_NAME`
   - `DBOS_AGENT_NAME`
