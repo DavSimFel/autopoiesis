@@ -74,7 +74,7 @@ split into focused companion modules.
   Custom skills override shipped skills when names collide.
 - `chat_runtime.build_agent(provider, name, toolsets, system_prompt, options)` — Anthropic/OpenRouter factory
   that resolves model fallback, strict tool preparation, history processors, and model settings.
-- `toolset_builder.strict_tool_definitions(...)` — marks all tools `strict=True` for OpenAI-compatible providers
+- `toolset_builder.strict_tool_definitions(...)` — marks the first `_MAX_STRICT_TOOLS` (20) tools `strict=True` for OpenAI-compatible providers; remaining tools stay non-strict to respect Anthropic's limit
 - `chat_runtime.instrument_agent(agent)` — Enables OpenTelemetry instrumentation when
   `OTEL_EXPORTER_OTLP_ENDPOINT` is set. Returns `True` if applied.
 
