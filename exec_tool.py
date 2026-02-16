@@ -1,8 +1,4 @@
-"""Shell execution tool for the agent runtime.
-
-Spawns commands with optional PTY support, timeout, and background mode.
-Full output is written to a log file; only a summary is returned.
-"""
+"""Shell execution tool with PTY support, timeout, and background mode."""
 
 from __future__ import annotations
 
@@ -216,6 +212,22 @@ async def _wait_with_timeout(
     return _build_summary(session)
 
 
+async def _finish_session(
+    session: exec_registry.ProcessSession,
+    timeout: float,
+) -> ToolReturn:
+    """Register a session and wait or background-monitor it."""
+    exec_registry.add(session)
+    if session.background:
+        task = asyncio.create_task(_monitor_background(session))
+        _background_tasks.add(task)
+        task.add_done_callback(_background_tasks.discard)
+        summary = _build_summary(session)
+    else:
+        summary = await _wait_with_timeout(session, timeout)
+    return _to_tool_return(summary)
+
+
 async def execute(
     ctx: RunContext[AgentDeps],
     command: str,
@@ -227,44 +239,24 @@ async def execute(
 ) -> ToolReturn:
     """Run a shell command in the workspace.
 
-    Use for system queries, builds, tests, git, or any task needing shell access.
-
     Args:
-        command: Shell command to execute (e.g. "date", "pytest -q", "git status").
-        cwd: Working directory relative to workspace root. Defaults to workspace root.
-        env: Extra environment variables to set. Dangerous keys (LD_PRELOAD etc.) are blocked.
-        timeout: Seconds before the process is killed. Only applies to foreground commands.
-        background: Run in background and return session id immediately. Use for long-running tasks.
-
-    Returns:
-        ToolReturn with command output summary and session metadata.
+        command: Shell command to run (e.g. "pytest -q", "git status").
+        cwd: Working directory relative to workspace root.
+        env: Extra environment variables. Dangerous keys are blocked.
+        timeout: Seconds before kill (foreground only).
+        background: Return immediately with a session id for monitoring.
     """
     workspace_root = Path(ctx.deps.backend.root_dir)
     safe_cwd = sandbox_cwd(cwd, workspace_root)
     safe_env = validate_env(env)
     session_id = exec_registry.new_session_id()
     log_path = exec_registry.log_path_for(workspace_root, session_id)
-
     proc, master_fd = await _spawn_subprocess(command, safe_cwd, safe_env, log_path)
-
     session = exec_registry.ProcessSession(
-        session_id=session_id,
-        command=command,
-        process=proc,
-        log_path=log_path,
-        master_fd=master_fd,
-        background=background,
+        session_id=session_id, command=command, process=proc,
+        log_path=log_path, master_fd=master_fd, background=background,
     )
-    exec_registry.add(session)
-
-    if background:
-        task = asyncio.create_task(_monitor_background(session))
-        _background_tasks.add(task)
-        task.add_done_callback(_background_tasks.discard)
-        summary = _build_summary(session)
-    else:
-        summary = await _wait_with_timeout(session, timeout)
-    return _to_tool_return(summary)
+    return await _finish_session(session, timeout)
 
 
 async def execute_pty(
@@ -276,42 +268,23 @@ async def execute_pty(
     timeout: float = _DEFAULT_TIMEOUT,
     background: bool = False,
 ) -> ToolReturn:
-    """Run a shell command with a pseudo-terminal.
-
-    Use for interactive programs (REPLs, TUIs, coding agents).
-
-    Same as execute but allocates a PTY, which some programs require for proper output.
+    """Run a shell command under a pseudo-terminal (for REPLs, TUIs).
 
     Args:
-        command: Shell command to execute under a PTY.
+        command: Shell command to run under a PTY.
         cwd: Working directory relative to workspace root.
         env: Extra environment variables. Dangerous keys are blocked.
-        timeout: Seconds before kill. Foreground only.
-        background: Run in background and return session id for monitoring via process tools.
+        timeout: Seconds before kill (foreground only).
+        background: Return immediately with a session id for monitoring.
     """
     workspace_root = Path(ctx.deps.backend.root_dir)
     safe_cwd = sandbox_cwd(cwd, workspace_root)
     safe_env = validate_env(env)
     session_id = exec_registry.new_session_id()
     log_path = exec_registry.log_path_for(workspace_root, session_id)
-
     proc, master_fd = await _spawn_pty_session(command, safe_cwd, safe_env, log_path)
-
     session = exec_registry.ProcessSession(
-        session_id=session_id,
-        command=command,
-        process=proc,
-        log_path=log_path,
-        master_fd=master_fd,
-        background=background,
+        session_id=session_id, command=command, process=proc,
+        log_path=log_path, master_fd=master_fd, background=background,
     )
-    exec_registry.add(session)
-
-    if background:
-        task = asyncio.create_task(_monitor_background(session))
-        _background_tasks.add(task)
-        task.add_done_callback(_background_tasks.discard)
-        summary = _build_summary(session)
-    else:
-        summary = await _wait_with_timeout(session, timeout)
-    return _to_tool_return(summary)
+    return await _finish_session(session, timeout)
