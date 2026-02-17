@@ -67,3 +67,5 @@ autopoiesis serve [--host HOST] [--port PORT]
 ## Change Log
 
 - 2026-02-16: Initial server module (#126)
+
+- 2026-02-17: Paths updated for `src/autopoiesis/` layout (#152)

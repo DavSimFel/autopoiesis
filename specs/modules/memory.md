@@ -13,3 +13,5 @@ See `specs/modules/knowledge.md` for the current memory/knowledge architecture.
 
 `store/knowledge_migration.py` is retained as a reference for migrating legacy
 SQLite memory entries to knowledge markdown files.
+
+- 2026-02-17: Paths updated for `src/autopoiesis/` layout (#152)
