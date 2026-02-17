@@ -26,6 +26,7 @@ from pydantic_ai.messages import (
 from pydantic_ai.tools import DeferredToolResults, RunContext
 
 from autopoiesis.agent.runtime import Runtime, get_runtime
+from autopoiesis.agent.topic_activation import activate_topic_ref
 from autopoiesis.display.stream_formatting import forward_stream_events
 from autopoiesis.display.streaming import StreamHandle, ToolAwareStreamHandle, take_stream
 from autopoiesis.infra import otel_tracing
@@ -35,7 +36,7 @@ from autopoiesis.infra.approval.chat_approval import (
     serialize_deferred_requests,
 )
 from autopoiesis.infra.approval.types import ApprovalScope
-from autopoiesis.infra.work_queue import work_queue
+from autopoiesis.infra.work_queue import dispatch_workitem
 from autopoiesis.models import AgentDeps, WorkItem, WorkItemOutput
 from autopoiesis.store.history import clear_checkpoint, load_checkpoint, save_checkpoint
 
@@ -198,6 +199,11 @@ def run_agent_step(work_item_dict: dict[str, Any]) -> dict[str, Any]:
     """Execute one work item and return a serialized WorkItemOutput."""
     rt = get_runtime()
     item = WorkItem.model_validate(work_item_dict)
+
+    # Auto-activate topic when topic_ref is set (before agent executes)
+    if item.topic_ref:
+        activate_topic_ref(item.topic_ref)
+
     recovered_history_json = load_checkpoint(rt.history_db_path, item.id)
     history_json = recovered_history_json or item.input.message_history_json
     history = _deserialize_history(history_json)
@@ -260,15 +266,23 @@ def execute_work_item(work_item_dict: dict[str, Any]) -> dict[str, Any]:
 
 
 def enqueue(item: WorkItem) -> str:
-    """Enqueue a work item and return its id."""
+    """Enqueue a work item and return its id.
+
+    Routes to the correct per-agent queue via :func:`dispatch_workitem`.
+    """
+    queue = dispatch_workitem(item)
     with SetEnqueueOptions(priority=int(item.priority)):
-        work_queue.enqueue(execute_work_item, item.model_dump())
+        queue.enqueue(execute_work_item, item.model_dump())
     return item.id
 
 
 def enqueue_and_wait(item: WorkItem) -> WorkItemOutput:
-    """Enqueue a work item and block until complete."""
+    """Enqueue a work item and block until complete.
+
+    Routes to the correct per-agent queue via :func:`dispatch_workitem`.
+    """
+    queue = dispatch_workitem(item)
     with SetEnqueueOptions(priority=int(item.priority)):
-        handle = work_queue.enqueue(execute_work_item, item.model_dump())
+        handle = queue.enqueue(execute_work_item, item.model_dump())
     raw = handle.get_result()
     return WorkItemOutput.model_validate(raw)

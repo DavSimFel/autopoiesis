@@ -24,7 +24,7 @@ def write_topic(topics_dir: Path, name: str, content: str) -> Path:
 
 
 _SKIP_ROUTING = pytest.mark.skip(
-    reason="Blocked on #146 Phase A - WorkItem dispatch not implemented"
+    reason="Phase B-3: needs full multi-agent runtime with owner-based routing"
 )
 
 _DAILY_BRIEFING = (

@@ -42,6 +42,15 @@ except ModuleNotFoundError as exc:
     ) from exc
 
 
+# Module-level registry for loaded agent configs (populated in main() when --config is provided)
+_agent_configs: dict[str, object] = {}
+
+
+def get_agent_configs() -> dict[str, object]:
+    """Return loaded agent configs, or empty dict if none were loaded."""
+    return _agent_configs
+
+
 def _rotate_key(agent_paths: AgentPaths) -> None:
     """Rotate active approval signing key and expire pending envelopes."""
     approval_store = ApprovalStore.from_env(base_dir=agent_paths.root)
@@ -178,6 +187,20 @@ def main() -> None:
     args = parse_cli_args(repo_root)
     agent_name = resolve_agent_name(getattr(args, "agent", None))
     agent_paths = resolve_agent_workspace(agent_name)
+
+    # Load multi-agent config if provided
+    config_path_str = getattr(args, "config", None) or os.environ.get("AUTOPOIESIS_AGENTS_CONFIG")
+    if config_path_str:
+        from autopoiesis.agent.config import load_agent_configs
+        from autopoiesis.agent.validation import validate_slug
+
+        # Validate agent name early
+        if args.agent:
+            validate_slug(args.agent)
+
+        agent_configs = load_agent_configs(Path(config_path_str))
+        # Store on a module-level registry for other components to access
+        _agent_configs.update(agent_configs)
 
     if args.command == "rotate-key":
         _rotate_key(agent_paths)

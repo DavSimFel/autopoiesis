@@ -9,8 +9,6 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-import pytest
-
 from autopoiesis.agent.workspace import resolve_agent_workspace
 from autopoiesis.topics.topic_manager import TopicRegistry
 
@@ -100,8 +98,9 @@ class TestSharedDBOS:
     on their WorkItems.
     """
 
-    @pytest.mark.skip(reason="Phase B wiring: needs actual DBOS queue routing")
     def test_agents_share_system_db(self, tmp_path: Path) -> None:
+        """Verify dispatch_workitem routes different agent_ids to different queues."""
+        from autopoiesis.infra.work_queue import dispatch_workitem
         from autopoiesis.models import WorkItem, WorkItemInput, WorkItemType
 
         item_a = WorkItem(
@@ -115,9 +114,21 @@ class TestSharedDBOS:
             agent_id="beta",
         )
 
-        # Both items are valid WorkItems with different agent_ids
-        assert item_a.agent_id == "alpha"
-        assert item_b.agent_id == "beta"
+        queue_a = dispatch_workitem(item_a)
+        queue_b = dispatch_workitem(item_b)
+
+        # Different agent_ids → different queues
+        assert queue_a is not queue_b
+        assert queue_a.name == "agent_work_alpha"
+        assert queue_b.name == "agent_work_beta"
+
+        # Same agent_id → same queue
+        item_a2 = WorkItem(
+            type=WorkItemType.CHAT,
+            input=WorkItemInput(prompt="another from alpha"),
+            agent_id="alpha",
+        )
+        assert dispatch_workitem(item_a2) is queue_a
         assert item_a.id != item_b.id
 
 

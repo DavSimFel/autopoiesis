@@ -10,7 +10,9 @@ from pathlib import Path
 
 import pytest
 
-_SKIP_REASON = "Blocked on #146 Phase A - multi-agent WorkItem flow not implemented"
+_SKIP_REASON = (
+    "Phase B-3: needs planner/coder/reviewer agent configs and topic-status-triggered routing"
+)
 
 pytestmark = pytest.mark.skip(reason=_SKIP_REASON)
 
