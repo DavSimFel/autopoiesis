@@ -7,6 +7,7 @@ injected into the agent context when activated.
 
 from __future__ import annotations
 
+import fcntl
 import logging
 from dataclasses import dataclass
 from pathlib import Path
@@ -19,10 +20,41 @@ logger = logging.getLogger(__name__)
 TriggerType = Literal["manual", "cron", "webhook"]
 ApprovalMode = Literal["auto", "prompt", "deny"]
 TopicPriority = Literal["critical", "high", "normal", "low"]
+TopicType = Literal["general", "task", "project", "goal", "review", "conversation"]
+TopicStatus = Literal["open", "in-progress", "review", "done", "archived"]
 
 _FRONTMATTER_DELIMITER = "---"
 MAX_ACTIVE_TOPICS = 5
 MAX_TOPIC_CONTEXT_BYTES = 10_240  # 10 KB
+
+VALID_TOPIC_TYPES = frozenset({"general", "task", "project", "goal", "review", "conversation"})
+VALID_TOPIC_STATUSES = frozenset({"open", "in-progress", "review", "done", "archived"})
+
+# Valid status transitions per topic type.  ``general`` has NO lifecycle.
+STATUS_TRANSITIONS: dict[str, dict[str, list[str]]] = {
+    "task": {
+        "open": ["in-progress"],
+        "in-progress": ["review"],
+        "review": ["done"],
+        "done": ["archived"],
+    },
+    "project": {
+        "open": ["in-progress"],
+        "in-progress": ["done"],
+        "done": ["archived"],
+    },
+    "goal": {
+        "open": ["in-progress"],
+        "in-progress": ["done"],
+    },
+    "review": {
+        "open": ["in-progress"],
+        "in-progress": ["done"],
+    },
+    "conversation": {
+        "open": ["archived"],
+    },
+}
 
 
 @dataclass(frozen=True)
@@ -47,6 +79,9 @@ class Topic:
     enabled: bool
     priority: TopicPriority
     file_path: Path
+    type: TopicType = "general"
+    status: TopicStatus | None = None
+    owner: str | None = None
 
 
 def _parse_trigger(raw: dict[str, str]) -> TopicTrigger:
@@ -89,7 +124,6 @@ def _parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
         return {}, text
     if not isinstance(parsed, dict):
         return {}, text
-    # yaml.safe_load returns dict[str, Any] for valid YAML mappings
     result = cast(dict[str, Any], parsed)
     return result, body
 
@@ -121,6 +155,17 @@ def parse_topic(file_path: Path) -> Topic:
         else "normal"
     )
 
+    raw_type: str = str(meta.get("type", "general"))
+    topic_type: TopicType = raw_type if raw_type in VALID_TOPIC_TYPES else "general"  # type: ignore[assignment]
+
+    raw_status: object = meta.get("status")
+    topic_status: TopicStatus | None = None
+    if isinstance(raw_status, str) and raw_status in VALID_TOPIC_STATUSES:
+        topic_status = raw_status  # type: ignore[assignment]
+
+    raw_owner: object = meta.get("owner")
+    topic_owner: str | None = str(raw_owner) if raw_owner is not None else None
+
     name = file_path.stem
 
     return Topic(
@@ -132,6 +177,9 @@ def parse_topic(file_path: Path) -> Topic:
         enabled=bool(meta.get("enabled", True)),
         priority=priority,
         file_path=file_path,
+        type=topic_type,
+        status=topic_status,
+        owner=topic_owner,
     )
 
 
@@ -156,6 +204,11 @@ class TopicRegistry:
                 self._topics[topic.name] = topic
             except Exception:
                 logger.warning("Failed to parse topic file: %s", md_file, exc_info=True)
+
+    @property
+    def topics_dir(self) -> Path:
+        """Return the topics directory path."""
+        return self._topics_dir
 
     def reload(self) -> None:
         """Re-scan and reload all topics from disk."""
@@ -254,3 +307,139 @@ def build_topic_context(registry: TopicRegistry) -> TopicContext | None:
 
     instructions = "\n\n".join(parts)
     return TopicContext(instructions=instructions, subscription_names=all_subs)
+
+
+# ---------------------------------------------------------------------------
+# Frontmatter write helpers (with advisory locking)
+# ---------------------------------------------------------------------------
+
+
+def _write_frontmatter(file_path: Path, meta: dict[str, Any], body: str) -> None:
+    """Write frontmatter + body to *file_path* with advisory locking."""
+    content = _FRONTMATTER_DELIMITER + "\n"
+    content += yaml.dump(meta, default_flow_style=False, sort_keys=True)
+    content += _FRONTMATTER_DELIMITER + "\n"
+    if body:
+        content += "\n" + body
+
+    with file_path.open("w", encoding="utf-8") as fh:
+        fcntl.flock(fh, fcntl.LOCK_EX)
+        try:
+            fh.write(content)
+        finally:
+            fcntl.flock(fh, fcntl.LOCK_UN)
+
+
+def _update_frontmatter_field(
+    file_path: Path,
+    field: str,
+    value: str,
+) -> dict[str, Any]:
+    """Read a topic file, update one frontmatter field, write back.
+
+    Returns the updated metadata dict.
+    """
+    text = file_path.read_text(encoding="utf-8")
+    meta, body = _parse_frontmatter(text)
+    meta[field] = value
+    _write_frontmatter(file_path, meta, body)
+    return meta
+
+
+# ---------------------------------------------------------------------------
+# Lifecycle helpers
+# ---------------------------------------------------------------------------
+
+
+def validate_status_transition(
+    topic_type: str,
+    current_status: str | None,
+    new_status: str,
+) -> str | None:
+    """Return an error message if the transition is invalid, else ``None``."""
+    if topic_type == "general":
+        return "Topics of type 'general' have no lifecycle status transitions."
+    transitions = STATUS_TRANSITIONS.get(topic_type)
+    if transitions is None:
+        return f"Unknown topic type '{topic_type}'."
+    if new_status not in VALID_TOPIC_STATUSES:
+        return f"Invalid status '{new_status}'."
+
+    error: str | None = None
+    if current_status is None:
+        if new_status != "open":
+            error = (
+                f"Topic has no status yet; first transition must be to 'open', got '{new_status}'."
+            )
+    elif new_status not in transitions.get(current_status, []):
+        allowed = transitions.get(current_status, [])
+        error = (
+            f"Cannot transition from '{current_status}' to '{new_status}' "
+            f"for type '{topic_type}'. Allowed: {allowed}."
+        )
+    return error
+
+
+def update_topic_status(registry: TopicRegistry, name: str, status: str) -> str:
+    """Validate and apply a status transition for a topic."""
+    topic = registry.get_topic(name)
+    if topic is None:
+        return f"Topic '{name}' not found."
+    error = validate_status_transition(topic.type, topic.status, status)
+    if error is not None:
+        return error
+    _update_frontmatter_field(topic.file_path, "status", status)
+    registry.reload()
+    return f"Topic '{name}' status updated to '{status}'."
+
+
+def set_topic_owner(registry: TopicRegistry, name: str, owner: str) -> str:
+    """Set the owner field on a topic."""
+    topic = registry.get_topic(name)
+    if topic is None:
+        return f"Topic '{name}' not found."
+    _update_frontmatter_field(topic.file_path, "owner", owner)
+    registry.reload()
+    return f"Topic '{name}' owner set to '{owner}'."
+
+
+def create_topic(
+    registry: TopicRegistry,
+    name: str,
+    *,
+    type: str = "general",
+    body: str = "",
+    owner: str | None = None,
+) -> str:
+    """Create a new topic file with frontmatter."""
+    if type not in VALID_TOPIC_TYPES:
+        return f"Invalid topic type '{type}'."
+    file_path = registry.topics_dir / f"{name}.md"
+    if file_path.exists():
+        return f"Topic '{name}' already exists."
+    meta: dict[str, Any] = {"type": type}
+    if owner is not None:
+        meta["owner"] = owner
+    _write_frontmatter(file_path, meta, body)
+    registry.reload()
+    return f"Topic '{name}' created."
+
+
+def query_topics(
+    registry: TopicRegistry,
+    *,
+    type: str | None = None,
+    status: str | None = None,
+    owner: str | None = None,
+) -> list[Topic]:
+    """Filter topics by type, status, and/or owner."""
+    results: list[Topic] = []
+    for topic in registry.list_topics():
+        if type is not None and topic.type != type:
+            continue
+        if status is not None and topic.status != status:
+            continue
+        if owner is not None and topic.owner != owner:
+            continue
+        results.append(topic)
+    return results

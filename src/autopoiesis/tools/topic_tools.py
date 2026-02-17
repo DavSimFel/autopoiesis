@@ -1,7 +1,7 @@
 """PydanticAI tool definitions for topic management.
 
-Exposes activate_topic, deactivate_topic, and list_topics as agent tools
-backed by the TopicRegistry.
+Exposes activate_topic, deactivate_topic, list_topics, and lifecycle tools
+(create, update status, set owner, query) backed by the TopicRegistry.
 """
 
 from __future__ import annotations
@@ -10,7 +10,22 @@ from pydantic_ai import RunContext
 from pydantic_ai.toolsets import FunctionToolset
 
 from autopoiesis.models import AgentDeps
-from autopoiesis.topics.topic_manager import Topic, TopicRegistry
+from autopoiesis.topics.topic_manager import (
+    Topic,
+    TopicRegistry,
+)
+from autopoiesis.topics.topic_manager import (
+    create_topic as _create_topic,
+)
+from autopoiesis.topics.topic_manager import (
+    query_topics as _query_topics,
+)
+from autopoiesis.topics.topic_manager import (
+    set_topic_owner as _set_topic_owner,
+)
+from autopoiesis.topics.topic_manager import (
+    update_topic_status as _update_topic_status,
+)
 
 _TOPIC_INSTRUCTIONS = """\
 ## Topics
@@ -18,7 +33,11 @@ Topics are situational context bundles that inject task-specific instructions
 and subscriptions when activated.
 - `activate_topic` — activate a topic for the current session
 - `deactivate_topic` — deactivate a topic
-- `list_topics` — show all available topics with status"""
+- `list_topics` — show all available topics with status
+- `create_topic` — create a new topic file with type and optional owner
+- `update_topic_status` — transition a topic's lifecycle status
+- `set_topic_owner` — assign an owner role to a topic
+- `query_topics` — filter topics by type, status, or owner"""
 
 
 def _try_activate(registry: TopicRegistry, name: str) -> str | None:
@@ -44,14 +63,14 @@ def _format_topic_list(registry: TopicRegistry, topics: list[Topic]) -> str:
     return "\n".join(lines)
 
 
-def _register_tools(
+def _register_core_tools(
     toolset: FunctionToolset[AgentDeps],
     registry: TopicRegistry,
+    meta: dict[str, str],
 ) -> None:
-    """Register all topic tools on the toolset."""
-    topic_meta: dict[str, str] = {"category": "topics"}
+    """Register activate, deactivate, and list tools."""
 
-    @toolset.tool(metadata=topic_meta)
+    @toolset.tool(metadata=meta)
     async def activate_topic(
         ctx: RunContext[AgentDeps],
         name: str,
@@ -74,7 +93,7 @@ def _register_tools(
             return error
         return f"Activated topic '{name}'. Its instructions are now in context."
 
-    @toolset.tool(metadata=topic_meta)
+    @toolset.tool(metadata=meta)
     async def deactivate_topic(
         ctx: RunContext[AgentDeps],
         name: str,
@@ -89,7 +108,7 @@ def _register_tools(
         registry.deactivate(name)
         return f"Deactivated topic '{name}'."
 
-    @toolset.tool(metadata=topic_meta)
+    @toolset.tool(metadata=meta)
     async def list_topics(
         ctx: RunContext[AgentDeps],
     ) -> str:
@@ -99,8 +118,87 @@ def _register_tools(
             return "No topics found."
         return _format_topic_list(registry, topics)
 
-    # Ensure closures are retained
     _ = (activate_topic, deactivate_topic, list_topics)
+
+
+def _register_lifecycle_tools(
+    toolset: FunctionToolset[AgentDeps],
+    registry: TopicRegistry,
+    meta: dict[str, str],
+) -> None:
+    """Register lifecycle tools: create, update status, set owner, query."""
+
+    @toolset.tool(metadata=meta)
+    async def update_topic_status(
+        ctx: RunContext[AgentDeps],
+        name: str,
+        status: str,
+    ) -> str:
+        """Transition a topic's lifecycle status (e.g. open → in-progress → done).
+
+        Args:
+            name: Name of the topic to update.
+            status: Target status (open, in-progress, review, done, archived).
+        """
+        return _update_topic_status(registry, name, status)
+
+    @toolset.tool(metadata=meta)
+    async def set_topic_owner(
+        ctx: RunContext[AgentDeps],
+        name: str,
+        owner: str,
+    ) -> str:
+        """Assign an owner role to a topic for routing.
+
+        Args:
+            name: Name of the topic.
+            owner: Agent role string to assign as owner.
+        """
+        return _set_topic_owner(registry, name, owner)
+
+    @toolset.tool(metadata=meta)
+    async def create_topic(
+        ctx: RunContext[AgentDeps],
+        name: str,
+        topic_type: str = "general",
+        body: str = "",
+        owner: str | None = None,
+    ) -> str:
+        """Create a new topic file with frontmatter and body.
+
+        Args:
+            name: Name for the new topic (becomes filename).
+            topic_type: Topic type (general, task, project, goal, review, conversation).
+            body: Markdown body content for the topic instructions.
+            owner: Optional agent role to assign as owner.
+        """
+        return _create_topic(registry, name, type=topic_type, body=body, owner=owner)
+
+    @toolset.tool(metadata=meta)
+    async def query_topics(
+        ctx: RunContext[AgentDeps],
+        topic_type: str | None = None,
+        status: str | None = None,
+        owner: str | None = None,
+    ) -> str:
+        """Filter topics by type, status, and/or owner.
+
+        Args:
+            topic_type: Filter by topic type (e.g. task, project).
+            status: Filter by lifecycle status (e.g. open, done).
+            owner: Filter by owner role.
+        """
+        results = _query_topics(
+            registry,
+            type=topic_type,
+            status=status,
+            owner=owner,
+        )
+        if not results:
+            return "No topics match the given filters."
+        return _format_topic_list(registry, results)
+
+    _ = (update_topic_status, set_topic_owner, create_topic, query_topics)
 
 
 def create_topic_toolset(
@@ -111,5 +209,7 @@ def create_topic_toolset(
         docstring_format="google",
         require_parameter_descriptions=True,
     )
-    _register_tools(toolset, registry)
+    meta: dict[str, str] = {"category": "topics"}
+    _register_core_tools(toolset, registry, meta)
+    _register_lifecycle_tools(toolset, registry, meta)
     return toolset, _TOPIC_INSTRUCTIONS
