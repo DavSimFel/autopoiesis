@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-import subprocess
+import subprocess  # nosec B404 — shell execution is this module's purpose
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -81,7 +81,7 @@ def shell(
 
     timed_out = False
     try:
-        proc = subprocess.run(
+        proc = subprocess.run(  # nosec B602 — shell=True is intentional; commands are classified by command_classifier
             command,
             shell=True,
             capture_output=True,
