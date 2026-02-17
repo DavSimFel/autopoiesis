@@ -2,14 +2,16 @@
 
 ## Overview
 
-Reactive context injection via file and memory subscriptions. The agent subscribes once to a resource; before each turn, subscribed content is automatically materialized and injected into the conversation context.
+> Updated 2026-02-17: Memory subscriptions removed (#151). File subscriptions only.
+
+Reactive context injection via file subscriptions. The agent subscribes once to a resource; before each turn, subscribed content is automatically materialized and injected into the conversation context.
 
 ## Files
 
 | File | Responsibility |
 |------|---------------|
 | `subscriptions.py` | `Subscription` dataclass, `SubscriptionRegistry` (SQLite-backed CRUD), content hashing, truncation |
-| `subscription_tools.py` | PydanticAI tool definitions: `subscribe_file`, `subscribe_memory`, `unsubscribe`, `unsubscribe_all`, `list_subscriptions` |
+| `subscription_tools.py` | PydanticAI tool definitions: `subscribe_file`, `unsubscribe`, `unsubscribe_all`, `list_subscriptions` |
 | `subscription_processor.py` | History processor that materializes subscriptions into `ModelRequest` messages before each turn |
 
 ## Architecture
@@ -19,7 +21,7 @@ Reactive context injection via file and memory subscriptions. The agent subscrib
 A `Subscription` is a frozen dataclass referencing a resource:
 
 - **`kind`**: `file` | `lines` | `memory`
-- **`target`**: file path (file/lines) or query string (memory)
+- **`target`**: file path (file/lines) or 
 - **`line_range`**: optional `(start, end)` for line-scoped file subscriptions
 - **`pattern`**: optional regex filter for file lines
 - **`content_hash`**: SHA-256 prefix of last materialized content
@@ -58,14 +60,12 @@ The processor chain order in `chat.py`:
 | Tool | Purpose |
 |------|---------|
 | `subscribe_file(path, lines?, pattern?)` | Subscribe to a workspace file |
-| `subscribe_memory(query)` | Subscribe to a memory FTS5 search query |
 | `unsubscribe(subscription_id)` | Remove a subscription by id |
 | `unsubscribe_all()` | Clear all subscriptions |
 | `list_subscriptions()` | Show active subscriptions |
 
 ## Dependencies
 
-- `memory_store.py` — for memory subscription resolution (FTS5 search)
 - PydanticAI `HistoryProcessor` — for message injection
 - PydanticAI `ModelRequest.metadata` — for tagging materialization messages
 
