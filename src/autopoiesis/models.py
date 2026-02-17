@@ -99,5 +99,6 @@ class WorkItem(BaseModel):
     priority: WorkItemPriority = WorkItemPriority.NORMAL
     input: WorkItemInput
     output: WorkItemOutput | None = None
+    agent_id: str = "default"
     payload: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

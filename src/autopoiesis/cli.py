@@ -19,6 +19,7 @@ from autopoiesis.agent.runtime import (
     instrument_agent,
     set_runtime,
 )
+from autopoiesis.agent.workspace import AgentPaths, resolve_agent_name, resolve_agent_workspace
 from autopoiesis.infra import otel_tracing
 from autopoiesis.infra.approval.keys import ApprovalKeyManager
 from autopoiesis.infra.approval.policy import ToolPolicyRegistry
@@ -41,10 +42,10 @@ except ModuleNotFoundError as exc:
     ) from exc
 
 
-def _rotate_key(base_dir: Path) -> None:
+def _rotate_key(agent_paths: AgentPaths) -> None:
     """Rotate active approval signing key and expire pending envelopes."""
-    approval_store = ApprovalStore.from_env(base_dir=base_dir)
-    key_manager = ApprovalKeyManager.from_env(base_dir=base_dir)
+    approval_store = ApprovalStore.from_env(base_dir=agent_paths.root)
+    key_manager = ApprovalKeyManager.from_env(base_dir=agent_paths.root)
     key_manager.rotate_key_interactive(
         expire_pending_envelopes=approval_store.expire_pending_envelopes
     )
@@ -76,6 +77,11 @@ def parse_cli_args(repo_root: Path, argv: list[str] | None = None) -> argparse.N
         version=_project_version(repo_root),
     )
     parser.add_argument(
+        "--agent",
+        default=None,
+        help="Agent identity name (default: $AUTOPOIESIS_AGENT or 'default')",
+    )
+    parser.add_argument(
         "--no-approval",
         action="store_true",
         help="Skip approval key unlock (dev mode)",
@@ -103,7 +109,7 @@ def _resolve_startup_config() -> tuple[str, str, str]:
 
 
 def _initialize_runtime(
-    base_dir: Path,
+    agent_paths: AgentPaths,
     *,
     require_approval_unlock: bool,
 ) -> str:
@@ -111,8 +117,8 @@ def _initialize_runtime(
     provider, agent_name, system_database_url = _resolve_startup_config()
 
     backend: LocalBackend = build_backend()
-    approval_store = ApprovalStore.from_env(base_dir=base_dir)
-    key_manager = ApprovalKeyManager.from_env(base_dir=base_dir)
+    approval_store = ApprovalStore.from_env(base_dir=agent_paths.root)
+    key_manager = ApprovalKeyManager.from_env(base_dir=agent_paths.root)
     if require_approval_unlock:
         key_manager.ensure_unlocked_interactive()
     tool_policy = ToolPolicyRegistry.default()
@@ -165,15 +171,18 @@ def main() -> None:
     otel_tracing.configure()
 
     args = parse_cli_args(repo_root)
+    agent_name = resolve_agent_name(getattr(args, "agent", None))
+    agent_paths = resolve_agent_workspace(agent_name)
+
     if args.command == "rotate-key":
-        _rotate_key(repo_root)
+        _rotate_key(agent_paths)
         return
 
     is_batch = args.command == "run"
     is_serve = args.command == "serve"
     try:
         system_database_url = _initialize_runtime(
-            repo_root,
+            agent_paths,
             require_approval_unlock=not args.no_approval and not is_batch and not is_serve,
         )
     except (OSError, RuntimeError, ValueError) as exc:
