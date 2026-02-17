@@ -6,7 +6,7 @@ import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from store.history import (
+from autopoiesis.store.history import (
     cleanup_stale_checkpoints,
     clear_checkpoint,
     load_checkpoint,

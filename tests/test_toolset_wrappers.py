@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from tools.toolset_wrappers import ObservableToolset, wrap_toolsets
+from autopoiesis.tools.toolset_wrappers import ObservableToolset, wrap_toolsets
 
 
 @pytest.fixture
@@ -23,7 +23,7 @@ async def test_observable_logs_success(
     wrapper = ObservableToolset(mock_toolset)
     ctx = MagicMock()
     tool = MagicMock()
-    with caplog.at_level(logging.INFO, logger="tools.toolset_wrappers"):
+    with caplog.at_level(logging.INFO, logger="autopoiesis.tools.toolset_wrappers"):
         result = await wrapper.call_tool("my_tool", {}, ctx, tool)
     assert result == "ok"
     assert any("my_tool" in r.message and "status=ok" in r.message for r in caplog.records)
@@ -37,7 +37,7 @@ async def test_observable_logs_error(
     ctx = MagicMock()
     tool = MagicMock()
     with (
-        caplog.at_level(logging.ERROR, logger="tools.toolset_wrappers"),
+        caplog.at_level(logging.ERROR, logger="autopoiesis.tools.toolset_wrappers"),
         pytest.raises(RuntimeError),
     ):
         await wrapper.call_tool("bad_tool", {}, ctx, tool)

@@ -13,8 +13,8 @@ from pydantic_ai.messages import (
     UserPromptPart,
 )
 
-from agent.context import CHARS_PER_TOKEN, compact_history, estimate_tokens
-from agent.truncation import truncate_tool_results
+from autopoiesis.agent.context import CHARS_PER_TOKEN, compact_history, estimate_tokens
+from autopoiesis.agent.truncation import truncate_tool_results
 
 
 def _make_request(text: str) -> ModelRequest:

@@ -7,8 +7,8 @@ from unittest.mock import patch
 
 from pydantic_ai.settings import ModelSettings
 
-from agent.runtime import AgentOptions, build_agent
-from model_resolution import build_model_settings
+from autopoiesis.agent.model_resolution import build_model_settings
+from autopoiesis.agent.runtime import AgentOptions, build_agent
 
 _TEMP_HALF = 0.5
 _TEMP_LOW = 0.3

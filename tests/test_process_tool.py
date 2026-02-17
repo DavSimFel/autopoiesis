@@ -9,9 +9,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 from pydantic_ai.messages import ToolReturn
 
-from infra import exec_registry
-from models import AgentDeps
-from tools.process_tool import process_kill, process_list, process_poll, process_write
+from autopoiesis.infra import exec_registry
+from autopoiesis.models import AgentDeps
+from autopoiesis.tools.process_tool import process_kill, process_list, process_poll, process_write
 
 
 def _fake_process(

@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import os
-import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
-from store.knowledge import (
+from autopoiesis.store.knowledge import (
     CONTEXT_BUDGET_CHARS,
     SearchResult,
     ensure_journal_entry,
@@ -20,7 +19,6 @@ from store.knowledge import (
     sanitize_fts_query,
     search_knowledge,
 )
-from store.knowledge_migration import migrate_memory_to_knowledge
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -286,68 +284,3 @@ class TestSanitizeFtsQuery:
         assert "passwd" in result
         assert ":" not in result
         assert '"' not in result
-
-
-# ---------------------------------------------------------------------------
-# Migration tests
-# ---------------------------------------------------------------------------
-
-
-class TestMigration:
-    def test_migrate_entries(self, knowledge_root: Path) -> None:
-        from store.memory import init_memory_store, save_memory
-
-        with tempfile.NamedTemporaryFile(suffix=".sqlite", delete=False) as f:
-            mem_db = f.name
-        try:
-            init_memory_store(mem_db)
-            save_memory(mem_db, "JWT tokens expire after 1 hour", ["auth"])
-            save_memory(mem_db, "Use PostgreSQL for production", ["database"])
-
-            count = migrate_memory_to_knowledge(mem_db, knowledge_root)
-            expected_entries = 2
-            assert count == expected_entries
-
-            content = (knowledge_root / "memory" / "MEMORY.md").read_text()
-            assert "JWT tokens" in content
-            assert "PostgreSQL" in content
-            assert "Migrated from SQLite" in content
-        finally:
-            os.unlink(mem_db)
-
-    def test_migrate_empty_db(self, knowledge_root: Path) -> None:
-        with tempfile.NamedTemporaryFile(suffix=".sqlite", delete=False) as f:
-            mem_db = f.name
-        try:
-            from store.memory import init_memory_store
-
-            init_memory_store(mem_db)
-            count = migrate_memory_to_knowledge(mem_db, knowledge_root)
-            assert count == 0
-        finally:
-            os.unlink(mem_db)
-
-    def test_migrate_nonexistent_db(self, knowledge_root: Path) -> None:
-        count = migrate_memory_to_knowledge("/tmp/nonexistent.sqlite", knowledge_root)
-        assert count == 0
-
-    def test_migrate_idempotent(self, knowledge_root: Path) -> None:
-        """Running migration twice should not duplicate entries."""
-        from store.memory import init_memory_store, save_memory
-
-        with tempfile.NamedTemporaryFile(suffix=".sqlite", delete=False) as f:
-            mem_db = f.name
-        try:
-            init_memory_store(mem_db)
-            save_memory(mem_db, "JWT tokens expire after 1 hour", ["auth"])
-
-            first = migrate_memory_to_knowledge(mem_db, knowledge_root)
-            assert first == 1
-
-            second = migrate_memory_to_knowledge(mem_db, knowledge_root)
-            assert second == 0  # no new entries
-
-            content = (knowledge_root / "memory" / "MEMORY.md").read_text()
-            assert content.count("JWT tokens expire after 1 hour") == 1
-        finally:
-            os.unlink(mem_db)

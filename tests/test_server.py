@@ -9,10 +9,10 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
-from server.app import app, get_session_store, set_connection_manager, set_session_store
-from server.connections import ConnectionManager
-from server.models import WSIncoming, WSOutgoing
-from server.sessions import SessionStore
+from autopoiesis.server.app import app, get_session_store, set_connection_manager, set_session_store
+from autopoiesis.server.connections import ConnectionManager
+from autopoiesis.server.models import WSIncoming, WSOutgoing
+from autopoiesis.server.sessions import SessionStore
 
 
 @pytest.fixture(autouse=True)
@@ -92,17 +92,17 @@ class TestAuth:
         assert resp.status_code == 200
 
     def test_auth_required_when_key_set(self, client: TestClient) -> None:
-        with patch("server.auth.get_api_key", return_value="test-secret"):
+        with patch("autopoiesis.server.auth.get_api_key", return_value="test-secret"):
             resp = client.get("/api/sessions")
             assert resp.status_code == 401
 
     def test_auth_succeeds_with_correct_key(self, client: TestClient) -> None:
-        with patch("server.auth.get_api_key", return_value="test-secret"):
+        with patch("autopoiesis.server.auth.get_api_key", return_value="test-secret"):
             resp = client.get("/api/sessions", headers={"X-API-Key": "test-secret"})
             assert resp.status_code == 200
 
     def test_auth_fails_with_wrong_key(self, client: TestClient) -> None:
-        with patch("server.auth.get_api_key", return_value="test-secret"):
+        with patch("autopoiesis.server.auth.get_api_key", return_value="test-secret"):
             resp = client.get("/api/sessions", headers={"X-API-Key": "wrong"})
             assert resp.status_code == 401
 
@@ -147,9 +147,9 @@ class TestChatEndpoint:
             },
         )()
         with (
-            patch("agent.runtime.get_runtime"),
-            patch("agent.worker.enqueue_and_wait", return_value=mock_output),
-            patch("display.streaming.register_stream"),
+            patch("autopoiesis.agent.runtime.get_runtime"),
+            patch("autopoiesis.agent.worker.enqueue_and_wait", return_value=mock_output),
+            patch("autopoiesis.display.streaming.register_stream"),
         ):
             resp = client.post("/api/chat", json={"content": "hello"})
         assert resp.status_code == 200
@@ -158,7 +158,7 @@ class TestChatEndpoint:
     def test_chat_returns_503_when_runtime_init_fails(self, client: TestClient) -> None:
         """Graceful error when runtime init fails (e.g. missing provider config)."""
         with patch(
-            "agent.runtime.get_runtime",
+            "autopoiesis.agent.runtime.get_runtime",
             side_effect=RuntimeError("Runtime not initialised. Start the app via main()."),
         ):
             resp = client.post("/api/chat", json={"content": "hello"})

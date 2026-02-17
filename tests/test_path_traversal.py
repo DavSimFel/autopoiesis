@@ -6,14 +6,14 @@ from pathlib import Path
 
 import pytest
 
-from infra.subscription_processor import resolve_subscriptions
-from store.memory import init_memory_store
-from store.subscriptions import SubscriptionRegistry
+from autopoiesis.infra.subscription_processor import resolve_subscriptions
+from autopoiesis.store.knowledge import init_knowledge_index
+from autopoiesis.store.subscriptions import SubscriptionRegistry
 
 
-def _memory_db(tmp_path: Path) -> str:
-    db_path = str(tmp_path / "memory.sqlite")
-    init_memory_store(db_path)
+def _knowledge_db(tmp_path: Path) -> str:
+    db_path = str(tmp_path / "knowledge.sqlite")
+    init_knowledge_index(db_path)
     return db_path
 
 
@@ -36,7 +36,7 @@ def test_traversal_paths_are_rejected(tmp_path: Path, target: str) -> None:
     registry = _registry(tmp_path)
     registry.add(kind="file", target=target)
 
-    results = resolve_subscriptions(registry, workspace, _memory_db(tmp_path))
+    results = resolve_subscriptions(registry, workspace, _knowledge_db(tmp_path))
 
     assert len(results) == 1
     assert "escapes workspace root" in results[0].content
@@ -52,7 +52,7 @@ def test_valid_workspace_path_is_accepted(tmp_path: Path) -> None:
     registry = _registry(tmp_path)
     registry.add(kind="file", target="docs/notes.txt")
 
-    results = resolve_subscriptions(registry, workspace, _memory_db(tmp_path))
+    results = resolve_subscriptions(registry, workspace, _knowledge_db(tmp_path))
 
     assert len(results) == 1
     assert results[0].content == "line one\nline two"

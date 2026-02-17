@@ -2,32 +2,43 @@
 
 ## Purpose
 
-`chat.py` is the runtime entrypoint. It builds the agent stack, launches DBOS,
+`src/autopoiesis/cli.py` is the runtime entrypoint. It builds the agent stack, launches DBOS,
 and enters the CLI chat loop. Worker, runtime, and approval helpers are
 split into focused companion modules.
 
 ## Status
 
 - **Last updated:** 2026-02-17 (Issue #148)
-- **Source:** `chat.py`, `chat_runtime.py`, `model_resolution.py`, `toolset_builder.py`, `chat_worker.py`, `chat_approval.py`, `chat_cli.py`
+- **Source:** `src/autopoiesis/cli.py`, `agent/runtime.py`, `src/autopoiesis/agent/model_resolution.py`, `src/autopoiesis/tools/toolset_builder.py`, `agent/worker.py`, `infra/approval/chat_approval.py`, `agent/cli.py`
 
 ## File Structure
 
 | File | Responsibility |
 |------|---------------|
+<<<<<<< HEAD
 | `chat.py` | Entrypoint, rotate-key command, runtime initialization (all modes), DBOS launch, serve/chat dispatch (≤300 lines) |
 | `agent/history.py` | History processor pipeline construction (extracted from chat.py) |
 | `chat_runtime.py` | Runtime singleton state, `AgentOptions`, agent assembly, instrumentation toggle |
 | `model_resolution.py` | Provider detection, required env access, model settings/env parsing, fallback model resolution |
-| `toolset_builder.py` | Workspace/backend creation, console+skills+exec+memory/subscription toolset composition, strict tool schema preparation |
+| `toolset_builder.py` | Workspace/backend creation, console+skills+exec+subscription toolset composition, strict tool schema preparation |
 | `chat_worker.py` | DBOS workflow/step functions, enqueue helpers, history serialization |
 | `chat_approval.py` | Approval scope, request/result serialization, CLI approval collection |
 | `chat_cli.py` | Interactive CLI loop and approval re-enqueue flow |
+=======
+| `src/autopoiesis/cli.py` | Entrypoint, rotate-key command, runtime initialization (all modes), DBOS launch, serve/chat dispatch (≤300 lines) |
+| `src/autopoiesis/agent/history.py` | History processor pipeline construction (extracted from chat.py) |
+| `agent/runtime.py` | Runtime singleton state, `AgentOptions`, agent assembly, instrumentation toggle |
+| `src/autopoiesis/agent/model_resolution.py` | Provider detection, required env access, model settings/env parsing, fallback model resolution |
+| `src/autopoiesis/tools/toolset_builder.py` | Workspace/backend creation, console+skills+exec+memory/subscription toolset composition, strict tool schema preparation |
+| `agent/worker.py` | DBOS workflow/step functions, enqueue helpers, history serialization |
+| `infra/approval/chat_approval.py` | Approval scope, request/result serialization, CLI approval collection |
+| `agent/cli.py` | Interactive CLI loop and approval re-enqueue flow |
+>>>>>>> b8ed9c3 (refactor: move source to src/autopoiesis/ layout (closes #152))
 | `agent/batch.py` | Non-interactive batch execution with auto-approval and JSON output |
-| `models.py` | `AgentDeps`, `WorkItem`, `WorkItemInput`, `WorkItemOutput`, priority/type enums |
-| `skills.py` | Skill discovery, progressive loading, skills toolset |
-| `work_queue.py` | Queue instance only (no functions importing from `chat.py`) |
-| `streaming.py` | `StreamHandle` protocol, `RichStreamHandle`, registry |
+| `src/autopoiesis/models.py` | `AgentDeps`, `WorkItem`, `WorkItemInput`, `WorkItemOutput`, priority/type enums |
+| `src/autopoiesis/skills/skills.py` | Skill discovery, progressive loading, skills toolset |
+| `src/autopoiesis/infra/work_queue.py` | Queue instance only (no functions importing from `src/autopoiesis/cli.py`) |
+| `src/autopoiesis/display/streaming.py` | `StreamHandle` protocol, `RichStreamHandle`, registry |
 
 ## Environment Variables
 
@@ -41,7 +52,7 @@ split into focused companion modules.
 | `AI_TEMPERATURE` | No | — | `model_resolution.build_model_settings()` | LLM sampling temperature |
 | `AI_MAX_TOKENS` | No | — | `model_resolution.build_model_settings()` | Max generation tokens |
 | `AI_TOP_P` | No | — | `model_resolution.build_model_settings()` | Nucleus sampling top-p |
-| `AGENT_WORKSPACE_ROOT` | No | `data/agent-workspace` | `toolset_builder.resolve_workspace_root()` | Resolves from `chat.py` dir |
+| `AGENT_WORKSPACE_ROOT` | No | `data/agent-workspace` | `toolset_builder.resolve_workspace_root()` | Resolves from `src/autopoiesis/cli.py` dir |
 | `DBOS_APP_NAME` | No | `pydantic_dbos_agent` | `main()` | DBOS app name |
 | `DBOS_AGENT_NAME` | No | `chat` | `main()` | Agent name |
 | `DBOS_SYSTEM_DATABASE_URL` | No | `sqlite:///dbostest.sqlite` | `main()` | DBOS database URL |
@@ -53,7 +64,7 @@ split into focused companion modules.
 | `APPROVAL_KEYRING_PATH` | No | `$APPROVAL_KEY_DIR/keyring.json` | `ApprovalKeyManager.from_env(base_dir=...)` | Active/retired verification keyring |
 | `NONCE_RETENTION_PERIOD_SECONDS` | No | `604800` | `ApprovalStore.from_env(base_dir=...)` | Expired envelope pruning horizon |
 | `APPROVAL_CLOCK_SKEW_SECONDS` | No | `60` | `ApprovalStore.from_env(base_dir=...)` | Startup invariant with retention + TTL |
-| `SKILLS_DIR` | No | `skills` | `toolset_builder._resolve_shipped_skills_dir()` | Shipped skills path, resolves from `chat.py` dir |
+| `SKILLS_DIR` | No | `skills` | `toolset_builder._resolve_shipped_skills_dir()` | Shipped skills path, resolves from `src/autopoiesis/cli.py` dir |
 | `CUSTOM_SKILLS_DIR` | No | `skills` | `toolset_builder._resolve_custom_skills_dir()` | Custom skills path, resolves inside `AGENT_WORKSPACE_ROOT` when relative |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | No | — | `chat_runtime.instrument_agent()` | When set, enables OpenTelemetry trace export via `agent.instrument()` |
 
@@ -81,7 +92,7 @@ split into focused companion modules.
   `OTEL_EXPORTER_OTLP_ENDPOINT` is set. Returns `True` if applied.
 
 - `_resolve_startup_config()` — resolves provider, agent name, and DBOS system database URL from env
-- `toolset_builder.prepare_toolset_context(memory_db_path)` — initializes stores (subscriptions, knowledge, topics) and builds toolsets (moved from chat.py)
+- `toolset_builder.prepare_toolset_context(history_db_path)` — initializes stores (subscriptions, knowledge, topics) and builds toolsets (moved from chat.py)
 - `agent.history.build_history_processors(...)` — builds ordered message history processors (truncation, compaction, subscriptions, topics, checkpointing) (moved from chat.py)
 - `_initialize_runtime(base_dir, *, require_approval_unlock)` — full runtime init for all modes (chat/batch/serve); assembles provider, backend, toolsets, agent, initializes history storage, registers runtime. Serve mode defaults to `require_approval_unlock=False`.
 ### Runtime State
@@ -176,13 +187,13 @@ split into focused companion modules.
 - All work goes through the queue. No direct `agent.run_sync()` outside workers.
 - All agent calls use `output_type=[str, DeferredToolRequests]`.
 - Required env vars fail with `SystemExit`, not `KeyError`.
-- `.env` loads relative to `chat.py`, not CWD.
-- Workspace root resolves relative to `chat.py` when not absolute.
+- `.env` loads relative to `src/autopoiesis/cli.py`, not CWD.
+- Workspace root resolves relative to `src/autopoiesis/cli.py` when not absolute.
 - Skills load from shipped + custom locations; custom directory defaults to
   `<AGENT_WORKSPACE_ROOT>/skills`.
 - Backend execute always disabled. Write approval always required.
 - Console deps contract validated at startup.
-- Workflow/step functions live in `chat_worker.py` and are imported by entrypoint flow.
+- Workflow/step functions live in `agent/worker.py` and are imported by entrypoint flow.
 - Stream handles are in-process only — not durable, not serialised.
 - Deferred approvals are nonce-bound and single-use (atomic consume in SQLite).
 - Agent execution is blocked unless approval signing key is unlocked at startup.
@@ -210,12 +221,12 @@ split into focused companion modules.
 - 2026-02-16: Headless passphrase support via `APPROVAL_KEY_PASSPHRASE`
   env var in `approval_keys.py` (Issue #86)
 - 2026-02-16: CLI argparse with `--help`, `--version`, `--no-approval`
-  flags in `chat.py` (Issue #87)
+  flags in `src/autopoiesis/cli.py` (Issue #87)
 - 2026-02-16: Fixed spec drift — function references, class names,
   OVERVIEW.md module index (Issue #81)
 
 - 2026-02-16: Replaced mutable module-global runtime singleton with
-  `RuntimeRegistry` in `chat_runtime.py`. Runtime access now uses
+  `RuntimeRegistry` in `agent/runtime.py`. Runtime access now uses
   lock-protected registry storage with injectable helpers
   (`get_runtime_registry()` / `set_runtime_registry()`) and explicit
   `reset_runtime()` support for tests. Existing `get_runtime()` /
@@ -241,7 +252,7 @@ split into focused companion modules.
   `instrument_agent()`. When `OTEL_EXPORTER_OTLP_ENDPOINT` is set,
   `agent.instrument()` exports traces to the configured OTLP collector.
   Complementary to existing `ObservableToolset`. (Issue #60)
-- 2026-02-16: Added ``run_simple`` convenience module (``run_simple.py``) that
+- 2026-02-16: Added ``run_simple`` convenience module (``src/autopoiesis/run_simple.py``) that
   wraps ``agent.run_sync()`` with automatic deferred-tool approval for testing
   and scripting use cases.  Calling ``run_sync()`` directly without
   ``output_type=[str, DeferredToolRequests]`` crashes with a ``UserError``;
@@ -255,8 +266,8 @@ split into focused companion modules.
 - 2026-02-16: Replaced module-global active checkpoint state with
   context-local `ContextVar` storage for safer worker execution.
   (Issue #21, PR #23)
-- 2026-02-16: Refactored chat runtime into `chat_runtime.py`,
-  `chat_worker.py`, `chat_approval.py`, and `chat_cli.py` to reduce file
+- 2026-02-16: Refactored chat runtime into `agent/runtime.py`,
+  `agent/worker.py`, `infra/approval/chat_approval.py`, and `agent/cli.py` to reduce file
   size and isolate responsibilities while preserving queue-based behavior.
   (Issue #19, PR #20)
 - 2026-02-15: Skills now load from two places: shipped skills (`SKILLS_DIR`,
@@ -276,9 +287,9 @@ split into focused companion modules.
   unlocked Ed25519 signing key at startup, stores envelope `key_id`, signs
   approval decisions before re-enqueue, verifies signature before consume, and
   enforces immutable tool classification defaults. Added key rotation command
-  (`python chat.py rotate-key`) that expires pending envelopes.
+  (`python -m autopoiesis.cli rotate-key`) that expires pending envelopes.
   (Issue #19)
-- 2026-02-15: Skill system integration. `AgentDeps` moved to `models.py`.
+- 2026-02-15: Skill system integration. `AgentDeps` moved to `src/autopoiesis/models.py`.
   `build_toolsets()` returns `(toolsets, instructions)`. `build_agent()`
   accepts instructions list, passes to PydanticAI `instructions` param.
   `SKILLS_DIR` env var. (Issue #9)
@@ -289,7 +300,7 @@ split into focused companion modules.
 - 2026-02-16: SigNoz observability stack and custom OTEL span attributes.
   Added `docker/docker-compose.signoz.yml` for local SigNoz dev setup,
   `otel_tracing.py` module for SDK bootstrap and span helpers, custom
-  `agent.run` spans in `chat_worker.py` with model/provider/workflow
+  `agent.run` spans in `agent/worker.py` with model/provider/workflow
   attributes, and `docs/observability.md`. (Issue #70)
 - 2026-02-15: Unified all work through priority queue. WorkItem model with
   structured input/output. Stream handles for real-time CLI output. Removed
@@ -309,7 +320,7 @@ Capability text (exec, memory, skills) is generated conditionally based on what'
 actually enabled. No contradictory "disabled/enabled" text is emitted. Instructions
 describe actual enforcement honestly — cwd/path validation, not hard sandbox.
 
-- 2026-02-16: Exposed test hooks in `chat_runtime.py` to eliminate `# pyright: ignore`
+- 2026-02-16: Exposed test hooks in `agent/runtime.py` to eliminate `# pyright: ignore`
   suppressions in test files. (Issue #77)
 - 2026-02-16: Replaced inline WAL pragma in `approval_store.py` with shared `open_db()`;
   added proper `Row` typing in `approval_store_schema.py` migration. (Issues #84, #91)

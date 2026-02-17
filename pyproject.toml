@@ -17,6 +17,9 @@ dependencies = [
   "websockets>=14.0",
 ]
 
+[project.scripts]
+autopoiesis = "autopoiesis.cli:main"
+
 [dependency-groups]
 dev = [
   "ruff>=0.9",
@@ -28,9 +31,13 @@ dev = [
   "bandit",
 ]
 
+[tool.setuptools.packages.find]
+where = ["src"]
+
 [tool.ruff]
 target-version = "py312"
 line-length = 100
+src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = [
@@ -59,7 +66,8 @@ max-args = 6
 max-complexity = 10
 
 [tool.pyright]
-include = ["."]
+include = ["src", "tests"]
+extraPaths = ["src"]
 typeCheckingMode = "strict"
 pythonVersion = "3.12"
 reportMissingTypeStubs = false
@@ -67,7 +75,9 @@ reportMissingTypeStubs = false
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+pythonpath = ["src"]
 addopts = "--cov=. --cov-report=term-missing --cov-config=pyproject.toml"
 
 [tool.coverage.run]
+source = ["src/autopoiesis"]
 omit = ["tests/*"]

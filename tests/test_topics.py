@@ -7,8 +7,8 @@ from pathlib import Path
 import pytest
 from pydantic_ai.messages import ModelMessage, ModelRequest, UserPromptPart
 
-from infra.topic_processor import inject_topic_context, is_topic_injection
-from topic_manager import (
+from autopoiesis.infra.topic_processor import inject_topic_context, is_topic_injection
+from autopoiesis.topics.topic_manager import (
     MAX_ACTIVE_TOPICS,
     MAX_TOPIC_CONTEXT_BYTES,
     TopicRegistry,

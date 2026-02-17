@@ -1,18 +1,27 @@
 # Memory Module
 
-## Overview
+## Status
 
-Persistent chat memory with semantic search via SQLite FTS5. The agent retains knowledge across sessions and can recall past decisions, preferences, and context.
+**REMOVED** as of 2026-02-17 (Issue #151).
 
-## Files
+The SQLite-based memory system (`store/memory.py`, `tools/memory_tools.py`) has been
+removed in favor of the file-based knowledge system (`store/knowledge.py`).
 
+<<<<<<< HEAD
+See `specs/modules/knowledge.md` for the current memory/knowledge architecture.
+=======
 | File | Responsibility |
 |------|---------------|
-| `memory_store.py` | SQLite schema (FTS5), save/search/combined search, workspace file search |
+| `src/autopoiesis/store/memory.py` | SQLite schema (FTS5), save/search/combined search, workspace file search |
 | `memory_tools.py` | PydanticAI tool definitions: `memory_search`, `memory_get`, `memory_save` |
+>>>>>>> b8ed9c3 (refactor: move source to src/autopoiesis/ layout (closes #152))
 
-## Architecture
+## Migration
 
+<<<<<<< HEAD
+`store/knowledge_migration.py` is retained as a reference for migrating legacy
+SQLite memory entries to knowledge markdown files.
+=======
 ### Two-Layer Memory
 
 **Layer 1: Structured (SQLite)**
@@ -35,8 +44,8 @@ Persistent chat memory with semantic search via SQLite FTS5. The agent retains k
 
 ### Integration
 
-- Memory toolset wired in `chat_runtime.py` via `build_toolsets()`
-- Memory store initialized at startup in `chat.py`
+- Memory toolset wired in `agent/runtime.py` via `build_toolsets()`
+- Memory store initialized at startup in `src/autopoiesis/cli.py`
 - System prompt instructs: search memory before answering questions about prior work
 
 ## Observability
@@ -54,7 +63,7 @@ Persistent chat memory with semantic search via SQLite FTS5. The agent retains k
 - Foundation for: #27 (sliding window context), #28 (subscriptions)
 
 - 2026-02-16: Extracted shared `db.py` connection factory (`open_db()`); replaced inline
-  WAL pragma in `history_store.py` and `memory_store.py`. (Issue #84)
+  WAL pragma in `src/autopoiesis/store/history.py` and `src/autopoiesis/store/memory.py`. (Issue #84)
 - 2026-02-16: FTS5 sanitizer bugfix — `_sanitize_fts_query` now strips FTS5 keywords
   (AND, OR, NOT, NEAR) from user input to prevent them from altering query semantics.
   (Issue #88, PR #111)
@@ -63,3 +72,4 @@ Persistent chat memory with semantic search via SQLite FTS5. The agent retains k
 - 2026-02-16: Modules moved into subdirectories (`agent/`, `approval/`, `display/`, `infra/`, `store/`, `tools/`) as part of subdirectory restructuring (#119)
 - 2026-02-16: Added Dependencies/Wired-in docstring headers as part of #121 documentation update
 - 2026-02-16: Knowledge system integration — startup indexing, knowledge tools wiring, memory store deprecated (#130)
+>>>>>>> b8ed9c3 (refactor: move source to src/autopoiesis/ layout (closes #152))

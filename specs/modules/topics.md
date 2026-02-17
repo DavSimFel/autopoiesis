@@ -8,7 +8,7 @@ on demand or by schedule.
 
 ## Status
 - **Last updated:** 2026-02-16 (PR #136, Issue #129)
-- **Source:** `topic_manager.py`, `tools/topic_tools.py`, `infra/topic_processor.py`
+- **Source:** `src/autopoiesis/topics/topic_manager.py`, `src/autopoiesis/tools/topic_tools.py`, `src/autopoiesis/infra/topic_processor.py`
 
 ## Key Concepts
 - **Topic** — A markdown file with YAML frontmatter defining a context bundle (instructions, triggers, subscriptions)
@@ -20,9 +20,9 @@ on demand or by schedule.
 
 | File | Responsibility |
 |------|---------------|
-| `topic_manager.py` | `TopicMeta`, `TopicTrigger`, `TopicRegistry` — loading, parsing, activation state, context building |
-| `tools/topic_tools.py` | PydanticAI tool definitions: `activate_topic`, `deactivate_topic`, `list_topics` |
-| `infra/topic_processor.py` | History processor that strips stale topic injections and inserts fresh context from active topics |
+| `src/autopoiesis/topics/topic_manager.py` | `TopicMeta`, `TopicTrigger`, `TopicRegistry` — loading, parsing, activation state, context building |
+| `src/autopoiesis/tools/topic_tools.py` | PydanticAI tool definitions: `activate_topic`, `deactivate_topic`, `list_topics` |
+| `src/autopoiesis/infra/topic_processor.py` | History processor that strips stale topic injections and inserts fresh context from active topics |
 
 ### Data Flow
 

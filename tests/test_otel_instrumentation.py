@@ -7,8 +7,8 @@ from unittest.mock import MagicMock, patch
 
 from pydantic_ai import Agent
 
-from agent.runtime import instrument_agent
-from models import AgentDeps
+from autopoiesis.agent.runtime import instrument_agent
+from autopoiesis.models import AgentDeps
 
 
 def _mock_agent() -> Agent[AgentDeps, str]:
@@ -20,7 +20,7 @@ def test_instrument_called_when_endpoint_set() -> None:
     agent = _mock_agent()
     with (
         patch.dict("os.environ", {"OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4318"}),
-        patch("agent.runtime.Agent") as mock_cls,
+        patch("autopoiesis.agent.runtime.Agent") as mock_cls,
     ):
         result = instrument_agent(agent)
 
@@ -35,7 +35,7 @@ def test_instrument_skipped_when_endpoint_absent() -> None:
 
     with patch.dict("os.environ", {}, clear=False):
         os.environ.pop("OTEL_EXPORTER_OTLP_ENDPOINT", None)
-        with patch("agent.runtime.Agent") as mock_cls:
+        with patch("autopoiesis.agent.runtime.Agent") as mock_cls:
             result = instrument_agent(agent)
 
     assert result is False
