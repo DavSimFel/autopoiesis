@@ -35,9 +35,10 @@ from autopoiesis.infra.approval.chat_approval import (
     serialize_deferred_requests,
 )
 from autopoiesis.infra.approval.types import ApprovalScope
-from autopoiesis.infra.work_queue import work_queue
+from autopoiesis.infra.work_queue import dispatch_workitem
 from autopoiesis.models import AgentDeps, WorkItem, WorkItemOutput
 from autopoiesis.store.history import clear_checkpoint, load_checkpoint, save_checkpoint
+from autopoiesis.topics.topic_manager import update_topic_status
 
 try:
     from dbos import DBOS, SetEnqueueOptions
@@ -193,11 +194,48 @@ def _run_sync(
     return _build_output(result.output, result.all_messages(), turn.scope, rt)
 
 
+def activate_topic_ref(topic_ref: str) -> None:
+    """Attempt to transition a topic to ``in-progress`` status.
+
+    Called before agent execution when a WorkItem carries a ``topic_ref``.
+    Failures are logged but do not block execution.
+    """
+    try:
+        from autopoiesis.tools.toolset_builder import resolve_workspace_root
+
+        topics_dir = resolve_workspace_root() / "topics"
+        if not topics_dir.is_dir():
+            return
+        from autopoiesis.topics.topic_manager import TopicRegistry
+
+        registry = TopicRegistry(topics_dir)
+        topic = registry.get_topic(topic_ref)
+        if topic is None:
+            _log.debug("topic_ref '%s' not found; skipping activation", topic_ref)
+            return
+        if topic.status == "open":
+            result = update_topic_status(registry, topic_ref, "in-progress")
+            _log.info("topic_ref auto-activation: %s", result)
+        else:
+            _log.debug(
+                "topic_ref '%s' status is '%s'; skipping activation",
+                topic_ref,
+                topic.status,
+            )
+    except Exception:
+        _log.warning("Failed to auto-activate topic_ref '%s'", topic_ref, exc_info=True)
+
+
 @DBOS.step()
 def run_agent_step(work_item_dict: dict[str, Any]) -> dict[str, Any]:
     """Execute one work item and return a serialized WorkItemOutput."""
     rt = get_runtime()
     item = WorkItem.model_validate(work_item_dict)
+
+    # Auto-activate topic when topic_ref is set (before agent executes)
+    if item.topic_ref:
+        activate_topic_ref(item.topic_ref)
+
     recovered_history_json = load_checkpoint(rt.history_db_path, item.id)
     history_json = recovered_history_json or item.input.message_history_json
     history = _deserialize_history(history_json)
@@ -260,15 +298,23 @@ def execute_work_item(work_item_dict: dict[str, Any]) -> dict[str, Any]:
 
 
 def enqueue(item: WorkItem) -> str:
-    """Enqueue a work item and return its id."""
+    """Enqueue a work item and return its id.
+
+    Routes to the correct per-agent queue via :func:`dispatch_workitem`.
+    """
+    queue = dispatch_workitem(item)
     with SetEnqueueOptions(priority=int(item.priority)):
-        work_queue.enqueue(execute_work_item, item.model_dump())
+        queue.enqueue(execute_work_item, item.model_dump())
     return item.id
 
 
 def enqueue_and_wait(item: WorkItem) -> WorkItemOutput:
-    """Enqueue a work item and block until complete."""
+    """Enqueue a work item and block until complete.
+
+    Routes to the correct per-agent queue via :func:`dispatch_workitem`.
+    """
+    queue = dispatch_workitem(item)
     with SetEnqueueOptions(priority=int(item.priority)):
-        handle = work_queue.enqueue(execute_work_item, item.model_dump())
+        handle = queue.enqueue(execute_work_item, item.model_dump())
     raw = handle.get_result()
     return WorkItemOutput.model_validate(raw)

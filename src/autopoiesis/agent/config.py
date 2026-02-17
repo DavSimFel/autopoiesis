@@ -16,6 +16,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
+from autopoiesis.agent.validation import validate_slug
+
 
 @dataclass(frozen=True)
 class AgentConfig:
@@ -133,6 +135,7 @@ def load_agent_configs(config_path: Path) -> dict[str, AgentConfig]:
     for agent_name_key, agent_val in agents_section.items():
         if not isinstance(agent_val, dict):
             continue
+        validate_slug(agent_name_key)
         raw_dict = cast(dict[str, object], agent_val)
         configs[agent_name_key] = _parse_agent_entry(agent_name_key, raw_dict, defaults_raw)
 

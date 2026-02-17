@@ -78,11 +78,11 @@ Default queue instance plus multi-agent dispatch primitives (Phase B — not yet
 - `concurrency=1`
 - `polling_interval_sec=1.0`
 
-#### Multi-Agent Dispatch (Phase B primitives — not yet wired)
+#### Multi-Agent Dispatch (Phase B — wired)
 
 - `_agent_queues: dict[str, Queue]` — registry of per-agent queues; `"default"` always present
 - `get_or_create_agent_queue(agent_id)` — returns or lazily creates a DBOS `Queue` for the given agent
-- `dispatch_workitem(item)` — routes a `WorkItem` to the correct agent queue by `agent_id`; returns the `Queue` (caller is responsible for enqueue). **Not yet called by any worker path — wiring planned for Phase B-2.**
+- `dispatch_workitem(item)` — routes a `WorkItem` to the correct agent queue by `agent_id`; returns the `Queue`. **Now wired into `enqueue()` and `enqueue_and_wait()` in `agent/worker.py` (Phase B-2, PR #146).**
 
 ### `src/autopoiesis/display/streaming.py`
 

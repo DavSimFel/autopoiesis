@@ -82,6 +82,7 @@ split into focused companion modules.
 
 - `_resolve_startup_config()` — resolves provider, agent name, and DBOS system database URL from env
 - `toolset_builder.prepare_toolset_context(history_db_path)` — initializes stores (subscriptions, knowledge, topics) and builds toolsets (moved from chat.py)
+- **Config loading (Phase B):** When `--config` flag or `AUTOPOIESIS_AGENTS_CONFIG` env var is set, `main()` calls `load_agent_configs(config_path)` and stores results in a module-level `_agent_configs` registry accessible via `get_agent_configs()`. No config → backward-compatible single-agent behavior.
 - `agent.history.build_history_processors(...)` — builds ordered message history processors (truncation, compaction, subscriptions, topics, checkpointing) (moved from chat.py)
 - `_initialize_runtime(base_dir, *, require_approval_unlock)` — full runtime init for all modes (chat/batch/serve); assembles provider, backend, toolsets, agent, initializes history storage, registers runtime. Serve mode defaults to `require_approval_unlock=False`.
 ### Runtime State

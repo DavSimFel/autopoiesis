@@ -12,24 +12,20 @@ from __future__ import annotations
 import re
 
 from autopoiesis.agent.config import AgentConfig
+from autopoiesis.agent.validation import validate_slug
 from autopoiesis.agent.workspace import resolve_agent_workspace
 
-_UNSAFE_PATTERN = re.compile(r"[/\\]|\.\.")
 _SLUG_PATTERN = re.compile(r"[^a-zA-Z0-9_-]")
 
 
 def validate_agent_name(name: str) -> str:
     """Validate and slugify an agent task name.
 
-    Raises ``ValueError`` for empty names or names containing path traversal
-    sequences (``..``, ``/``, ``\\``).  Other non-alphanumeric characters
-    (except ``-`` and ``_``) are replaced with ``-``.
+    Uses :func:`validate_slug` for safety checks, then replaces
+    non-alphanumeric characters (except ``-`` and ``_``) with ``-``.
     """
-    if not name or not name.strip():
-        raise ValueError("Agent task name must not be empty")
-    if _UNSAFE_PATTERN.search(name):
-        raise ValueError(f"Agent task name contains unsafe path characters: {name!r}")
-    slugified = _SLUG_PATTERN.sub("-", name.strip())
+    validated = validate_slug(name)
+    slugified = _SLUG_PATTERN.sub("-", validated)
     if not slugified or slugified == "-":
         raise ValueError(f"Agent task name produces empty slug: {name!r}")
     return slugified
