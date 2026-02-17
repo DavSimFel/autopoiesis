@@ -171,9 +171,26 @@ split into focused companion modules.
 10. Agent executes approved tools, gets denial messages for denied ones
 11. Loop repeats until agent returns a final `str` response
 
+## Batch Mode Execution
+
+Batch mode (`run` subcommand) uses direct agent execution via `run_simple()`
+for simplicity. Durability guarantees (crash recovery, retry) do not apply to
+batch runs. This is intentional: batch tasks are single-shot and short-lived;
+the calling process (CI, scripts) handles retry at a higher level.
+
+Batch mode does not require approval key unlock — it operates with
+FREE-tier-only shell access (see `specs/modules/security.md`).
+
+## Security Model
+
+Shell command execution is subject to tier-based enforcement. See
+`specs/modules/security.md` for the full tier enforcement rules, Docker
+exception, and `--no-approval` behavior.
+
 ## Invariants
 
-- All work goes through the queue. No direct `agent.run_sync()` outside workers.
+- All **interactive** work goes through the queue. Batch mode (`run` subcommand)
+  is an intentional exception — it uses direct `run_simple()` / `agent.run_sync()`.
 - All agent calls use `output_type=[str, DeferredToolRequests]`.
 - Required env vars fail with `SystemExit`, not `KeyError`.
 - `.env` loads relative to `src/autopoiesis/cli.py`, not CWD.
