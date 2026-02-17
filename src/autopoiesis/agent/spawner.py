@@ -9,8 +9,30 @@ Wired in: (future) planner agent tool
 
 from __future__ import annotations
 
+import re
+
 from autopoiesis.agent.config import AgentConfig
 from autopoiesis.agent.workspace import resolve_agent_workspace
+
+_UNSAFE_PATTERN = re.compile(r"[/\\]|\.\.")
+_SLUG_PATTERN = re.compile(r"[^a-zA-Z0-9_-]")
+
+
+def validate_agent_name(name: str) -> str:
+    """Validate and slugify an agent task name.
+
+    Raises ``ValueError`` for empty names or names containing path traversal
+    sequences (``..``, ``/``, ``\\``).  Other non-alphanumeric characters
+    (except ``-`` and ``_``) are replaced with ``-``.
+    """
+    if not name or not name.strip():
+        raise ValueError("Agent task name must not be empty")
+    if _UNSAFE_PATTERN.search(name):
+        raise ValueError(f"Agent task name contains unsafe path characters: {name!r}")
+    slugified = _SLUG_PATTERN.sub("-", name.strip())
+    if not slugified or slugified == "-":
+        raise ValueError(f"Agent task name produces empty slug: {name!r}")
+    return slugified
 
 
 def spawn_agent(template: AgentConfig, task_name: str, parent: str) -> AgentConfig:
@@ -24,7 +46,8 @@ def spawn_agent(template: AgentConfig, task_name: str, parent: str) -> AgentConf
 
     All other fields are inherited from *template*.
     """
-    spawned_name = f"{template.name}-{task_name}"
+    safe_task_name = validate_agent_name(task_name)
+    spawned_name = f"{template.name}-{safe_task_name}"
 
     # Ensure workspace directories exist
     paths = resolve_agent_workspace(spawned_name)
