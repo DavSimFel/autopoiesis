@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 import pytest
 
-from prompts import compose_system_prompt
+from autopoiesis.prompts import compose_system_prompt
 
 
 class TestComposeSystemPrompt:
@@ -37,13 +37,13 @@ class TestRequiredEnv:
     """Tests for required_env raising on missing vars."""
 
     def test_returns_value_when_set(self) -> None:
-        from model_resolution import required_env
+        from autopoiesis.agent.model_resolution import required_env
 
         with patch.dict(os.environ, {"TEST_VAR_XYZ": "hello"}):
             assert required_env("TEST_VAR_XYZ") == "hello"
 
     def test_raises_system_exit_when_missing(self) -> None:
-        from model_resolution import required_env
+        from autopoiesis.agent.model_resolution import required_env
 
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("MISSING_VAR_ABC", None)
@@ -51,7 +51,7 @@ class TestRequiredEnv:
                 required_env("MISSING_VAR_ABC")
 
     def test_raises_on_empty_string(self) -> None:
-        from model_resolution import required_env
+        from autopoiesis.agent.model_resolution import required_env
 
         with (
             patch.dict(os.environ, {"EMPTY_VAR": ""}),
@@ -64,7 +64,7 @@ class TestResolveWorkspaceRoot:
     """Tests for resolve_workspace_root with various env configs."""
 
     def test_absolute_path_used_directly(self, tmp_path: Path) -> None:
-        from toolset_builder import resolve_workspace_root
+        from autopoiesis.tools.toolset_builder import resolve_workspace_root
 
         target = tmp_path / "workspace"
         with patch.dict(os.environ, {"AGENT_WORKSPACE_ROOT": str(target)}):
@@ -73,7 +73,7 @@ class TestResolveWorkspaceRoot:
             assert result.is_dir()
 
     def test_relative_path_resolved_from_module(self) -> None:
-        from toolset_builder import resolve_workspace_root
+        from autopoiesis.tools.toolset_builder import resolve_workspace_root
 
         with patch.dict(os.environ, {"AGENT_WORKSPACE_ROOT": "data/test-ws"}):
             result = resolve_workspace_root()
@@ -82,7 +82,7 @@ class TestResolveWorkspaceRoot:
             assert result.is_dir()
 
     def test_default_when_unset(self) -> None:
-        from toolset_builder import resolve_workspace_root
+        from autopoiesis.tools.toolset_builder import resolve_workspace_root
 
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("AGENT_WORKSPACE_ROOT", None)
@@ -91,7 +91,7 @@ class TestResolveWorkspaceRoot:
             assert result.name == "agent-workspace"
 
     def test_creates_directory(self, tmp_path: Path) -> None:
-        from toolset_builder import resolve_workspace_root
+        from autopoiesis.tools.toolset_builder import resolve_workspace_root
 
         target = tmp_path / "new" / "deep" / "ws"
         with patch.dict(os.environ, {"AGENT_WORKSPACE_ROOT": str(target)}):
@@ -108,7 +108,7 @@ class TestBuildToolsets:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
 
     def test_returns_tuple(self) -> None:
-        from toolset_builder import build_toolsets
+        from autopoiesis.tools.toolset_builder import build_toolsets
 
         result = build_toolsets()
         assert isinstance(result, tuple)
@@ -118,7 +118,7 @@ class TestBuildToolsets:
         assert len(system_prompt) > 0
 
     def test_toolset_count_without_knowledge(self) -> None:
-        from toolset_builder import build_toolsets
+        from autopoiesis.tools.toolset_builder import build_toolsets
 
         with patch.dict(os.environ, {"ENABLE_EXECUTE": ""}):
             toolsets, _ = build_toolsets()
@@ -127,10 +127,10 @@ class TestBuildToolsets:
             assert len(toolsets) >= min_toolsets
 
     def test_toolset_count_with_knowledge(self, tmp_path: Path) -> None:
-        from toolset_builder import build_toolsets
+        from autopoiesis.tools.toolset_builder import build_toolsets
 
         db_path = str(tmp_path / "knowledge.sqlite")
-        from store.knowledge import init_knowledge_index
+        from autopoiesis.store.knowledge import init_knowledge_index
 
         init_knowledge_index(db_path)
         toolsets, prompt = build_toolsets(knowledge_db_path=db_path)
@@ -140,14 +140,14 @@ class TestBuildToolsets:
 
     def test_exec_instructions_absent_when_disabled(self) -> None:
         with patch.dict(os.environ, {"ENABLE_EXECUTE": ""}):
-            from toolset_builder import build_toolsets
+            from autopoiesis.tools.toolset_builder import build_toolsets
 
             _, prompt = build_toolsets()
             assert "## Shell execution" not in prompt
 
     def test_exec_instructions_present_when_enabled(self) -> None:
         with patch.dict(os.environ, {"ENABLE_EXECUTE": "true"}):
-            from toolset_builder import build_toolsets
+            from autopoiesis.tools.toolset_builder import build_toolsets
 
             _, prompt = build_toolsets()
             assert "## Shell execution" in prompt
@@ -161,14 +161,14 @@ class TestBuildAgent:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
 
     def test_creates_anthropic_agent(self) -> None:
-        from agent.runtime import build_agent
+        from autopoiesis.agent.runtime import build_agent
 
         agent = build_agent("anthropic", "test", [], "You are helpful.")
         assert agent is not None
         assert agent.name == "test"
 
     def test_creates_openrouter_agent(self) -> None:
-        from agent.runtime import build_agent
+        from autopoiesis.agent.runtime import build_agent
 
         with patch.dict(os.environ, {"OPENROUTER_API_KEY": "or-key"}):
             agent = build_agent("openrouter", "or-test", [], "prompt")
@@ -176,7 +176,7 @@ class TestBuildAgent:
             assert agent.name == "or-test"
 
     def test_openrouter_missing_key_exits(self) -> None:
-        from agent.runtime import build_agent
+        from autopoiesis.agent.runtime import build_agent
 
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("OPENROUTER_API_KEY", None)
@@ -184,14 +184,14 @@ class TestBuildAgent:
                 build_agent("openrouter", "test", [], "prompt")
 
     def test_unsupported_provider_exits(self) -> None:
-        from agent.runtime import build_agent
+        from autopoiesis.agent.runtime import build_agent
 
         with pytest.raises(SystemExit, match="Unsupported"):
             build_agent("unknown", "test", [], "prompt")
 
     def test_empty_instructions_not_coerced(self) -> None:
         """Empty list should stay as empty list, not become None."""
-        from agent.runtime import AgentOptions, build_agent
+        from autopoiesis.agent.runtime import AgentOptions, build_agent
 
         agent = build_agent(
             "anthropic",
@@ -203,7 +203,7 @@ class TestBuildAgent:
         assert agent is not None
 
     def test_anthropic_missing_key_exits(self) -> None:
-        from agent.runtime import build_agent
+        from autopoiesis.agent.runtime import build_agent
 
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("ANTHROPIC_API_KEY", None)
@@ -215,14 +215,14 @@ class TestPrepareToolsForProvider:
     """Tests for provider-specific tool preparation selection."""
 
     def test_openrouter_uses_strict_tool_preparation(self) -> None:
-        from agent.runtime import prepare_tools_for_provider
-        from toolset_builder import strict_tool_definitions
+        from autopoiesis.agent.runtime import prepare_tools_for_provider
+        from autopoiesis.tools.toolset_builder import strict_tool_definitions
 
         prepare = prepare_tools_for_provider("openrouter")
         assert prepare is strict_tool_definitions
 
     def test_anthropic_disables_tool_preparation(self) -> None:
-        from agent.runtime import prepare_tools_for_provider
+        from autopoiesis.agent.runtime import prepare_tools_for_provider
 
         prepare = prepare_tools_for_provider("anthropic")
         assert prepare is None
@@ -232,14 +232,14 @@ class TestRuntimeRegistry:
     """Tests for lock-protected runtime registry injection and wrappers."""
 
     def test_get_before_set_raises(self) -> None:
-        from agent.runtime import RuntimeRegistry
+        from autopoiesis.agent.runtime import RuntimeRegistry
 
         registry = RuntimeRegistry()
         with pytest.raises(RuntimeError, match="Runtime not initialised"):
             registry.get()
 
     def test_wrappers_use_injected_registry(self) -> None:
-        from agent.runtime import (
+        from autopoiesis.agent.runtime import (
             Runtime,
             RuntimeRegistry,
             get_runtime,

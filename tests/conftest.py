@@ -7,10 +7,10 @@ from pathlib import Path
 import pytest
 from pydantic_ai_backends import LocalBackend
 
-from approval.keys import ApprovalKeyManager, KeyPaths
-from approval.store import ApprovalStore
-from models import AgentDeps
-from store.history import init_history_store
+from autopoiesis.infra.approval.keys import ApprovalKeyManager, KeyPaths
+from autopoiesis.infra.approval.store import ApprovalStore
+from autopoiesis.models import AgentDeps
+from autopoiesis.store.history import init_history_store
 
 _TEST_PASSPHRASE = "test-passphrase-long-enough"
 _TTL_SECONDS = 3600

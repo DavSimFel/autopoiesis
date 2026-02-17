@@ -8,7 +8,7 @@ chat, background research, code generation, reviews. One queue, one path.
 ## Status
 
 - **Last updated:** 2026-02-16 (Issue #19, #21)
-- **Source:** `models.py`, `work_queue.py`, `streaming.py`, `chat_worker.py`, `chat_cli.py`
+- **Source:** `src/autopoiesis/models.py`, `src/autopoiesis/infra/work_queue.py`, `src/autopoiesis/display/streaming.py`, `agent/worker.py`, `agent/cli.py`
 
 ## Core Concept: WorkItem
 
@@ -24,7 +24,7 @@ comes from the final `WorkItemOutput` persisted after completion.
 
 ## Components
 
-### `models.py`
+### `src/autopoiesis/models.py`
 
 #### `WorkItemPriority(IntEnum)`
 
@@ -69,16 +69,16 @@ comes from the final `WorkItemOutput` persisted after completion.
 | `payload` | `dict[str, Any]` | `{}` | Arbitrary metadata |
 | `created_at` | `datetime` | `now(UTC)` | Timezone-aware |
 
-### `work_queue.py`
+### `src/autopoiesis/infra/work_queue.py`
 
-Single queue instance — no functions, no imports from `chat.py`:
+Single queue instance — no functions, no imports from `src/autopoiesis/cli.py`:
 
 - Queue name: `"agent_work"`
 - `priority_enabled=True`
 - `concurrency=1`
 - `polling_interval_sec=1.0`
 
-### `streaming.py`
+### `src/autopoiesis/display/streaming.py`
 
 In-process stream handle registry for real-time output.
 
@@ -136,8 +136,8 @@ execution so DBOS replay can resume with minimal repeated model work.
   back to input history on mismatch. Active checkpoint state in workers is
   context-local (`ContextVar`) instead of module-global mutable state.
   (Issue #21, PR #23)
-- 2026-02-16: Moved queue worker/execution helpers from `chat.py` into
-  `chat_worker.py`; queue contract and transport schema unchanged.
+- 2026-02-16: Moved queue worker/execution helpers from `src/autopoiesis/cli.py` into
+  `agent/worker.py`; queue contract and transport schema unchanged.
   (Issue #19, PR #20)
 - 2026-02-15: Created. WorkItem model, stream handles, unified queue path. (Issue #8)
 - 2026-02-15: Added history checkpoint persistence + crash recovery resume flow. (Issue #21)

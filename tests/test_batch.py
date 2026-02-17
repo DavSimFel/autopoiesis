@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 import pytest
 
-from agent.batch import BatchResult, format_output, run_batch
+from autopoiesis.agent.batch import BatchResult, format_output, run_batch
 
 
 class TestFormatOutput:
@@ -45,13 +45,13 @@ class TestRunBatchStdinRead:
     """Verify stdin task reading."""
 
     def test_empty_stdin_exits(self) -> None:
-        with patch("agent.batch.sys.stdin") as mock_stdin:
+        with patch("autopoiesis.agent.batch.sys.stdin") as mock_stdin:
             mock_stdin.read.return_value = "  "
             with pytest.raises(SystemExit, match="empty task"):
                 run_batch(None)
 
     def test_dash_reads_stdin(self) -> None:
-        with patch("agent.batch.sys.stdin") as mock_stdin:
+        with patch("autopoiesis.agent.batch.sys.stdin") as mock_stdin:
             mock_stdin.read.return_value = "  "
             with pytest.raises(SystemExit, match="empty task"):
                 run_batch("-")
@@ -63,7 +63,7 @@ class TestRunBatchIntegration:
     def test_success_writes_output_file(self, tmp_path: Path) -> None:
         from unittest.mock import MagicMock
 
-        from run_simple import SimpleResult
+        from autopoiesis.run_simple import SimpleResult
 
         mock_rt = MagicMock()
         mock_rt.backend = MagicMock()
@@ -72,8 +72,8 @@ class TestRunBatchIntegration:
         fake_result = SimpleResult(text="done", all_messages=[], approval_rounds=1)
 
         with (
-            patch("agent.batch.get_runtime", return_value=mock_rt),
-            patch("agent.batch.run_simple", return_value=fake_result),
+            patch("autopoiesis.agent.batch.get_runtime", return_value=mock_rt),
+            patch("autopoiesis.agent.batch.run_simple", return_value=fake_result),
             pytest.raises(SystemExit) as exc_info,
         ):
             run_batch("do something", output_path=str(output_file))
@@ -91,8 +91,8 @@ class TestRunBatchIntegration:
         mock_rt.backend = MagicMock()
 
         with (
-            patch("agent.batch.get_runtime", return_value=mock_rt),
-            patch("agent.batch.run_simple", side_effect=RuntimeError("boom")),
+            patch("autopoiesis.agent.batch.get_runtime", return_value=mock_rt),
+            patch("autopoiesis.agent.batch.run_simple", side_effect=RuntimeError("boom")),
             pytest.raises(SystemExit) as exc_info,
         ):
             run_batch("do something")
@@ -110,10 +110,10 @@ class TestRunBatchIntegration:
             raise TimeoutError("Batch run exceeded 1s timeout.")
 
         with (
-            patch("agent.batch.get_runtime", return_value=mock_rt),
-            patch("agent.batch.run_simple", side_effect=_slow_run),
-            patch("agent.batch.signal.signal"),
-            patch("agent.batch.signal.alarm"),
+            patch("autopoiesis.agent.batch.get_runtime", return_value=mock_rt),
+            patch("autopoiesis.agent.batch.run_simple", side_effect=_slow_run),
+            patch("autopoiesis.agent.batch.signal.signal"),
+            patch("autopoiesis.agent.batch.signal.alarm"),
             pytest.raises(SystemExit) as exc_info,
         ):
             run_batch("do something", output_path=str(output_file), timeout=1)

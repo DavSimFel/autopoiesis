@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from skills import Skill, load_skill_instructions
+from autopoiesis.skills.skills import Skill, load_skill_instructions
 
 
 def _make_skill_dir(tmp_path: Path, name: str, instructions: str) -> Path:

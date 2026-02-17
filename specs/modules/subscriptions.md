@@ -76,3 +76,5 @@ The processor chain order in `chat.py`:
 ### Changelog
 - 2026-02-16: Modules moved into subdirectories (`agent/`, `approval/`, `display/`, `infra/`, `store/`, `tools/`) as part of subdirectory restructuring (#119)
 - 2026-02-16: Added Dependencies/Wired-in docstring headers as part of #121 documentation update
+
+- 2026-02-17: Paths updated for `src/autopoiesis/` layout (#152)

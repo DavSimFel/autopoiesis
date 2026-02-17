@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from skills import Skill, SkillDirectory, discover_skills, parse_skill_md
+from autopoiesis.skills.skills import Skill, SkillDirectory, discover_skills, parse_skill_md
 
 
 def _write_skill(directory: Path, name: str, description: str = "A test skill") -> Path:
@@ -141,7 +141,7 @@ class TestLoadSkillInstructions:
     """Tests for loading instructions with missing SKILL.md."""
 
     def test_missing_skill_file(self, tmp_path: Path) -> None:
-        from skills import load_skill_instructions
+        from autopoiesis.skills.skills import load_skill_instructions
 
         skill = Skill(name="ghost", description="gone", path=tmp_path / "ghost")
         cache = {"ghost": skill}

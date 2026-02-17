@@ -2,13 +2,13 @@
 
 ## Purpose
 
-`skillmaker_tools.py` provides reusable linting and validation logic for
+`src/autopoiesis/skills/skillmaker_tools.py` provides reusable linting and validation logic for
 `SKILL.md` files so skill quality checks are consistent across tool calls.
 
 ## Status
 
 - **Last updated:** 2026-02-15 (Issue #9)
-- **Source:** `skillmaker_tools.py`
+- **Source:** `src/autopoiesis/skills/skillmaker_tools.py`
 
 ## Key Concepts
 
@@ -17,9 +17,9 @@
 
 ## Architecture
 
-- `skills.py` reads/parses skill files, then delegates quality checks to
-  `skillmaker_tools.py`.
-- Tool functions exposed by `skills.py`:
+- `src/autopoiesis/skills/skills.py` reads/parses skill files, then delegates quality checks to
+  `src/autopoiesis/skills/skillmaker_tools.py`.
+- Tool functions exposed by `src/autopoiesis/skills/skills.py`:
   - `validate_skill(skill_name)`
   - `lint_skill(skill_name)`
 
@@ -52,7 +52,7 @@
 ## Dependencies
 
 - Python standard library only (`re`, `typing`).
-- Called by `skills.py`.
+- Called by `src/autopoiesis/skills/skills.py`.
 
 ## Change Log
 

@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from store.history import resolve_history_db_path
+from autopoiesis.store.history import resolve_history_db_path
 
 
 def test_history_db_default_path_points_to_repo_data() -> None:

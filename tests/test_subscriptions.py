@@ -7,13 +7,13 @@ from pathlib import Path
 import pytest
 from pydantic_ai.messages import ModelRequest, UserPromptPart
 
-from infra.subscription_processor import (
+from autopoiesis.infra.subscription_processor import (
     is_materialization,
     materialize_subscriptions,
     resolve_subscriptions,
 )
-from store.knowledge import init_knowledge_index, reindex_knowledge
-from store.subscriptions import (
+from autopoiesis.store.knowledge import init_knowledge_index, reindex_knowledge
+from autopoiesis.store.subscriptions import (
     MAX_CONTENT_CHARS,
     MAX_SUBSCRIPTIONS,
     SubscriptionRegistry,

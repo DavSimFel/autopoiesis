@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from infra.subscription_processor import resolve_subscriptions
-from store.knowledge import init_knowledge_index
-from store.subscriptions import SubscriptionRegistry
+from autopoiesis.infra.subscription_processor import resolve_subscriptions
+from autopoiesis.store.knowledge import init_knowledge_index
+from autopoiesis.store.subscriptions import SubscriptionRegistry
 
 
 def _knowledge_db(tmp_path: Path) -> str:

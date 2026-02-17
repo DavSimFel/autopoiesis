@@ -5,8 +5,8 @@ from __future__ import annotations
 import pytest
 from pydantic_ai import Agent, FunctionToolset, Tool
 
-from models import AgentDeps
-from run_simple import SimpleResult, run_simple
+from autopoiesis.models import AgentDeps
+from autopoiesis.run_simple import SimpleResult, run_simple
 
 # ---------------------------------------------------------------------------
 # Helpers

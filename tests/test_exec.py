@@ -7,9 +7,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from infra import exec_registry
-from models import AgentDeps, WorkItemType
-from tools.exec_tool import execute, sandbox_cwd, validate_env
+from autopoiesis.infra import exec_registry
+from autopoiesis.models import AgentDeps, WorkItemType
+from autopoiesis.tools.exec_tool import execute, sandbox_cwd, validate_env
 
 
 @pytest.fixture(autouse=True)

@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from store.knowledge import (
+from autopoiesis.store.knowledge import (
     CONTEXT_BUDGET_CHARS,
     SearchResult,
     ensure_journal_entry,

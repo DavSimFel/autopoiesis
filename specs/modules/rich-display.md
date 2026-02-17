@@ -7,7 +7,7 @@ branch in a Rich tree.
 
 ## Status
 - **Last updated:** 2026-02-16 (Issue #25)
-- **Source:** `rich_display.py`, `streaming.py`
+- **Source:** `rich_display.py`, `src/autopoiesis/display/streaming.py`
 
 ## Key Concepts
 
@@ -37,7 +37,7 @@ protocols. Routes:
 - Tool calls → per-call channels with args (running) → summary (done)
 - Thinking → dedicated channel with live tail → collapsed on completion
 
-`chat_worker.py` forwards PydanticAI `AgentStreamEvent`s:
+`agent/worker.py` forwards PydanticAI `AgentStreamEvent`s:
 - `FunctionToolCallEvent` → `start_tool_call`
 - `FunctionToolResultEvent` → `finish_tool_call`
 - `PartStartEvent(ThinkingPart)` → `start_thinking`
@@ -71,7 +71,7 @@ protocols. Routes:
 ## Dependencies
 
 - External: `rich>=13.0`
-- Internal: `chat_cli.py`, `chat_worker.py`
+- Internal: `agent/cli.py`, `agent/worker.py`
 
 ## Change Log
 

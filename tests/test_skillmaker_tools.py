@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from skillmaker_tools import validate_skill_definition
+from autopoiesis.skills.skillmaker_tools import validate_skill_definition
 
 
 def test_validate_requires_metadata_version_and_tags() -> None:

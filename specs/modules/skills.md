@@ -2,7 +2,7 @@
 
 ## Purpose
 
-`skills.py` provides a filesystem-based skill system with progressive
+`src/autopoiesis/skills/skills.py` provides a filesystem-based skill system with progressive
 disclosure. Skills are folders containing a `SKILL.md` with YAML frontmatter
 and markdown instructions. The agent discovers skills cheaply (frontmatter
 only) and loads full instructions on demand.
@@ -10,7 +10,7 @@ only) and loads full instructions on demand.
 ## Status
 
 - **Last updated:** 2026-02-15 (Issue #9)
-- **Source:** `skills.py`
+- **Source:** `src/autopoiesis/skills/skills.py`
 
 ## Key Concepts
 
@@ -57,7 +57,7 @@ metadata:
 Detailed instructions the agent follows when this skill is loaded...
 ```
 
-## Models (defined in `skills.py`)
+## Models (defined in `src/autopoiesis/skills/skills.py`)
 
 - `SkillDirectory(path, recursive=True)` — directory to scan
 - `Skill(name, description, path, tags, version, author, resources, instructions)` —
@@ -104,7 +104,7 @@ Detailed instructions the agent follows when this skill is loaded...
 
 | Var | Required | Default | Used in | Notes |
 |-----|----------|---------|---------|-------|
-| `SKILLS_DIR` | No | `skills` | `chat.py:_resolve_shipped_skills_dir()` | Shipped skill path, resolves from `chat.py` dir |
+| `SKILLS_DIR` | No | `skills` | `chat.py:_resolve_shipped_skills_dir()` | Shipped skill path, resolves from `src/autopoiesis/cli.py` dir |
 | `CUSTOM_SKILLS_DIR` | No | `skills` | `chat.py:_resolve_custom_skills_dir()` | Custom skill path, resolves inside `AGENT_WORKSPACE_ROOT` when relative |
 
 ## Invariants
@@ -132,7 +132,7 @@ Detailed instructions the agent follows when this skill is loaded...
 ## Dependencies
 
 - `pyyaml>=6.0` (90KB, zero transitive deps)
-- Internal helper module: `skillmaker_tools.py`
+- Internal helper module: `src/autopoiesis/skills/skillmaker_tools.py`
 
 ## Change Log
 

@@ -15,7 +15,7 @@ conversation history within model context limits.
 
 ## Architecture
 Both modules are wired as `history_processors` in the PydanticAI agent
-(via `chat.py`). They run in order: truncation → compaction → checkpoint.
+(via `src/autopoiesis/cli.py`). They run in order: truncation → compaction → checkpoint.
 
 ## API Surface
 
@@ -41,7 +41,7 @@ Both modules are wired as `history_processors` in the PydanticAI agent
 
 ## Dependencies
 - **External:** `pydantic-ai` (message types)
-- **Internal:** wired via `chat.py` history_processors
+- **Internal:** wired via `src/autopoiesis/cli.py` history_processors
 
 ## Change Log
 - 2026-02-16: Initial implementation — sliding window + truncation (Issue #27)

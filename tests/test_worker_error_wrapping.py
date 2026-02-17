@@ -11,9 +11,9 @@ import pytest
 from pydantic_ai.exceptions import ModelHTTPError
 from pydantic_ai_backends import LocalBackend
 
-import agent.worker as chat_worker
-from models import WorkItem, WorkItemInput, WorkItemPriority, WorkItemType
-from store.history import init_history_store
+import autopoiesis.agent.worker as chat_worker
+from autopoiesis.models import WorkItem, WorkItemInput, WorkItemPriority, WorkItemType
+from autopoiesis.store.history import init_history_store
 
 
 @dataclass

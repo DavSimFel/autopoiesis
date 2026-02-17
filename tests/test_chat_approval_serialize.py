@@ -8,11 +8,14 @@ from unittest.mock import MagicMock
 
 from pydantic_ai.tools import ToolDenied
 
-from approval.chat_approval import deserialize_deferred_results, serialize_deferred_requests
-from approval.keys import ApprovalKeyManager
-from approval.policy import ToolPolicyRegistry
-from approval.store import ApprovalStore
-from approval.types import ApprovalScope, SignedDecision
+from autopoiesis.infra.approval.chat_approval import (
+    deserialize_deferred_results,
+    serialize_deferred_requests,
+)
+from autopoiesis.infra.approval.keys import ApprovalKeyManager
+from autopoiesis.infra.approval.policy import ToolPolicyRegistry
+from autopoiesis.infra.approval.store import ApprovalStore
+from autopoiesis.infra.approval.types import ApprovalScope, SignedDecision
 
 
 def _scope() -> ApprovalScope:

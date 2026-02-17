@@ -9,10 +9,10 @@ from typing import Any
 
 import pytest
 
-from approval.keys import ApprovalKeyManager, KeyPaths
-from approval.policy import ToolClassification, ToolPolicyRegistry
-from approval.store import ApprovalStore
-from approval.types import (
+from autopoiesis.infra.approval.keys import ApprovalKeyManager, KeyPaths
+from autopoiesis.infra.approval.policy import ToolClassification, ToolPolicyRegistry
+from autopoiesis.infra.approval.store import ApprovalStore
+from autopoiesis.infra.approval.types import (
     ApprovalScope,
     ApprovalVerificationError,
     DeferredToolCall,
