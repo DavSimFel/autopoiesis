@@ -18,6 +18,12 @@ from prompts import (
     compose_system_prompt,
 )
 from skills import SkillDirectory, create_skills_toolset
+from store.knowledge import (
+    ensure_journal_entry,
+    init_knowledge_index,
+    load_knowledge_context,
+    reindex_knowledge,
+)
 from store.subscriptions import SubscriptionRegistry
 from tools.knowledge_tools import create_knowledge_toolset
 from tools.memory_tools import create_memory_toolset
@@ -207,6 +213,36 @@ def build_toolsets(
         prompt_fragments.append(topic_instr)
 
     return wrap_toolsets(toolsets), compose_system_prompt(prompt_fragments)
+
+
+def prepare_toolset_context(
+    memory_db_path: str,
+) -> tuple[
+    Path,
+    SubscriptionRegistry,
+    TopicRegistry,
+    list[AbstractToolset[AgentDeps]],
+    str,
+]:
+    """Initialize runtime stores needed for toolset construction."""
+    workspace_root = resolve_workspace_root()
+    sub_db_path = str(Path(memory_db_path).with_name("subscriptions.sqlite"))
+    subscription_registry = SubscriptionRegistry(sub_db_path)
+    knowledge_root = workspace_root / "knowledge"
+    knowledge_db_path = str(Path(memory_db_path).with_name("knowledge.sqlite"))
+    init_knowledge_index(knowledge_db_path)
+    reindex_knowledge(knowledge_db_path, knowledge_root)
+    ensure_journal_entry(knowledge_root)
+    knowledge_context = load_knowledge_context(knowledge_root)
+    topic_registry = TopicRegistry(workspace_root / "topics")
+    toolsets, system_prompt = build_toolsets(
+        memory_db_path=memory_db_path,
+        subscription_registry=subscription_registry,
+        knowledge_db_path=knowledge_db_path,
+        knowledge_context=knowledge_context,
+        topic_registry=topic_registry,
+    )
+    return workspace_root, subscription_registry, topic_registry, toolsets, system_prompt
 
 
 async def strict_tool_definitions(

@@ -15,7 +15,8 @@ split into focused companion modules.
 
 | File | Responsibility |
 |------|---------------|
-| `chat.py` | Entrypoint, rotate-key command, runtime initialization (all modes), DBOS launch, serve/chat dispatch |
+| `chat.py` | Entrypoint, rotate-key command, runtime initialization (all modes), DBOS launch, serve/chat dispatch (≤300 lines) |
+| `agent/history.py` | History processor pipeline construction (extracted from chat.py) |
 | `chat_runtime.py` | Runtime singleton state, `AgentOptions`, agent assembly, instrumentation toggle |
 | `model_resolution.py` | Provider detection, required env access, model settings/env parsing, fallback model resolution |
 | `toolset_builder.py` | Workspace/backend creation, console+skills+exec+memory/subscription toolset composition, strict tool schema preparation |
@@ -80,10 +81,9 @@ split into focused companion modules.
   `OTEL_EXPORTER_OTLP_ENDPOINT` is set. Returns `True` if applied.
 
 - `_resolve_startup_config()` — resolves provider, agent name, and DBOS system database URL from env
-- `_prepare_toolset_context(memory_db_path)` — initializes stores (subscriptions, knowledge, topics) and builds toolsets
-- `_build_history_processors(...)` — builds ordered message history processors (truncation, compaction, subscriptions, topics, checkpointing)
-- `_initialize_runtime(base_dir, *, require_approval_unlock)` — full runtime init for all modes (chat/batch/serve); assembles provider, backend, toolsets, agent, registers runtime
-- `_register_runtime(...)` — initializes history storage and calls set_runtime() with all components
+- `toolset_builder.prepare_toolset_context(memory_db_path)` — initializes stores (subscriptions, knowledge, topics) and builds toolsets (moved from chat.py)
+- `agent.history.build_history_processors(...)` — builds ordered message history processors (truncation, compaction, subscriptions, topics, checkpointing) (moved from chat.py)
+- `_initialize_runtime(base_dir, *, require_approval_unlock)` — full runtime init for all modes (chat/batch/serve); assembles provider, backend, toolsets, agent, initializes history storage, registers runtime. Serve mode defaults to `require_approval_unlock=False`.
 ### Runtime State
 
 - `Runtime` dataclass holds agent + backend + approval store + unlocked key manager + tool policy for the process lifetime

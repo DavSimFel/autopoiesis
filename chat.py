@@ -6,13 +6,11 @@ import argparse
 import os
 import sys
 from pathlib import Path
-from typing import Any
 
 from dotenv import load_dotenv
-from pydantic_ai.messages import ModelMessage
+from pydantic_ai import Agent
 
-from agent.cli import cli_chat_loop
-from agent.context import compact_history
+from agent.history import build_history_processors
 from agent.runtime import (
     AgentOptions,
     Runtime,
@@ -20,30 +18,19 @@ from agent.runtime import (
     instrument_agent,
     set_runtime,
 )
-from agent.truncation import truncate_tool_results
-from agent.worker import checkpoint_history_processor
 from approval.keys import ApprovalKeyManager
 from approval.policy import ToolPolicyRegistry
 from approval.store import ApprovalStore
 from infra import otel_tracing
-from infra.subscription_processor import materialize_subscriptions
-from infra.topic_processor import inject_topic_context
 from model_resolution import resolve_provider
+from models import AgentDeps
 from store.history import (
     cleanup_stale_checkpoints,
     init_history_store,
     resolve_history_db_path,
 )
-from store.knowledge import (
-    ensure_journal_entry,
-    init_knowledge_index,
-    load_knowledge_context,
-    reindex_knowledge,
-)
 from store.memory import init_memory_store, resolve_memory_db_path
-from store.subscriptions import SubscriptionRegistry
-from toolset_builder import build_backend, build_toolsets, resolve_workspace_root
-from topic_manager import TopicRegistry
+from toolset_builder import LocalBackend, build_backend, prepare_toolset_context
 
 try:
     from dbos import DBOS, DBOSConfig
@@ -53,16 +40,6 @@ except ModuleNotFoundError as exc:
         f"Missing DBOS dependency package `{missing_package}`. Run `uv sync` so "
         "`pydantic-ai-slim[dbos,mcp]` and `dbos` are installed."
     ) from exc
-
-
-def _truncate_processor(msgs: list[ModelMessage]) -> list[ModelMessage]:
-    """Truncate oversized tool results in message history."""
-    return truncate_tool_results(msgs, resolve_workspace_root())
-
-
-def _compact_processor(msgs: list[ModelMessage]) -> list[ModelMessage]:
-    """Compact older messages when token usage exceeds threshold."""
-    return compact_history(msgs)
 
 
 def _rotate_key(base_dir: Path) -> None:
@@ -115,65 +92,6 @@ def parse_cli_args(repo_root: Path, argv: list[str] | None = None) -> argparse.N
     return parser.parse_args(argv if argv is not None else sys.argv[1:])
 
 
-def _prepare_toolset_context(
-    memory_db_path: str,
-) -> tuple[
-    Path,
-    SubscriptionRegistry,
-    TopicRegistry,
-    list[Any],
-    str,
-]:
-    """Initialize runtime stores needed for toolset construction."""
-    workspace_root = resolve_workspace_root()
-    sub_db_path = str(Path(memory_db_path).with_name("subscriptions.sqlite"))
-    subscription_registry = SubscriptionRegistry(sub_db_path)
-    knowledge_root = workspace_root / "knowledge"
-    knowledge_db_path = str(Path(memory_db_path).with_name("knowledge.sqlite"))
-    init_knowledge_index(knowledge_db_path)
-    reindex_knowledge(knowledge_db_path, knowledge_root)
-    ensure_journal_entry(knowledge_root)
-    knowledge_context = load_knowledge_context(knowledge_root)
-    topic_registry = TopicRegistry(workspace_root / "topics")
-    toolsets, system_prompt = build_toolsets(
-        memory_db_path=memory_db_path,
-        subscription_registry=subscription_registry,
-        knowledge_db_path=knowledge_db_path,
-        knowledge_context=knowledge_context,
-        topic_registry=topic_registry,
-    )
-    return workspace_root, subscription_registry, topic_registry, toolsets, system_prompt
-
-
-def _build_history_processors(
-    *,
-    subscription_registry: SubscriptionRegistry,
-    workspace_root: Path,
-    memory_db_path: str,
-    topic_registry: TopicRegistry,
-) -> list[Any]:
-    """Build ordered message history processors for agent runs."""
-
-    def _subscription_processor(msgs: list[ModelMessage]) -> list[ModelMessage]:
-        return materialize_subscriptions(
-            msgs,
-            subscription_registry,
-            workspace_root,
-            memory_db_path,
-        )
-
-    def _topic_processor(msgs: list[ModelMessage]) -> list[ModelMessage]:
-        return inject_topic_context(msgs, topic_registry)
-
-    return [
-        _truncate_processor,
-        _compact_processor,
-        _subscription_processor,
-        _topic_processor,
-        checkpoint_history_processor,
-    ]
-
-
 def _resolve_startup_config() -> tuple[str, str, str]:
     """Resolve provider/agent names and DBOS system database URL."""
     provider = resolve_provider(os.getenv("AI_PROVIDER"))
@@ -193,7 +111,7 @@ def _initialize_runtime(
     """Build runtime dependencies and register the process-wide runtime."""
     provider, agent_name, system_database_url = _resolve_startup_config()
 
-    backend = build_backend()
+    backend: LocalBackend = build_backend()
     approval_store = ApprovalStore.from_env(base_dir=base_dir)
     key_manager = ApprovalKeyManager.from_env(base_dir=base_dir)
     if require_approval_unlock:
@@ -207,15 +125,15 @@ def _initialize_runtime(
         topic_registry,
         toolsets,
         system_prompt,
-    ) = _prepare_toolset_context(memory_db_path)
-    history_processors = _build_history_processors(
+    ) = prepare_toolset_context(memory_db_path)
+    history_processors = build_history_processors(
         subscription_registry=subscription_registry,
         workspace_root=workspace_root,
         memory_db_path=memory_db_path,
         topic_registry=topic_registry,
     )
 
-    agent = build_agent(
+    agent: Agent[AgentDeps, str] = build_agent(
         provider,
         agent_name,
         toolsets,
@@ -223,31 +141,7 @@ def _initialize_runtime(
         options=AgentOptions(history_processors=history_processors),
     )
     instrument_agent(agent)
-    _register_runtime(
-        agent=agent,
-        backend=backend,
-        system_database_url=system_database_url,
-        memory_db_path=memory_db_path,
-        subscription_registry=subscription_registry,
-        approval_store=approval_store,
-        key_manager=key_manager,
-        tool_policy=tool_policy,
-    )
-    return system_database_url
 
-
-def _register_runtime(  # noqa: PLR0913 — runtime wiring needs all components
-    *,
-    agent: Any,
-    backend: Any,
-    system_database_url: str,
-    memory_db_path: str,
-    subscription_registry: SubscriptionRegistry,
-    approval_store: ApprovalStore,
-    key_manager: ApprovalKeyManager,
-    tool_policy: ToolPolicyRegistry,
-) -> None:
-    """Initialize history storage and set the shared runtime."""
     history_db_path = resolve_history_db_path(system_database_url)
     init_history_store(history_db_path)
     cleanup_stale_checkpoints(history_db_path)
@@ -263,6 +157,7 @@ def _register_runtime(  # noqa: PLR0913 — runtime wiring needs all components
             tool_policy=tool_policy,
         )
     )
+    return system_database_url
 
 
 def main() -> None:
@@ -281,7 +176,7 @@ def main() -> None:
     try:
         system_database_url = _initialize_runtime(
             base_dir,
-            require_approval_unlock=not args.no_approval and not is_batch,
+            require_approval_unlock=not args.no_approval and not is_batch and not is_serve,
         )
     except (OSError, RuntimeError, ValueError) as exc:
         raise SystemExit(f"Failed to initialize runtime: {exc}") from exc
@@ -304,6 +199,8 @@ def main() -> None:
 
         run_server(host=args.host, port=args.port)
         return
+
+    from agent.cli import cli_chat_loop
 
     cli_chat_loop()
 
