@@ -9,13 +9,142 @@ from __future__ import annotations
 import logging
 import re
 from contextlib import closing
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any, cast
+
+import yaml
 
 from autopoiesis.db import open_db
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Type registry
+# ---------------------------------------------------------------------------
+
+_BUILTIN_TYPES = frozenset(
+    {"fact", "experience", "preference", "note", "conversation", "decision", "contact", "project"}
+)
+
+_registered_types: set[str] = set()
+
+
+def register_types(types: set[str]) -> None:
+    """Register additional memory types (e.g. from skills at startup)."""
+    _registered_types.update(types)
+
+
+def known_types() -> frozenset[str]:
+    """Return all known memory types (built-in + registered)."""
+    return _BUILTIN_TYPES | frozenset(_registered_types)
+
+
+# ---------------------------------------------------------------------------
+# Frontmatter parsing
+# ---------------------------------------------------------------------------
+
+_FRONTMATTER_RE = re.compile(r"\A---\s*\n(.*?\n)---\s*\n", re.DOTALL)
+
+
+@dataclass
+class FileMeta:
+    """Parsed frontmatter metadata for a knowledge file."""
+
+    type: str = "note"
+    created: datetime = field(default_factory=lambda: datetime.now(UTC))
+    modified: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+
+def _parse_datetime(val: object) -> datetime | None:
+    """Try to interpret *val* as a timezone-aware datetime."""
+    if isinstance(val, datetime):
+        return val if val.tzinfo else val.replace(tzinfo=UTC)
+    if isinstance(val, str):
+        try:
+            parsed = datetime.fromisoformat(val)
+            return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+        except ValueError:
+            return None
+    return None
+
+
+def parse_frontmatter(content: str, file_path: Path | None = None) -> FileMeta:
+    """Extract ``type``, ``created``, ``modified`` from YAML frontmatter.
+
+    Falls back to file mtime when fields are missing or frontmatter is absent.
+    Unknown types are treated as ``note``.
+    """
+    meta = FileMeta()
+
+    # Derive defaults from file mtime if available
+    if file_path is not None and file_path.is_file():
+        mtime = datetime.fromtimestamp(file_path.stat().st_mtime, tz=UTC)
+        meta.created = mtime
+        meta.modified = mtime
+
+    m = _FRONTMATTER_RE.match(content)
+    if m is None:
+        return meta
+
+    try:
+        data = yaml.safe_load(m.group(1))
+    except yaml.YAMLError:
+        return meta
+
+    if not isinstance(data, dict):
+        return meta
+
+    fm = cast(dict[str, Any], data)
+
+    raw_type = fm.get("type")
+    if isinstance(raw_type, str) and raw_type in known_types():
+        meta.type = raw_type
+
+    for key in ("created", "modified"):
+        dt = _parse_datetime(fm.get(key))
+        if dt is not None:
+            setattr(meta, key, dt)
+
+    return meta
+
+
+def strip_frontmatter(content: str) -> str:
+    """Return *content* without the leading YAML frontmatter block."""
+    return _FRONTMATTER_RE.sub("", content)
+
+
+# ---------------------------------------------------------------------------
+# Wikilink backlink index
+# ---------------------------------------------------------------------------
+
+_WIKILINK_RE = re.compile(r"\[\[([^\]|]+?)(?:\|[^\]]+)?\]\]")
+
+
+def build_backlink_index(knowledge_root: Path) -> dict[str, set[str]]:
+    """Scan all markdown files for ``[[target]]`` wikilinks.
+
+    Returns a mapping from *target* (lowercased, no extension) to the set of
+    source file paths (relative to *knowledge_root*) that link to it.
+    """
+    index: dict[str, set[str]] = {}
+    if not knowledge_root.is_dir():
+        return index
+
+    for md in knowledge_root.rglob("*.md"):
+        rel = str(md.relative_to(knowledge_root))
+        try:
+            text = md.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        for match in _WIKILINK_RE.finditer(text):
+            target = match.group(1).strip().lower()
+            if target:
+                index.setdefault(target, set()).add(rel)
+
+    return index
+
 
 # ---------------------------------------------------------------------------
 # Schema
@@ -97,6 +226,7 @@ class SearchResult:
     line_end: int
     snippet: str
     score: float
+    file_type: str = "note"
 
 
 # ---------------------------------------------------------------------------
@@ -217,8 +347,20 @@ def search_knowledge(
     db_path: str,
     query: str,
     limit: int = 10,
+    *,
+    type_filter: str | None = None,
+    since: datetime | None = None,
+    knowledge_root: Path | None = None,
 ) -> list[SearchResult]:
-    """Search the knowledge index using FTS5 BM25 ranking."""
+    """Search the knowledge index using FTS5 BM25 ranking.
+
+    Optional filters:
+
+    * *type_filter* - only return results from files whose frontmatter
+      ``type`` matches (requires *knowledge_root*).
+    * *since* - only return results from files created or modified on/after
+      this datetime (requires *knowledge_root*).
+    """
     fts_query = sanitize_fts_query(query)
     if not fts_query:
         return []
@@ -233,18 +375,44 @@ def search_knowledge(
             ORDER BY rank
             LIMIT ?
             """,
-            (fts_query, limit),
+            (fts_query, limit * 5 if (type_filter or since) else limit),
         ).fetchall()
-    return [
-        SearchResult(
-            file_path=row["file_path"],
-            line_start=row["line_start"],
-            line_end=row["line_end"],
-            snippet=row["content"][:500],
-            score=float(row["score"]),
+
+    results: list[SearchResult] = []
+    _meta_cache: dict[str, FileMeta] = {}
+
+    for row in rows:
+        fp = row["file_path"]
+
+        if (type_filter or since) and knowledge_root is not None:
+            if fp not in _meta_cache:
+                abs_path = knowledge_root / fp
+                try:
+                    content = abs_path.read_text(encoding="utf-8")
+                except (OSError, UnicodeDecodeError):
+                    content = ""
+                _meta_cache[fp] = parse_frontmatter(content, abs_path)
+
+            meta = _meta_cache[fp]
+
+            if type_filter and meta.type != type_filter:
+                continue
+            if since and meta.created < since and meta.modified < since:
+                continue
+
+        results.append(
+            SearchResult(
+                file_path=fp,
+                line_start=row["line_start"],
+                line_end=row["line_end"],
+                snippet=row["content"][:500],
+                score=float(row["score"]),
+            )
         )
-        for row in rows
-    ]
+        if len(results) >= limit:
+            break
+
+    return results
 
 
 def format_search_results(results: list[SearchResult]) -> str:

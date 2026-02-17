@@ -7,11 +7,57 @@
 The SQLite-based memory system (`store/memory.py`, `tools/memory_tools.py`) has been
 removed in favor of the file-based knowledge system (`store/knowledge.py`).
 
-See `specs/modules/knowledge.md` for the current memory/knowledge architecture.
+## Knowledge System (Issue #147)
 
-## Migration
+### Frontmatter
 
-`store/knowledge_migration.py` is retained as a reference for migrating legacy
-SQLite memory entries to knowledge markdown files.
+Knowledge files support YAML frontmatter with three fields:
+
+```yaml
+---
+type: fact
+created: 2026-01-15T10:00:00+00:00
+modified: 2026-02-01T12:00:00+00:00
+---
+```
+
+- **type**: One of `fact`, `experience`, `preference`, `note`, `conversation`,
+  `decision`, `contact`, `project`. Unknown types default to `note`. Skills
+  can register additional types via `register_types()`.
+- **created** / **modified**: ISO 8601 datetimes. Default to file mtime when
+  missing.
+- Files without frontmatter continue to work (backward compatible).
+
+### Type Registry
+
+`register_types(types: set[str])` allows skills to add custom types at startup.
+`known_types()` returns all built-in + registered types.
+
+### Filtered Search
+
+`search_knowledge()` accepts optional `type_filter` and `since` parameters:
+
+- `type_filter: str` - only return results from files whose frontmatter type matches.
+- `since: datetime` - only return files created or modified on/after this date.
+
+The `search` tool in `knowledge_tools.py` exposes both filters.
+
+### Wikilink Backlink Index
+
+`build_backlink_index(knowledge_root)` scans all markdown files for `[[target]]`
+patterns and returns `dict[str, set[str]]` mapping targets to source files.
+Designed to complete in <200ms for 1K files.
+
+### Migration
+
+`knowledge_migration.py` adds frontmatter (`type`, `created`, `modified`) to
+migrated files. Existing frontmatter is preserved.
+
+## Auto-loaded Context (unchanged)
+
+- `knowledge/identity/*` - identity files
+- `knowledge/memory/MEMORY.md` - long-term memory
+- `knowledge/journal/YYYY-MM-DD.md` - today's journal
 
 - 2026-02-17: Paths updated for `src/autopoiesis/` layout (#152)
+- 2026-02-17: Added typed frontmatter, filtered search, backlink index (#147)
