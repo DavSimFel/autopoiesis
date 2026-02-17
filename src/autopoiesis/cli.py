@@ -164,6 +164,7 @@ def _initialize_runtime(
             approval_store=approval_store,
             key_manager=key_manager,
             tool_policy=tool_policy,
+            approval_unlocked=require_approval_unlock,
         )
     )
     return system_database_url

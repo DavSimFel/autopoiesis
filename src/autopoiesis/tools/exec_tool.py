@@ -15,11 +15,32 @@ from pydantic_ai import RunContext
 from pydantic_ai.messages import ToolReturn
 
 from autopoiesis.infra import exec_registry
+from autopoiesis.infra.command_classifier import Tier, classify
 from autopoiesis.infra.pty_spawn import PtyProcess, read_master, spawn_pty
 from autopoiesis.io_utils import tail_lines
 from autopoiesis.models import AgentDeps
 
 _background_tasks: set[asyncio.Task[None]] = set()
+
+
+def enforce_tier(command: str, approval_unlocked: bool) -> ToolReturn | None:
+    """Check command tier and return a blocked ToolReturn if not permitted."""
+    tier = classify(command)
+    if tier is Tier.BLOCK:
+        return ToolReturn(
+            return_value=f"Blocked: command classified as {tier.value}.",
+            metadata={"blocked": True, "tier": tier.value},
+        )
+    if not approval_unlocked and tier is not Tier.FREE:
+        return ToolReturn(
+            return_value=(
+                f"Approval required: command classified as {tier.value}. "
+                "Unlock approval keys or use Docker backend."
+            ),
+            metadata={"blocked": True, "tier": tier.value},
+        )
+    return None
+
 
 _DANGEROUS_ENV_VARS: frozenset[str] = frozenset(
     {
@@ -233,6 +254,9 @@ async def execute(
         timeout: Seconds before kill (foreground only).
         background: Return immediately with a session id for monitoring.
     """
+    blocked = enforce_tier(command, ctx.deps.approval_unlocked)
+    if blocked is not None:
+        return blocked
     workspace_root = Path(ctx.deps.backend.root_dir)
     safe_cwd = sandbox_cwd(cwd, workspace_root)
     safe_env = resolve_env(env)
@@ -268,6 +292,9 @@ async def execute_pty(
         timeout: Seconds before kill (foreground only).
         background: Return immediately with a session id for monitoring.
     """
+    blocked = enforce_tier(command, ctx.deps.approval_unlocked)
+    if blocked is not None:
+        return blocked
     workspace_root = Path(ctx.deps.backend.root_dir)
     safe_cwd = sandbox_cwd(cwd, workspace_root)
     safe_env = resolve_env(env)

@@ -44,6 +44,7 @@ class _FakeRuntime:
     history_db_path: str
     approval_store: Any = None
     key_manager: Any = None
+    approval_unlocked: bool = False
     tool_policy: Any = None
 
 
