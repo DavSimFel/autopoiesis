@@ -14,6 +14,7 @@ from pathlib import Path
 # YAML parser (minimal, no external deps)
 # ---------------------------------------------------------------------------
 
+
 def parse_yaml(path: Path) -> dict:
     """Minimal YAML subset parser: supports scalars, lists, and flat dicts."""
     lines = path.read_text().splitlines()
@@ -100,6 +101,7 @@ def extract_imports(filepath: Path) -> list[tuple[int, str]]:
 # Checks
 # ---------------------------------------------------------------------------
 
+
 def module_of(filepath: Path, root: Path) -> str | None:
     """Return the top-level module directory, or None for root-level files."""
     rel = filepath.relative_to(root)
@@ -145,15 +147,12 @@ def check_dependencies(
             # Check allowed deps
             if imported in internal_modules and imported not in allowed:
                 violations.append(
-                    f"{rel}:{lineno} imports '{imported}' — "
-                    f"not in allowed dependencies for '{mod}'"
+                    f"{rel}:{lineno} imports '{imported}' — not in allowed dependencies for '{mod}'"
                 )
     return violations
 
 
-def check_max_lines(
-    files: list[Path], root: Path, max_lines: int, exempt: list[str]
-) -> list[str]:
+def check_max_lines(files: list[Path], root: Path, max_lines: int, exempt: list[str]) -> list[str]:
     violations = []
     exempt_set = {Path(e) for e in exempt}
     for fp in files:
@@ -183,6 +182,7 @@ def check_patterns(files: list[Path], root: Path, patterns: list[str]) -> list[s
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main() -> int:
     root = Path(__file__).resolve().parent.parent
     spec_path = root / "specs" / "architecture.yaml"
@@ -204,7 +204,8 @@ def main() -> int:
     # Only check source files (skip tests, scripts, benchmarks)
     all_files = find_py_files(root)
     source_files = [
-        f for f in all_files
+        f
+        for f in all_files
         if not any(p in f.relative_to(root).parts for p in ("tests", "scripts", "benchmarks"))
     ]
 
