@@ -29,7 +29,6 @@ from store.history import (
     init_history_store,
     resolve_history_db_path,
 )
-from store.memory import init_memory_store, resolve_memory_db_path
 from toolset_builder import LocalBackend, build_backend, prepare_toolset_context
 
 try:
@@ -117,19 +116,19 @@ def _initialize_runtime(
     if require_approval_unlock:
         key_manager.ensure_unlocked_interactive()
     tool_policy = ToolPolicyRegistry.default()
-    memory_db_path = resolve_memory_db_path(system_database_url)
-    init_memory_store(memory_db_path)
+    history_db_path = resolve_history_db_path(system_database_url)
     (
         workspace_root,
+        knowledge_db_path,
         subscription_registry,
         topic_registry,
         toolsets,
         system_prompt,
-    ) = prepare_toolset_context(memory_db_path)
+    ) = prepare_toolset_context(history_db_path)
     history_processors = build_history_processors(
         subscription_registry=subscription_registry,
         workspace_root=workspace_root,
-        memory_db_path=memory_db_path,
+        knowledge_db_path=knowledge_db_path,
         topic_registry=topic_registry,
     )
 
@@ -142,7 +141,6 @@ def _initialize_runtime(
     )
     instrument_agent(agent)
 
-    history_db_path = resolve_history_db_path(system_database_url)
     init_history_store(history_db_path)
     cleanup_stale_checkpoints(history_db_path)
     set_runtime(
@@ -150,7 +148,7 @@ def _initialize_runtime(
             agent=agent,
             backend=backend,
             history_db_path=history_db_path,
-            memory_db_path=memory_db_path,
+            knowledge_db_path=knowledge_db_path,
             subscription_registry=subscription_registry,
             approval_store=approval_store,
             key_manager=key_manager,

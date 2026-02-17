@@ -117,7 +117,7 @@ class TestBuildToolsets:
         assert isinstance(system_prompt, str)
         assert len(system_prompt) > 0
 
-    def test_toolset_count_without_memory(self) -> None:
+    def test_toolset_count_without_knowledge(self) -> None:
         from toolset_builder import build_toolsets
 
         with patch.dict(os.environ, {"ENABLE_EXECUTE": ""}):
@@ -126,17 +126,17 @@ class TestBuildToolsets:
             min_toolsets = 3
             assert len(toolsets) >= min_toolsets
 
-    def test_toolset_count_with_memory(self, tmp_path: Path) -> None:
+    def test_toolset_count_with_knowledge(self, tmp_path: Path) -> None:
         from toolset_builder import build_toolsets
 
-        db_path = str(tmp_path / "mem.sqlite")
-        from store.memory import init_memory_store
+        db_path = str(tmp_path / "knowledge.sqlite")
+        from store.knowledge import init_knowledge_index
 
-        init_memory_store(db_path)
-        toolsets, prompt = build_toolsets(memory_db_path=db_path)
-        min_toolsets_with_memory = 4
-        assert len(toolsets) >= min_toolsets_with_memory
-        assert "memory" in prompt.lower()
+        init_knowledge_index(db_path)
+        toolsets, prompt = build_toolsets(knowledge_db_path=db_path)
+        min_toolsets_with_knowledge = 4
+        assert len(toolsets) >= min_toolsets_with_knowledge
+        assert "knowledge" in prompt.lower()
 
     def test_exec_instructions_absent_when_disabled(self) -> None:
         with patch.dict(os.environ, {"ENABLE_EXECUTE": ""}):

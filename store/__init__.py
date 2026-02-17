@@ -2,11 +2,9 @@
 
 Public API: MaterializedContent, Subscription, SubscriptionKind,
     SubscriptionRegistry, cleanup_stale_checkpoints, clear_checkpoint,
-    combined_search, content_hash, get_memory_file_snippet,
-    init_history_store, init_memory_store, load_checkpoint,
-    resolve_history_db_path, resolve_memory_db_path, save_checkpoint,
-    save_memory, search_memory
-Internal: history, memory, subscriptions
+    content_hash, init_history_store, load_checkpoint,
+    resolve_history_db_path, save_checkpoint
+Internal: history, subscriptions
 """
 
 from store.history import (
@@ -26,15 +24,6 @@ from store.knowledge import (
     reindex_knowledge,
     search_knowledge,
 )
-from store.knowledge_migration import migrate_memory_to_knowledge
-from store.memory import (
-    combined_search,
-    get_memory_file_snippet,
-    init_memory_store,
-    resolve_memory_db_path,
-    save_memory,
-    search_memory,
-)
 from store.subscriptions import (
     MaterializedContent,
     Subscription,
@@ -51,22 +40,15 @@ __all__ = [
     "SubscriptionRegistry",
     "cleanup_stale_checkpoints",
     "clear_checkpoint",
-    "combined_search",
     "content_hash",
     "ensure_journal_entry",
     "format_search_results",
-    "get_memory_file_snippet",
     "init_history_store",
     "init_knowledge_index",
-    "init_memory_store",
     "load_checkpoint",
     "load_knowledge_context",
-    "migrate_memory_to_knowledge",
     "reindex_knowledge",
     "resolve_history_db_path",
-    "resolve_memory_db_path",
     "save_checkpoint",
-    "save_memory",
     "search_knowledge",
-    "search_memory",
 ]

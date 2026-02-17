@@ -1,6 +1,6 @@
 """Subscription registry for reactive context injection.
 
-Subscriptions are references to files or memory queries that get
+Subscriptions are references to files or knowledge queries that get
 automatically materialized (resolved to current content) before each
 agent turn.  Content is injected into the conversation so the agent
 always sees the freshest version of subscribed resources.
@@ -30,7 +30,7 @@ MAX_SUBSCRIPTIONS = 10
 MAX_CONTENT_CHARS = 2000
 EXPIRY_SECONDS = 86400  # 24 h
 
-SubscriptionKind = Literal["file", "lines", "memory"]
+SubscriptionKind = Literal["file", "lines", "knowledge"]
 
 _CREATE_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS subscriptions (
