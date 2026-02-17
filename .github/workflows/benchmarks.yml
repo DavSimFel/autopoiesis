@@ -1,0 +1,32 @@
+name: Benchmarks
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * *" # 03:00 UTC daily
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+      - run: uv sync
+
+      - name: Run benchmarks
+        run: |
+          uv run inspect eval \
+            benchmarks/tasks/tool_use.py \
+            benchmarks/tasks/knowledge.py \
+            --log-dir benchmarks/results
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results-${{ github.sha }}
+          path: benchmarks/results/
+          retention-days: 30

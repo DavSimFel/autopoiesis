@@ -29,6 +29,7 @@ dev = [
   "pytest-cov>=6.0",
   "pip-audit",
   "bandit",
+  "inspect-ai>=0.3",
 ]
 
 [tool.setuptools.packages.find]
