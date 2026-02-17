@@ -1,75 +1,70 @@
-# PydanticAI Durable CLI Chat
+# Autopoiesis
 
-Minimal interactive CLI chat using PydanticAI + DBOS durability, with either Anthropic or OpenRouter.
+A **durable CLI agent** built on [PydanticAI](https://ai.pydantic.dev/) + [DBOS](https://docs.dbos.dev/) with multi-agent coordination, cryptographic approval gates, and a file-first knowledge system.
 
-## Configure
+## What It Does
+
+- Interactive CLI chat agent with streaming Rich terminal UI
+- **Durable execution** — DBOS priority queue survives crashes, retries automatically
+- **Cryptographic approval** — Ed25519-signed envelopes gate shell/file operations
+- **Multi-agent capable** — WorkItem queue supports T1 (human) → T2 (planner) → T3 (worker) tiers
+- **File-first knowledge** — markdown files, git versioning, FTS5 search
+- **Skill system** — drop a `SKILL.md` file, agent discovers it at startup
+
+## Quick Start
 
 ```bash
-cp .env.example .env
+git clone https://github.com/DavSimFel/autopoiesis.git
+cd autopoiesis
+
+uv sync                       # install deps
+cp .env.example .env          # configure API keys
+
+uv run pytest                 # run all tests
+uv run pytest tests/integration/  # integration tests only
+uv run python chat.py         # start the agent
 ```
+
+## Verify
+
+```bash
+uv run ruff check .           # lint
+uv run ruff format --check .  # formatting
+uv run pyright                # type checking
+uv run pytest                 # tests
+```
+
+All four must pass before pushing.
+
+## Configuration
 
 Edit `.env`:
 
-- `AI_PROVIDER=anthropic` or `AI_PROVIDER=openrouter`
-- If `anthropic`: set `ANTHROPIC_API_KEY`
-- If `openrouter`: set `OPENROUTER_API_KEY`
-- `AGENT_WORKSPACE_ROOT` controls backend workspace location (relative paths resolve from `chat.py`)
-- `SKILLS_DIR` sets the shipped skills directory path (default: `skills`, relative paths resolve from `chat.py`)
-- `CUSTOM_SKILLS_DIR` sets the custom skills directory path (default: `skills`, relative paths resolve inside `AGENT_WORKSPACE_ROOT`)
-- `APPROVAL_TTL_SECONDS` sets approval expiry in seconds (default: `3600`)
-- `APPROVAL_KEY_DIR` sets the approval key directory (default: `data/keys`)
-- `APPROVAL_PRIVATE_KEY_PATH` sets encrypted private key path (default: `$APPROVAL_KEY_DIR/approval.key`)
-- `APPROVAL_PUBLIC_KEY_PATH` sets public key path (default: `$APPROVAL_KEY_DIR/approval.pub`)
-- `APPROVAL_KEYRING_PATH` sets keyring path for active/retired verification keys (default: `$APPROVAL_KEY_DIR/keyring.json`)
-- `NONCE_RETENTION_PERIOD_SECONDS` sets expired envelope retention (default: `604800`)
-- `APPROVAL_CLOCK_SKEW_SECONDS` sets startup skew margin for retention invariant checks (default: `60`)
-- `APPROVAL_DB_PATH` (optional) overrides where deferred approval envelopes are stored. If unset, uses `data/approvals.sqlite`.
-- Optional DBOS settings:
-  - `DBOS_APP_NAME`
-  - `DBOS_AGENT_NAME`
-  - `DBOS_SYSTEM_DATABASE_URL`
+| Variable | Purpose |
+|----------|---------|
+| `AI_PROVIDER` | `anthropic` or `openrouter` |
+| `ANTHROPIC_API_KEY` / `OPENROUTER_API_KEY` | Provider credentials |
+| `AGENT_WORKSPACE_ROOT` | Agent workspace location |
+| `SKILLS_DIR` | Shipped skills directory (default: `skills`) |
+| `CUSTOM_SKILLS_DIR` | Custom skills inside workspace (default: `skills`) |
 
-## Run with uv
+See `.env.example` for the full list including approval and DBOS settings.
 
-```bash
-uv sync
-uv run python chat.py
-```
-
-Rotate approval signing key (expires all pending approvals):
-
-```bash
-uv run python chat.py rotate-key
-```
-
-## Shipped Skills
-
-Default shipped skill under `skills/`:
-
-- `skillmaker`
-  - Use `validate_skill` and `lint_skill` tools when editing skills.
-
-Add custom skills under `<AGENT_WORKSPACE_ROOT>/skills/` (or `CUSTOM_SKILLS_DIR`).
-
-## Run with Docker Compose
+## Docker
 
 ```bash
 docker compose up --build
 ```
 
-Notes:
+DBOS state persists in a `dbos-data` volume. Container runs as non-root `appuser`.
 
-- CLI is interactive (`stdin_open` + `tty` are enabled in Compose).
-- DBOS sqlite state is persisted in a named volume `dbos-data` mounted at `/data`.
-- Compose overrides DBOS sqlite URL to `sqlite:////data/dbostest.sqlite`.
-- Backend workspace is persisted at `/data/agent-workspace` in Compose.
-- Enabled backend tools: `ls`, `read_file`, `write_file`, `edit_file`, `glob`, `grep`.
-- `execute` is disabled at both toolset and backend layers.
-- Writes require approval in the toolset.
-- Skills are loaded from shipped + custom locations; custom skills override shipped skills when names collide.
-- Container runs as non-root user `appuser`.
+## Documentation
 
-## VS Code
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** — system design, tool inventory, agent tiers
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** — developer workflow, CI, specs
+- **[docs/testing.md](docs/testing.md)** — complete testing guide
+- **[specs/](specs/)** — module specifications (the source of truth)
 
-`.vscode/launch.json` runs `chat.py` and reads env vars from `.env`.
-# trigger
+## License
+
+See [LICENSE](LICENSE).
