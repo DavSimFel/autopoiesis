@@ -6,6 +6,7 @@ import argparse
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
 from dotenv import load_dotenv
 from pydantic_ai.messages import ModelMessage
@@ -114,51 +115,26 @@ def parse_cli_args(repo_root: Path, argv: list[str] | None = None) -> argparse.N
     return parser.parse_args(argv if argv is not None else sys.argv[1:])
 
 
-def main() -> None:
-    """Load config, assemble runtime components, and launch DBOS + CLI chat."""
-    base_dir = Path(__file__).resolve().parent
-    load_dotenv(dotenv_path=base_dir / ".env")
-    otel_tracing.configure()
-
-    args = parse_cli_args(base_dir)
-    if args.command == "rotate-key":
-        _rotate_key(base_dir)
-        return
-
-    if args.command == "serve":
-        from server.cli import run_server
-
-        run_server(host=args.host, port=args.port)
-        return
-
-    is_batch = args.command == "run"
-
-    provider = resolve_provider(os.getenv("AI_PROVIDER"))
-    agent_name = os.getenv("DBOS_AGENT_NAME", "chat")
-
-    backend = build_backend()
-    approval_store = ApprovalStore.from_env(base_dir=base_dir)
-    key_manager = ApprovalKeyManager.from_env(base_dir=base_dir)
-    if not args.no_approval and not is_batch:
-        key_manager.ensure_unlocked_interactive()
-    tool_policy = ToolPolicyRegistry.default()
-    memory_db_path = resolve_memory_db_path(
-        os.getenv("DBOS_SYSTEM_DATABASE_URL", "sqlite:///dbostest.sqlite")
-    )
-    init_memory_store(memory_db_path)
+def _prepare_toolset_context(
+    memory_db_path: str,
+) -> tuple[
+    Path,
+    SubscriptionRegistry,
+    TopicRegistry,
+    list[Any],
+    str,
+]:
+    """Initialize runtime stores needed for toolset construction."""
     workspace_root = resolve_workspace_root()
     sub_db_path = str(Path(memory_db_path).with_name("subscriptions.sqlite"))
     subscription_registry = SubscriptionRegistry(sub_db_path)
-    # Knowledge system: index files and load context
     knowledge_root = workspace_root / "knowledge"
     knowledge_db_path = str(Path(memory_db_path).with_name("knowledge.sqlite"))
     init_knowledge_index(knowledge_db_path)
     reindex_knowledge(knowledge_db_path, knowledge_root)
     ensure_journal_entry(knowledge_root)
     knowledge_context = load_knowledge_context(knowledge_root)
-
-    topics_dir = workspace_root / "topics"
-    topic_registry = TopicRegistry(topics_dir)
+    topic_registry = TopicRegistry(workspace_root / "topics")
     toolsets, system_prompt = build_toolsets(
         memory_db_path=memory_db_path,
         subscription_registry=subscription_registry,
@@ -166,6 +142,17 @@ def main() -> None:
         knowledge_context=knowledge_context,
         topic_registry=topic_registry,
     )
+    return workspace_root, subscription_registry, topic_registry, toolsets, system_prompt
+
+
+def _build_history_processors(
+    *,
+    subscription_registry: SubscriptionRegistry,
+    workspace_root: Path,
+    memory_db_path: str,
+    topic_registry: TopicRegistry,
+) -> list[Any]:
+    """Build ordered message history processors for agent runs."""
 
     def _subscription_processor(msgs: list[ModelMessage]) -> list[ModelMessage]:
         return materialize_subscriptions(
@@ -178,26 +165,89 @@ def main() -> None:
     def _topic_processor(msgs: list[ModelMessage]) -> list[ModelMessage]:
         return inject_topic_context(msgs, topic_registry)
 
+    return [
+        _truncate_processor,
+        _compact_processor,
+        _subscription_processor,
+        _topic_processor,
+        checkpoint_history_processor,
+    ]
+
+
+def _resolve_startup_config() -> tuple[str, str, str]:
+    """Resolve provider/agent names and DBOS system database URL."""
+    provider = resolve_provider(os.getenv("AI_PROVIDER"))
+    agent_name = os.getenv("DBOS_AGENT_NAME", "chat")
+    system_database_url = os.getenv(
+        "DBOS_SYSTEM_DATABASE_URL",
+        "sqlite:///dbostest.sqlite",
+    )
+    return provider, agent_name, system_database_url
+
+
+def _initialize_runtime(
+    base_dir: Path,
+    *,
+    require_approval_unlock: bool,
+) -> str:
+    """Build runtime dependencies and register the process-wide runtime."""
+    provider, agent_name, system_database_url = _resolve_startup_config()
+
+    backend = build_backend()
+    approval_store = ApprovalStore.from_env(base_dir=base_dir)
+    key_manager = ApprovalKeyManager.from_env(base_dir=base_dir)
+    if require_approval_unlock:
+        key_manager.ensure_unlocked_interactive()
+    tool_policy = ToolPolicyRegistry.default()
+    memory_db_path = resolve_memory_db_path(system_database_url)
+    init_memory_store(memory_db_path)
+    (
+        workspace_root,
+        subscription_registry,
+        topic_registry,
+        toolsets,
+        system_prompt,
+    ) = _prepare_toolset_context(memory_db_path)
+    history_processors = _build_history_processors(
+        subscription_registry=subscription_registry,
+        workspace_root=workspace_root,
+        memory_db_path=memory_db_path,
+        topic_registry=topic_registry,
+    )
+
     agent = build_agent(
         provider,
         agent_name,
         toolsets,
         system_prompt,
-        options=AgentOptions(
-            history_processors=[
-                _truncate_processor,
-                _compact_processor,
-                _subscription_processor,
-                _topic_processor,
-                checkpoint_history_processor,
-            ],
-        ),
+        options=AgentOptions(history_processors=history_processors),
     )
     instrument_agent(agent)
-    system_database_url = os.getenv(
-        "DBOS_SYSTEM_DATABASE_URL",
-        "sqlite:///dbostest.sqlite",
+    _register_runtime(
+        agent=agent,
+        backend=backend,
+        system_database_url=system_database_url,
+        memory_db_path=memory_db_path,
+        subscription_registry=subscription_registry,
+        approval_store=approval_store,
+        key_manager=key_manager,
+        tool_policy=tool_policy,
     )
+    return system_database_url
+
+
+def _register_runtime(
+    *,
+    agent: Any,
+    backend: Any,
+    system_database_url: str,
+    memory_db_path: str,
+    subscription_registry: SubscriptionRegistry,
+    approval_store: ApprovalStore,
+    key_manager: ApprovalKeyManager,
+    tool_policy: ToolPolicyRegistry,
+) -> None:
+    """Initialize history storage and set the shared runtime."""
     history_db_path = resolve_history_db_path(system_database_url)
     init_history_store(history_db_path)
     cleanup_stale_checkpoints(history_db_path)
@@ -214,6 +264,28 @@ def main() -> None:
         )
     )
 
+
+def main() -> None:
+    """Load config, assemble runtime components, and launch DBOS + CLI chat."""
+    base_dir = Path(__file__).resolve().parent
+    load_dotenv(dotenv_path=base_dir / ".env")
+    otel_tracing.configure()
+
+    args = parse_cli_args(base_dir)
+    if args.command == "rotate-key":
+        _rotate_key(base_dir)
+        return
+
+    is_batch = args.command == "run"
+    is_serve = args.command == "serve"
+    try:
+        system_database_url = _initialize_runtime(
+            base_dir,
+            require_approval_unlock=not args.no_approval and not is_batch,
+        )
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise SystemExit(f"Failed to initialize runtime: {exc}") from exc
+
     if is_batch:
         from agent.batch import run_batch
 
@@ -226,6 +298,13 @@ def main() -> None:
     }
     DBOS(config=dbos_config)
     DBOS.launch()
+
+    if is_serve:
+        from server.cli import run_server
+
+        run_server(host=args.host, port=args.port)
+        return
+
     cli_chat_loop()
 
 
