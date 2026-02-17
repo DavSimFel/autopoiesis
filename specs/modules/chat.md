@@ -209,8 +209,10 @@ split into focused companion modules.
   `OTEL_EXPORTER_OTLP_INSECURE` env var (Issue #82)
 - 2026-02-16: Headless passphrase support via `APPROVAL_KEY_PASSPHRASE`
   env var in `approval_keys.py` (Issue #86)
-- 2026-02-16: CLI argparse with `--help`, `--version`, `--no-approval`
-  flags in `src/autopoiesis/cli.py` (Issue #87)
+- 2026-02-16: CLI argparse with `--help`, `--version`, `--no-approval`,
+  `--config` flags in `src/autopoiesis/cli.py` (Issue #87, #146).
+  `--config` accepts a path to `agents.toml` for multi-agent configuration
+  (parsed but not yet wired into runtime — Phase B-2).
 - 2026-02-16: Fixed spec drift — function references, class names,
   OVERVIEW.md module index (Issue #81)
 
