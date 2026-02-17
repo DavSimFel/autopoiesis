@@ -134,7 +134,34 @@ Detailed instructions the agent follows when this skill is loaded...
 - `pyyaml>=6.0` (90KB, zero transitive deps)
 - Internal helper module: `src/autopoiesis/skills/skillmaker_tools.py`
 
+## Shipped Skill Contract
+
+Shipped skills live in `skills/<skill-name>/` at the repo root. Each skill
+directory **must** satisfy:
+
+1. **`SKILL.md` exists and is non-empty** — the primary skill definition file.
+2. **Valid YAML frontmatter** with required fields:
+   - `name` (string, non-empty) — unique skill identifier, kebab-case.
+   - `description` (string) — one-line summary.
+   - `metadata.version` (string) — SemVer version.
+   - `metadata.tags` (list of strings) — categorisation tags.
+3. **No dead internal references** — every file in the skill directory must
+   exist and be readable.
+4. **Parseable by the skill loader** — `discover_skills()` and
+   `parse_skill_md()` must succeed without errors.
+5. **Toolset registration** — `create_skills_toolset()` must succeed when
+   the `skills/` directory is provided.
+
+These invariants are enforced by `tests/test_shipped_skills.py` (Issue #163).
+
+CI also maps shipped skill files to this spec via the `source_to_spec` check,
+so any change to a shipped skill file requires this spec to be up-to-date.
+
 ## Change Log
+
+- 2026-02-17: Documented shipped skill contract, added CI spec-check
+  mappings for shipped skill files, added `tests/test_shipped_skills.py`.
+  (Issue #163)
 
 - 2026-02-16: Added mtime-based cache invalidation for skill instructions.
   `load_skill` now checks SKILL.md mtime and reloads when the file has
