@@ -9,15 +9,19 @@ from __future__ import annotations
 import ast
 import sys
 from pathlib import Path
+from typing import Any
 
 # ---------------------------------------------------------------------------
 # YAML parser (minimal, no external deps)
 # ---------------------------------------------------------------------------
 
-def parse_yaml(path: Path) -> dict:
+YamlValue = str | int | list[str] | dict[str, Any]
+
+
+def parse_yaml(path: Path) -> dict[str, YamlValue]:
     """Minimal YAML subset parser: supports scalars, lists, and flat dicts."""
     lines = path.read_text().splitlines()
-    result: dict = {}
+    result: dict[str, YamlValue] = {}
     current_key: str | None = None
     for raw in lines:
         stripped = raw.split("#")[0].rstrip()
@@ -34,21 +38,22 @@ def parse_yaml(path: Path) -> dict:
                 result[current_key] = {}
             continue
         if indent > 0 and current_key is not None:
+            cur = result[current_key]
             if stripped.lstrip().startswith("- "):
                 item = stripped.lstrip()[2:].strip()
-                if not isinstance(result[current_key], list):
-                    result[current_key] = []
-                result[current_key].append(_scalar(item))
+                if not isinstance(cur, list):
+                    result[current_key] = cur = []
+                cur.append(_scalar_str(item))
             elif ":" in stripped:
                 key, _, val = stripped.partition(":")
                 val = val.strip()
-                if isinstance(result[current_key], list):
-                    result[current_key] = {}
-                result[current_key][key.strip()] = _parse_list_value(val)
+                if not isinstance(cur, dict):
+                    result[current_key] = cur = {}
+                cur[key.strip()] = _parse_list_value(val)
     return result
 
 
-def _scalar(v: str):
+def _scalar(v: str) -> str | int | list[str]:
     if v.startswith("[") and v.endswith("]"):
         return [x.strip() for x in v[1:-1].split(",") if x.strip()]
     if v.isdigit():
@@ -56,7 +61,12 @@ def _scalar(v: str):
     return v
 
 
-def _parse_list_value(v: str):
+def _scalar_str(v: str) -> str:
+    """Parse a scalar, coercing to str for list items."""
+    return v
+
+
+def _parse_list_value(v: str) -> str | int | list[str]:
     if v.startswith("[") and v.endswith("]"):
         return [x.strip() for x in v[1:-1].split(",") if x.strip()]
     if v.isdigit():
@@ -72,7 +82,7 @@ SKIP_DIRS = {".venv", "benchmarks", "__pycache__", ".git", "node_modules"}
 
 
 def find_py_files(root: Path) -> list[Path]:
-    files = []
+    files: list[Path] = []
     for p in sorted(root.rglob("*.py")):
         if any(part in SKIP_DIRS for part in p.parts):
             continue
@@ -86,7 +96,7 @@ def extract_imports(filepath: Path) -> list[tuple[int, str]]:
         tree = ast.parse(filepath.read_text(), filename=str(filepath))
     except SyntaxError:
         return []
-    results = []
+    results: list[tuple[int, str]] = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
@@ -100,6 +110,7 @@ def extract_imports(filepath: Path) -> list[tuple[int, str]]:
 # Checks
 # ---------------------------------------------------------------------------
 
+
 def module_of(filepath: Path, root: Path) -> str | None:
     """Return the top-level module directory, or None for root-level files."""
     rel = filepath.relative_to(root)
@@ -110,22 +121,26 @@ def module_of(filepath: Path, root: Path) -> str | None:
 
 
 def check_dependencies(
-    files: list[Path], root: Path, deps: dict, forbidden: list[str]
+    files: list[Path],
+    root: Path,
+    deps: dict[str, str | int | list[str]],
+    forbidden: list[str],
 ) -> list[str]:
-    violations = []
+    violations: list[str] = []
     # Parse forbidden rules
     forbidden_pairs: list[tuple[str, str]] = []
     for rule in forbidden:
         src, _, dst = rule.partition("->")
         forbidden_pairs.append((src.strip(), dst.strip()))
 
-    internal_modules = set(deps.keys())
+    internal_modules: set[str] = set(deps.keys())
 
     for fp in files:
         mod = module_of(fp, root)
         if mod is None or mod not in internal_modules:
             continue
-        allowed = set(deps.get(mod, []))
+        raw_allowed = deps.get(mod, [])
+        allowed: set[str] = set(raw_allowed) if isinstance(raw_allowed, list) else set()
         allowed.add(mod)  # module can import from itself
         rel = fp.relative_to(root)
 
@@ -145,16 +160,13 @@ def check_dependencies(
             # Check allowed deps
             if imported in internal_modules and imported not in allowed:
                 violations.append(
-                    f"{rel}:{lineno} imports '{imported}' — "
-                    f"not in allowed dependencies for '{mod}'"
+                    f"{rel}:{lineno} imports '{imported}' — not in allowed dependencies for '{mod}'"
                 )
     return violations
 
 
-def check_max_lines(
-    files: list[Path], root: Path, max_lines: int, exempt: list[str]
-) -> list[str]:
-    violations = []
+def check_max_lines(files: list[Path], root: Path, max_lines: int, exempt: list[str]) -> list[str]:
+    violations: list[str] = []
     exempt_set = {Path(e) for e in exempt}
     for fp in files:
         rel = fp.relative_to(root)
@@ -167,7 +179,7 @@ def check_max_lines(
 
 
 def check_patterns(files: list[Path], root: Path, patterns: list[str]) -> list[str]:
-    violations = []
+    violations: list[str] = []
     if not patterns:
         return violations
     for fp in files:
@@ -183,6 +195,30 @@ def check_patterns(files: list[Path], root: Path, patterns: list[str]) -> list[s
 # Main
 # ---------------------------------------------------------------------------
 
+
+def _to_str_list(val: YamlValue) -> list[str]:
+    """Coerce a YAML value to a list of strings."""
+    if isinstance(val, list):
+        return val
+    if isinstance(val, str):
+        return [val]
+    return []
+
+
+def _to_dict(val: YamlValue) -> dict[str, str | int | list[str]]:
+    """Coerce a YAML value to a dict."""
+    if isinstance(val, dict):
+        return val
+    return {}
+
+
+def _to_int(val: YamlValue, default: int) -> int:
+    """Coerce a YAML value to an int."""
+    if isinstance(val, int):
+        return val
+    return default
+
+
 def main() -> int:
     root = Path(__file__).resolve().parent.parent
     spec_path = root / "specs" / "architecture.yaml"
@@ -191,20 +227,17 @@ def main() -> int:
         return 1
 
     spec = parse_yaml(spec_path)
-    deps = spec.get("dependencies", {})
-    forbidden = spec.get("forbidden", [])
-    max_lines = spec.get("max_lines", 300)
-    exempt = spec.get("max_lines_exempt", [])
-    if isinstance(exempt, str):
-        exempt = [exempt]
-    patterns = spec.get("no_globals", [])
-    if isinstance(patterns, str):
-        patterns = [patterns]
+    deps = _to_dict(spec.get("dependencies", {}))
+    forbidden = _to_str_list(spec.get("forbidden", []))
+    max_lines = _to_int(spec.get("max_lines", 300), 300)
+    exempt = _to_str_list(spec.get("max_lines_exempt", []))
+    patterns = _to_str_list(spec.get("no_globals", []))
 
     # Only check source files (skip tests, scripts, benchmarks)
     all_files = find_py_files(root)
     source_files = [
-        f for f in all_files
+        f
+        for f in all_files
         if not any(p in f.relative_to(root).parts for p in ("tests", "scripts", "benchmarks"))
     ]
 
