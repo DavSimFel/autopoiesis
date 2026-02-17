@@ -135,9 +135,35 @@ class TestWebSocket:
 
 
 class TestChatEndpoint:
-    def test_chat_without_runtime_returns_503(self, client: TestClient) -> None:
-        resp = client.post("/api/chat", json={"content": "hello"})
+    def test_chat_returns_200_when_runtime_initialized(self, client: TestClient) -> None:
+        """Serve bootstraps runtime; /api/chat returns 200 for valid requests."""
+        mock_output = type(
+            "MockOutput",
+            (),
+            {
+                "text": "Hello back!",
+                "message_history_json": "[]",
+                "deferred_tool_requests_json": None,
+            },
+        )()
+        with (
+            patch("agent.runtime.get_runtime"),
+            patch("agent.worker.enqueue_and_wait", return_value=mock_output),
+            patch("display.streaming.register_stream"),
+        ):
+            resp = client.post("/api/chat", json={"content": "hello"})
+        assert resp.status_code == 200
+        assert resp.json()["content"] == "Hello back!"
+
+    def test_chat_returns_503_when_runtime_init_fails(self, client: TestClient) -> None:
+        """Graceful error when runtime init fails (e.g. missing provider config)."""
+        with patch(
+            "agent.runtime.get_runtime",
+            side_effect=RuntimeError("Runtime not initialised. Start the app via main()."),
+        ):
+            resp = client.post("/api/chat", json={"content": "hello"})
         assert resp.status_code == 503
+        assert "Runtime not initialised" in resp.json()["detail"]
 
 
 class TestConnectionManager:
