@@ -111,7 +111,17 @@ Push to origin, open PR to `main`. Squash merge after approval.
 
 ---
 
-## Code Style
+## Auto-Merge Policy
+
+PRs are subject to the following merge policy:
+
+- **PRs that modify `tests/integration/`** are automatically labeled `needs-human-review` and require human approval before merge. Integration tests define the architecture spec and are controlled by humans.
+- **All other PRs** auto-merge when CI passes.
+- The `integration-test-guard` CI job detects integration test changes and posts a comment — it always passes (advisory, not blocking).
+
+---
+
+## Code Style Essentials
 
 | Rule | Detail |
 |------|--------|

@@ -44,6 +44,37 @@ jobs:
       - name: Bandit
         run: uv run bandit -r src -s B101 --exclude ./.venv,./tests
 
+  integration-test-guard:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check integration test changes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          changed=$(git diff --name-only origin/main...HEAD -- 'tests/integration/')
+          if [ -n "$changed" ]; then
+            echo "::warning::Integration tests modified — human review required"
+            echo "$changed"
+            gh pr edit ${{ github.event.pull_request.number }} --add-label "needs-human-review"
+            # Check if comment already exists to avoid duplicates
+            existing=$(gh pr view ${{ github.event.pull_request.number }} --json comments --jq '.comments[].body' | grep -c "modifies integration tests" || true)
+            if [ "$existing" -eq "0" ]; then
+              gh pr comment ${{ github.event.pull_request.number }} --body "⚠️ **This PR modifies integration tests.** Requires human review before merge.
+
+          Changed files:
+          \`\`\`
+          $changed
+          \`\`\`"
+            fi
+          else
+            echo "No integration test changes."
+          fi
+
   arch-check:
     runs-on: ubuntu-latest
     steps:
