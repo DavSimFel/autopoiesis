@@ -344,3 +344,4 @@ describe actual enforcement honestly — cwd/path validation, not hard sandbox.
   structured JSON output, timeout, and exit codes (#138)
 - 2026-02-16: Knowledge system integration — startup indexing, knowledge tools wiring, memory store deprecated (#130)
 
+
