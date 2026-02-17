@@ -13,7 +13,12 @@ from autopoiesis.topics.topic_manager import (
     MAX_TOPIC_CONTEXT_BYTES,
     TopicRegistry,
     build_topic_context,
+    create_topic,
     parse_topic,
+    query_topics,
+    set_topic_owner,
+    update_topic_status,
+    validate_status_transition,
 )
 
 
@@ -389,3 +394,238 @@ class TestContextSizeLimit:
         high_pos = ctx.instructions.index("high-t")
         low_pos = ctx.instructions.index("low-t")
         assert high_pos < low_pos
+
+
+# --- Phase 1: Topic lifecycle schema & tools ---
+
+_TASK_TOPIC = """\
+---
+type: task
+status: open
+owner: planner
+triggers: []
+---
+
+# A task topic
+"""
+
+_TYPED_NO_STATUS = """\
+---
+type: project
+owner: builder
+triggers: []
+---
+
+# Project without status
+"""
+
+
+class TestTopicSchemaFields:
+    def test_parse_type_status_owner(self, topics_dir: Path) -> None:
+        path = _write_topic(topics_dir, "my-task", _TASK_TOPIC)
+        topic = parse_topic(path)
+        assert topic.type == "task"
+        assert topic.status == "open"
+        assert topic.owner == "planner"
+
+    def test_defaults_no_frontmatter(self, topics_dir: Path) -> None:
+        path = _write_topic(topics_dir, "plain", "# Just markdown\n\nNo FM.")
+        topic = parse_topic(path)
+        assert topic.type == "general"
+        assert topic.status is None
+        assert topic.owner is None
+
+    def test_partial_frontmatter(self, topics_dir: Path) -> None:
+        path = _write_topic(topics_dir, "partial", _TYPED_NO_STATUS)
+        topic = parse_topic(path)
+        assert topic.type == "project"
+        assert topic.status is None
+        assert topic.owner == "builder"
+
+    def test_unknown_type_defaults_general(self, topics_dir: Path) -> None:
+        path = _write_topic(topics_dir, "bad-type", "---\ntype: banana\ntriggers: []\n---\nBody.")
+        topic = parse_topic(path)
+        assert topic.type == "general"
+
+    def test_invalid_status_defaults_none(self, topics_dir: Path) -> None:
+        path = _write_topic(
+            topics_dir,
+            "bad-status",
+            "---\ntype: task\nstatus: flying\ntriggers: []\n---\nBody.",
+        )
+        topic = parse_topic(path)
+        assert topic.status is None
+
+    def test_backward_compat_existing_topic(self, topics_dir: Path) -> None:
+        path = _write_topic(topics_dir, "old", _SAMPLE_TOPIC)
+        topic = parse_topic(path)
+        assert topic.type == "general"
+        assert topic.status is None
+        assert topic.owner is None
+        assert len(topic.triggers) == 2
+
+
+class TestStatusTransitions:
+    def test_task_full_lifecycle(self) -> None:
+        assert validate_status_transition("task", None, "open") is None
+        assert validate_status_transition("task", "open", "in-progress") is None
+        assert validate_status_transition("task", "in-progress", "review") is None
+        assert validate_status_transition("task", "review", "done") is None
+        assert validate_status_transition("task", "done", "archived") is None
+
+    def test_task_invalid_skip(self) -> None:
+        err = validate_status_transition("task", "open", "done")
+        assert err is not None
+        assert "Cannot transition" in err
+
+    def test_general_no_lifecycle(self) -> None:
+        err = validate_status_transition("general", None, "open")
+        assert err is not None
+        assert "no lifecycle" in err
+
+    def test_project_lifecycle(self) -> None:
+        assert validate_status_transition("project", None, "open") is None
+        assert validate_status_transition("project", "open", "in-progress") is None
+        assert validate_status_transition("project", "in-progress", "done") is None
+        assert validate_status_transition("project", "done", "archived") is None
+
+    def test_conversation_lifecycle(self) -> None:
+        assert validate_status_transition("conversation", None, "open") is None
+        assert validate_status_transition("conversation", "open", "archived") is None
+
+    def test_first_status_must_be_open(self) -> None:
+        err = validate_status_transition("task", None, "in-progress")
+        assert err is not None
+        assert "first transition must be to 'open'" in err
+
+
+class TestUpdateTopicStatus:
+    def test_valid_transition(self, topics_dir: Path) -> None:
+        _write_topic(topics_dir, "my-task", _TASK_TOPIC)
+        registry = TopicRegistry(topics_dir)
+        result = update_topic_status(registry, "my-task", "in-progress")
+        assert "updated" in result
+        reloaded = registry.get_topic("my-task")
+        assert reloaded is not None
+        assert reloaded.status == "in-progress"
+
+    def test_invalid_transition(self, topics_dir: Path) -> None:
+        _write_topic(topics_dir, "my-task", _TASK_TOPIC)
+        registry = TopicRegistry(topics_dir)
+        result = update_topic_status(registry, "my-task", "done")
+        assert "Cannot transition" in result
+
+    def test_not_found(self, topics_dir: Path) -> None:
+        registry = TopicRegistry(topics_dir)
+        result = update_topic_status(registry, "nope", "open")
+        assert "not found" in result
+
+    def test_general_rejected(self, topics_dir: Path) -> None:
+        _write_topic(topics_dir, "gen", _MINIMAL_TOPIC)
+        registry = TopicRegistry(topics_dir)
+        result = update_topic_status(registry, "gen", "open")
+        assert "no lifecycle" in result
+
+
+class TestSetTopicOwner:
+    def test_set_owner(self, topics_dir: Path) -> None:
+        _write_topic(topics_dir, "t", _TASK_TOPIC)
+        registry = TopicRegistry(topics_dir)
+        result = set_topic_owner(registry, "t", "executor")
+        assert "executor" in result
+        reloaded = registry.get_topic("t")
+        assert reloaded is not None
+        assert reloaded.owner == "executor"
+
+    def test_not_found(self, topics_dir: Path) -> None:
+        registry = TopicRegistry(topics_dir)
+        assert "not found" in set_topic_owner(registry, "nope", "x")
+
+
+class TestCreateTopic:
+    def test_create_basic(self, topics_dir: Path) -> None:
+        registry = TopicRegistry(topics_dir)
+        result = create_topic(registry, "new-task", type="task", body="# Hello")
+        assert "created" in result
+        topic = registry.get_topic("new-task")
+        assert topic is not None
+        assert topic.type == "task"
+        assert "Hello" in topic.instructions
+
+    def test_create_with_owner(self, topics_dir: Path) -> None:
+        registry = TopicRegistry(topics_dir)
+        create_topic(registry, "owned", type="project", owner="alice")
+        topic = registry.get_topic("owned")
+        assert topic is not None
+        assert topic.owner == "alice"
+
+    def test_duplicate_rejected(self, topics_dir: Path) -> None:
+        _write_topic(topics_dir, "existing", _MINIMAL_TOPIC)
+        registry = TopicRegistry(topics_dir)
+        result = create_topic(registry, "existing")
+        assert "already exists" in result
+
+    def test_invalid_type(self, topics_dir: Path) -> None:
+        registry = TopicRegistry(topics_dir)
+        result = create_topic(registry, "bad", type="banana")
+        assert "Invalid" in result
+
+
+class TestQueryTopics:
+    def test_filter_by_type(self, topics_dir: Path) -> None:
+        _write_topic(topics_dir, "t1", _TASK_TOPIC)
+        _write_topic(topics_dir, "p1", _TYPED_NO_STATUS)
+        registry = TopicRegistry(topics_dir)
+        results = query_topics(registry, type="task")
+        assert len(results) == 1
+        assert results[0].name == "t1"
+
+    def test_filter_by_status(self, topics_dir: Path) -> None:
+        _write_topic(topics_dir, "t1", _TASK_TOPIC)
+        _write_topic(topics_dir, "t2", _TYPED_NO_STATUS)
+        registry = TopicRegistry(topics_dir)
+        results = query_topics(registry, status="open")
+        assert len(results) == 1
+        assert results[0].name == "t1"
+
+    def test_filter_by_owner(self, topics_dir: Path) -> None:
+        _write_topic(topics_dir, "t1", _TASK_TOPIC)
+        _write_topic(topics_dir, "p1", _TYPED_NO_STATUS)
+        registry = TopicRegistry(topics_dir)
+        results = query_topics(registry, owner="planner")
+        assert len(results) == 1
+        assert results[0].name == "t1"
+
+    def test_combined_filters(self, topics_dir: Path) -> None:
+        _write_topic(topics_dir, "t1", _TASK_TOPIC)
+        _write_topic(topics_dir, "p1", _TYPED_NO_STATUS)
+        registry = TopicRegistry(topics_dir)
+        results = query_topics(registry, type="task", owner="planner")
+        assert len(results) == 1
+        results = query_topics(registry, type="task", owner="builder")
+        assert len(results) == 0
+
+    def test_no_filters_returns_all(self, topics_dir: Path) -> None:
+        _write_topic(topics_dir, "t1", _TASK_TOPIC)
+        _write_topic(topics_dir, "p1", _TYPED_NO_STATUS)
+        registry = TopicRegistry(topics_dir)
+        results = query_topics(registry)
+        assert len(results) == 2
+
+
+class TestAdvisoryLocking:
+    def test_write_and_reparse(self, topics_dir: Path) -> None:
+        """Verify that frontmatter writes via locking produce valid files."""
+        _write_topic(topics_dir, "lock-test", _TASK_TOPIC)
+        registry = TopicRegistry(topics_dir)
+        update_topic_status(registry, "lock-test", "in-progress")
+        set_topic_owner(registry, "lock-test", "new-owner")
+        topic = registry.get_topic("lock-test")
+        assert topic is not None
+        assert topic.status == "in-progress"
+        assert topic.owner == "new-owner"
+        # Verify file is still parseable
+        reparsed = parse_topic(topic.file_path)
+        assert reparsed.status == "in-progress"
+        assert reparsed.owner == "new-owner"
+        assert reparsed.type == "task"
