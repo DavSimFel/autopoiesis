@@ -61,8 +61,46 @@ def shell(
     command: str,
     timeout: int = 30,
     audit_path: Path | None = None,
+    approval_unlocked: bool = False,
 ) -> ShellResult:
-    """Execute a shell command in a sandboxed environment."""
+    """Execute a shell command in a sandboxed environment.
+
+    When *approval_unlocked* is ``False``, only FREE-tier commands (as
+    determined by :func:`autopoiesis.infra.command_classifier.classify`) are
+    permitted.  REVIEW and APPROVE commands are blocked.  BLOCK-tier commands
+    are always rejected regardless of *approval_unlocked*.
+    """
+    from autopoiesis.infra.command_classifier import Tier, classify
+
+    tier = classify(command)
+
+    if tier is Tier.BLOCK:
+        result = ShellResult(
+            stderr=f"Blocked: command classified as {tier.value}.",
+            exit_code=1,
+            blocked=True,
+        )
+        if audit_path is not None:
+            from autopoiesis.infra.audit_log import log_command
+
+            log_command(command, result, audit_path)
+        return result
+
+    if not approval_unlocked and tier is not Tier.FREE:
+        result = ShellResult(
+            stderr=(
+                f"Approval required: command classified as {tier.value}. "
+                "Unlock approval keys or use Docker backend."
+            ),
+            exit_code=1,
+            blocked=True,
+        )
+        if audit_path is not None:
+            from autopoiesis.infra.audit_log import log_command
+
+            log_command(command, result, audit_path)
+        return result
+
     if _is_blocked(command):
         result = ShellResult(
             stderr="Access denied: blocked path",
