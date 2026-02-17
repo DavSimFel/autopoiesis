@@ -7,6 +7,12 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+
+pytest.importorskip(
+    "autopoiesis.infra.command_classifier",
+    reason="Blocked on #170 — command classifier not implemented",
+)
+
 from autopoiesis.infra.command_classifier import Tier, classify  # type: ignore[import-not-found]
 
 pytestmark = pytest.mark.xfail(reason="Blocked on #170 — command classifier not implemented")

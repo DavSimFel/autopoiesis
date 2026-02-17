@@ -5,6 +5,12 @@
 from __future__ import annotations
 
 import pytest
+
+pytest.importorskip(
+    "autopoiesis.tools.shell_tool",
+    reason="Blocked on #170 — shell tool not implemented",
+)
+
 from autopoiesis.tools.shell_tool import shell  # type: ignore[import-not-found]
 
 pytestmark = pytest.mark.xfail(reason="Blocked on #170 — shell tool not implemented")
