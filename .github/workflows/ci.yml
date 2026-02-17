@@ -44,6 +44,13 @@ jobs:
       - name: Bandit
         run: uv run bandit -r src -s B101 --exclude ./.venv,./tests
 
+  arch-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check architecture constraints
+        run: python scripts/arch_check.py
+
   spec-check:
     runs-on: ubuntu-latest
     steps:

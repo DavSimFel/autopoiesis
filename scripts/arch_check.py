@@ -1,0 +1,227 @@
+#!/usr/bin/env python3
+"""Architecture drift detection — validates code against specs/architecture.yaml.
+
+See: https://github.com/DavSimFel/autopoiesis/issues/156
+"""
+
+from __future__ import annotations
+
+import ast
+import sys
+from pathlib import Path
+
+# ---------------------------------------------------------------------------
+# YAML parser (minimal, no external deps)
+# ---------------------------------------------------------------------------
+
+def parse_yaml(path: Path) -> dict:
+    """Minimal YAML subset parser: supports scalars, lists, and flat dicts."""
+    lines = path.read_text().splitlines()
+    result: dict = {}
+    current_key: str | None = None
+    for raw in lines:
+        stripped = raw.split("#")[0].rstrip()
+        if not stripped:
+            continue
+        indent = len(raw) - len(raw.lstrip())
+        if indent == 0 and ":" in stripped:
+            key, _, val = stripped.partition(":")
+            val = val.strip()
+            current_key = key.strip()
+            if val:
+                result[current_key] = _scalar(val)
+            else:
+                result[current_key] = {}
+            continue
+        if indent > 0 and current_key is not None:
+            if stripped.lstrip().startswith("- "):
+                item = stripped.lstrip()[2:].strip()
+                if not isinstance(result[current_key], list):
+                    result[current_key] = []
+                result[current_key].append(_scalar(item))
+            elif ":" in stripped:
+                key, _, val = stripped.partition(":")
+                val = val.strip()
+                if isinstance(result[current_key], list):
+                    result[current_key] = {}
+                result[current_key][key.strip()] = _parse_list_value(val)
+    return result
+
+
+def _scalar(v: str):
+    if v.startswith("[") and v.endswith("]"):
+        return [x.strip() for x in v[1:-1].split(",") if x.strip()]
+    if v.isdigit():
+        return int(v)
+    return v
+
+
+def _parse_list_value(v: str):
+    if v.startswith("[") and v.endswith("]"):
+        return [x.strip() for x in v[1:-1].split(",") if x.strip()]
+    if v.isdigit():
+        return int(v)
+    return v
+
+
+# ---------------------------------------------------------------------------
+# Import extraction
+# ---------------------------------------------------------------------------
+
+SKIP_DIRS = {".venv", "benchmarks", "__pycache__", ".git", "node_modules"}
+
+
+def find_py_files(root: Path) -> list[Path]:
+    files = []
+    for p in sorted(root.rglob("*.py")):
+        if any(part in SKIP_DIRS for part in p.parts):
+            continue
+        files.append(p)
+    return files
+
+
+def extract_imports(filepath: Path) -> list[tuple[int, str]]:
+    """Return (line_number, top-level module) for each import."""
+    try:
+        tree = ast.parse(filepath.read_text(), filename=str(filepath))
+    except SyntaxError:
+        return []
+    results = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                results.append((node.lineno, alias.name.split(".")[0]))
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            results.append((node.lineno, node.module.split(".")[0]))
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Checks
+# ---------------------------------------------------------------------------
+
+def module_of(filepath: Path, root: Path) -> str | None:
+    """Return the top-level module directory, or None for root-level files."""
+    rel = filepath.relative_to(root)
+    parts = rel.parts
+    if len(parts) == 1:
+        return None  # root-level .py file
+    return parts[0]
+
+
+def check_dependencies(
+    files: list[Path], root: Path, deps: dict, forbidden: list[str]
+) -> list[str]:
+    violations = []
+    # Parse forbidden rules
+    forbidden_pairs: list[tuple[str, str]] = []
+    for rule in forbidden:
+        src, _, dst = rule.partition("->")
+        forbidden_pairs.append((src.strip(), dst.strip()))
+
+    internal_modules = set(deps.keys())
+
+    for fp in files:
+        mod = module_of(fp, root)
+        if mod is None or mod not in internal_modules:
+            continue
+        allowed = set(deps.get(mod, []))
+        allowed.add(mod)  # module can import from itself
+        rel = fp.relative_to(root)
+
+        for lineno, imported in extract_imports(fp):
+            # Only check internal modules
+            if imported not in internal_modules and imported not in {
+                m for pair in forbidden_pairs for m in pair
+            }:
+                continue
+            # Check forbidden
+            for src, dst in forbidden_pairs:
+                if mod == src and imported == dst:
+                    violations.append(
+                        f"{rel}:{lineno} imports '{imported}' — "
+                        f"forbidden by architecture.yaml ({src} -> {dst})"
+                    )
+            # Check allowed deps
+            if imported in internal_modules and imported not in allowed:
+                violations.append(
+                    f"{rel}:{lineno} imports '{imported}' — "
+                    f"not in allowed dependencies for '{mod}'"
+                )
+    return violations
+
+
+def check_max_lines(
+    files: list[Path], root: Path, max_lines: int, exempt: list[str]
+) -> list[str]:
+    violations = []
+    exempt_set = {Path(e) for e in exempt}
+    for fp in files:
+        rel = fp.relative_to(root)
+        if rel in exempt_set:
+            continue
+        count = len(fp.read_text().splitlines())
+        if count > max_lines:
+            violations.append(f"{rel}: {count} lines (max {max_lines})")
+    return violations
+
+
+def check_patterns(files: list[Path], root: Path, patterns: list[str]) -> list[str]:
+    violations = []
+    if not patterns:
+        return violations
+    for fp in files:
+        rel = fp.relative_to(root)
+        for i, line in enumerate(fp.read_text().splitlines(), 1):
+            for pat in patterns:
+                if pat in line:
+                    violations.append(f"{rel}:{i} contains forbidden pattern '{pat}'")
+    return violations
+
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
+def main() -> int:
+    root = Path(__file__).resolve().parent.parent
+    spec_path = root / "specs" / "architecture.yaml"
+    if not spec_path.exists():
+        print("ERROR: specs/architecture.yaml not found")
+        return 1
+
+    spec = parse_yaml(spec_path)
+    deps = spec.get("dependencies", {})
+    forbidden = spec.get("forbidden", [])
+    max_lines = spec.get("max_lines", 300)
+    exempt = spec.get("max_lines_exempt", [])
+    if isinstance(exempt, str):
+        exempt = [exempt]
+    patterns = spec.get("no_globals", [])
+    if isinstance(patterns, str):
+        patterns = [patterns]
+
+    # Only check source files (skip tests, scripts, benchmarks)
+    all_files = find_py_files(root)
+    source_files = [
+        f for f in all_files
+        if not any(p in f.relative_to(root).parts for p in ("tests", "scripts", "benchmarks"))
+    ]
+
+    violations: list[str] = []
+    violations.extend(check_dependencies(source_files, root, deps, forbidden))
+    violations.extend(check_max_lines(source_files, root, max_lines, exempt))
+    violations.extend(check_patterns(source_files, root, patterns))
+
+    if violations:
+        print(f"Architecture violations ({len(violations)}):\n")
+        for v in violations:
+            print(f"  ✗ {v}")
+        return 1
+
+    print(f"✓ Architecture check passed ({len(source_files)} files scanned)")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
