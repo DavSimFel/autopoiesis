@@ -26,7 +26,6 @@ from store.knowledge import (
 )
 from store.subscriptions import SubscriptionRegistry
 from tools.knowledge_tools import create_knowledge_toolset
-from tools.memory_tools import create_memory_toolset
 from tools.subscription_tools import create_subscription_toolset
 from tools.toolset_wrappers import wrap_toolsets
 from tools.topic_tools import create_topic_toolset
@@ -170,7 +169,6 @@ def _build_exec_toolset() -> AbstractToolset[AgentDeps]:
 
 
 def build_toolsets(
-    memory_db_path: str | None = None,
     subscription_registry: SubscriptionRegistry | None = None,
     knowledge_db_path: str | None = None,
     knowledge_context: str = "",
@@ -195,13 +193,6 @@ def build_toolsets(
         if knowledge_context:
             prompt_fragments.append(knowledge_context)
 
-    if memory_db_path is not None:
-        memory_toolset, memory_instr = create_memory_toolset(
-            memory_db_path, resolve_workspace_root()
-        )
-        toolsets.append(memory_toolset)
-        prompt_fragments.append(memory_instr)
-
     if subscription_registry is not None:
         sub_toolset, sub_instr = create_subscription_toolset(subscription_registry)
         toolsets.append(sub_toolset)
@@ -216,9 +207,10 @@ def build_toolsets(
 
 
 def prepare_toolset_context(
-    memory_db_path: str,
+    history_db_path: str,
 ) -> tuple[
     Path,
+    str,
     SubscriptionRegistry,
     TopicRegistry,
     list[AbstractToolset[AgentDeps]],
@@ -226,23 +218,29 @@ def prepare_toolset_context(
 ]:
     """Initialize runtime stores needed for toolset construction."""
     workspace_root = resolve_workspace_root()
-    sub_db_path = str(Path(memory_db_path).with_name("subscriptions.sqlite"))
+    sub_db_path = str(Path(history_db_path).with_name("subscriptions.sqlite"))
     subscription_registry = SubscriptionRegistry(sub_db_path)
     knowledge_root = workspace_root / "knowledge"
-    knowledge_db_path = str(Path(memory_db_path).with_name("knowledge.sqlite"))
+    knowledge_db_path = str(Path(history_db_path).with_name("knowledge.sqlite"))
     init_knowledge_index(knowledge_db_path)
     reindex_knowledge(knowledge_db_path, knowledge_root)
     ensure_journal_entry(knowledge_root)
     knowledge_context = load_knowledge_context(knowledge_root)
     topic_registry = TopicRegistry(workspace_root / "topics")
     toolsets, system_prompt = build_toolsets(
-        memory_db_path=memory_db_path,
         subscription_registry=subscription_registry,
         knowledge_db_path=knowledge_db_path,
         knowledge_context=knowledge_context,
         topic_registry=topic_registry,
     )
-    return workspace_root, subscription_registry, topic_registry, toolsets, system_prompt
+    return (
+        workspace_root,
+        knowledge_db_path,
+        subscription_registry,
+        topic_registry,
+        toolsets,
+        system_prompt,
+    )
 
 
 async def strict_tool_definitions(

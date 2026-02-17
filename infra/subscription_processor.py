@@ -5,7 +5,7 @@ a ``ModelRequest`` with the materialized text right before the final
 user message.  Old materialization messages are stripped first so
 content is always fresh.
 
-Dependencies: store.memory, store.subscriptions
+Dependencies: store.knowledge, store.subscriptions
 Wired in: chat.py → main() (as history_processor)
 """
 
@@ -22,7 +22,7 @@ from pydantic_ai.messages import (
     UserPromptPart,
 )
 
-from store.memory import search_memory
+from store.knowledge import search_knowledge
 from store.subscriptions import (
     MaterializedContent,
     Subscription,
@@ -76,30 +76,30 @@ def _read_file(target: str, workspace_root: Path, sub: Subscription) -> str:
     return "\n".join(lines)
 
 
-def _read_memory(
+def _read_knowledge(
     target: str,
-    memory_db_path: str,
+    knowledge_db_path: str,
 ) -> str:
-    """Run a memory FTS5 query and format top results."""
-    results = search_memory(memory_db_path, target, max_results=5)
+    """Run a knowledge FTS5 query and format top results."""
+    results = search_knowledge(knowledge_db_path, target, limit=5)
     if not results:
         return "(no matches)"
     parts: list[str] = []
     for entry in results:
-        parts.append(f"- [{entry['timestamp']}] {entry['summary']}")
+        parts.append(f"- {entry.file_path}:{entry.line_start}-{entry.line_end}\n  {entry.snippet}")
     return "\n".join(parts)
 
 
 def _resolve_one(
     sub: Subscription,
     workspace_root: Path,
-    memory_db_path: str,
+    knowledge_db_path: str,
 ) -> MaterializedContent:
     """Resolve a single subscription to its current content."""
     if sub.kind in ("file", "lines"):
         raw = _read_file(sub.target, workspace_root, sub)
     else:
-        raw = _read_memory(sub.target, memory_db_path)
+        raw = _read_knowledge(sub.target, knowledge_db_path)
     truncated = truncate_content(raw)
     header = f"[📎 {sub.target}]"
     if sub.line_range is not None:
@@ -115,13 +115,13 @@ def _resolve_one(
 def resolve_subscriptions(
     registry: SubscriptionRegistry,
     workspace_root: Path,
-    memory_db_path: str,
+    knowledge_db_path: str,
 ) -> list[MaterializedContent]:
     """Resolve all active subscriptions to materialized content."""
     active = registry.get_active()
     results: list[MaterializedContent] = []
     for sub in active:
-        mat = _resolve_one(sub, workspace_root, memory_db_path)
+        mat = _resolve_one(sub, workspace_root, knowledge_db_path)
         registry.update_hash(sub.id, mat.content_hash)
         results.append(mat)
     return results
@@ -131,7 +131,7 @@ def materialize_subscriptions(
     messages: list[ModelMessage],
     registry: SubscriptionRegistry,
     workspace_root: Path,
-    memory_db_path: str,
+    knowledge_db_path: str,
 ) -> list[ModelMessage]:
     """History processor: inject materialized subscription content.
 
@@ -143,7 +143,7 @@ def materialize_subscriptions(
     materialized = resolve_subscriptions(
         registry,
         workspace_root,
-        memory_db_path,
+        knowledge_db_path,
     )
     non_empty = [m for m in materialized if m.content.strip()]
     if not non_empty:

@@ -1,6 +1,6 @@
 """PydanticAI tool definitions for subscription management.
 
-Exposes subscribe_file, subscribe_memory, unsubscribe, unsubscribe_all,
+Exposes subscribe_file, subscribe_knowledge, unsubscribe, unsubscribe_all,
 and list_subscriptions as agent tools backed by the SubscriptionRegistry.
 
 Dependencies: models, store.subscriptions
@@ -19,11 +19,11 @@ _LINE_RANGE_PARTS = 2
 
 _SUBSCRIPTION_INSTRUCTIONS = """\
 ## Context subscriptions
-You can subscribe to files or memory queries for automatic context injection.
+You can subscribe to files or knowledge queries for automatic context injection.
 Subscribed content is refreshed and injected before every turn — no need to
 re-read manually.
 - `subscribe_file` — watch a file (optionally specific lines)
-- `subscribe_memory` — watch a memory search query
+- `subscribe_knowledge` — watch a knowledge search query
 - `unsubscribe` / `unsubscribe_all` — stop watching
 - `list_subscriptions` — show active subscriptions
 Max 10 subscriptions. Each capped at 2000 chars. Auto-expire after 24h."""
@@ -87,22 +87,22 @@ def _register_tools(
         return f"Subscribed to {path} (id: {sub.id})"
 
     @toolset.tool(metadata=sub_meta)
-    async def subscribe_memory(
+    async def subscribe_knowledge(
         ctx: RunContext[AgentDeps],
         query: str,
     ) -> str:
-        """Subscribe to a memory search query for automatic injection each turn.
+        """Subscribe to a knowledge search query for automatic injection each turn.
 
         Results are refreshed before every agent turn.
 
         Args:
-            query: Natural language search query for memory.
+            query: Natural language search query for knowledge.
         """
         try:
-            sub = registry.add(kind="memory", target=query)
+            sub = registry.add(kind="knowledge", target=query)
         except ValueError as exc:
             return str(exc)
-        return f"Subscribed to memory query '{query}' (id: {sub.id})"
+        return f"Subscribed to knowledge query '{query}' (id: {sub.id})"
 
     @toolset.tool(metadata=sub_meta)
     async def unsubscribe(
@@ -112,7 +112,7 @@ def _register_tools(
         """Remove a subscription by its id.
 
         Args:
-            subscription_id: The subscription id returned by subscribe_file/subscribe_memory.
+            subscription_id: The subscription id returned by subscribe_file/subscribe_knowledge.
         """
         removed = registry.remove(subscription_id)
         if removed:
@@ -137,7 +137,7 @@ def _register_tools(
             return "No active subscriptions."
         return "\n".join(_format_subscription(s) for s in active)
 
-    _ = (subscribe_file, subscribe_memory, unsubscribe, unsubscribe_all, list_subscriptions)
+    _ = (subscribe_file, subscribe_knowledge, unsubscribe, unsubscribe_all, list_subscriptions)
 
 
 def create_subscription_toolset(

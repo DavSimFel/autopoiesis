@@ -33,7 +33,7 @@ class Runtime:
     agent: Agent[AgentDeps, str]
     backend: LocalBackend
     history_db_path: str
-    memory_db_path: str
+    knowledge_db_path: str
     subscription_registry: SubscriptionRegistry | None
     approval_store: ApprovalStore
     key_manager: ApprovalKeyManager

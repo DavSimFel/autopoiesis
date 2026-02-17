@@ -37,7 +37,7 @@ def build_history_processors(
     *,
     subscription_registry: SubscriptionRegistry,
     workspace_root: Path,
-    memory_db_path: str,
+    knowledge_db_path: str,
     topic_registry: TopicRegistry,
 ) -> list[Callable[[list[ModelMessage]], list[ModelMessage]]]:
     """Build ordered message history processors for agent runs."""
@@ -47,7 +47,7 @@ def build_history_processors(
             msgs,
             subscription_registry,
             workspace_root,
-            memory_db_path,
+            knowledge_db_path,
         )
 
     def _topic_processor(msgs: list[ModelMessage]) -> list[ModelMessage]:

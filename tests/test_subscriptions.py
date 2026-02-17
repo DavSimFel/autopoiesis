@@ -12,7 +12,7 @@ from infra.subscription_processor import (
     materialize_subscriptions,
     resolve_subscriptions,
 )
-from store.memory import init_memory_store, save_memory
+from store.knowledge import init_knowledge_index, reindex_knowledge
 from store.subscriptions import (
     MAX_CONTENT_CHARS,
     MAX_SUBSCRIPTIONS,
@@ -38,9 +38,9 @@ def workspace(tmp_path: Path) -> Path:
 
 
 @pytest.fixture()
-def memory_db(tmp_path: Path) -> str:
-    db = str(tmp_path / "memory.sqlite")
-    init_memory_store(db)
+def knowledge_db(tmp_path: Path) -> str:
+    db = str(tmp_path / "knowledge.sqlite")
+    init_knowledge_index(db)
     return db
 
 
@@ -58,9 +58,9 @@ class TestSubscriptionRegistry:
         assert active[0].line_range == (1, 10)
         assert active[0].kind == "lines"
 
-    def test_add_memory(self, registry: SubscriptionRegistry) -> None:
-        sub = registry.add(kind="memory", target="auth decisions")
-        assert sub.kind == "memory"
+    def test_add_knowledge(self, registry: SubscriptionRegistry) -> None:
+        sub = registry.add(kind="knowledge", target="auth decisions")
+        assert sub.kind == "knowledge"
 
     def test_remove(self, registry: SubscriptionRegistry) -> None:
         sub = registry.add(kind="file", target="a.txt")
@@ -101,11 +101,11 @@ class TestResolveSubscriptions:
         self,
         registry: SubscriptionRegistry,
         workspace: Path,
-        memory_db: str,
+        knowledge_db: str,
     ) -> None:
         (workspace / "test.txt").write_text("hello world")
         registry.add(kind="file", target="test.txt")
-        results = resolve_subscriptions(registry, workspace, memory_db)
+        results = resolve_subscriptions(registry, workspace, knowledge_db)
         assert len(results) == 1
         assert "hello world" in results[0].content
 
@@ -113,12 +113,12 @@ class TestResolveSubscriptions:
         self,
         registry: SubscriptionRegistry,
         workspace: Path,
-        memory_db: str,
+        knowledge_db: str,
     ) -> None:
         big = "x" * (MAX_CONTENT_CHARS + 500)
         (workspace / "big.txt").write_text(big)
         registry.add(kind="file", target="big.txt")
-        results = resolve_subscriptions(registry, workspace, memory_db)
+        results = resolve_subscriptions(registry, workspace, knowledge_db)
         assert len(results[0].content) < len(big)
         assert "truncated" in results[0].content
 
@@ -126,25 +126,29 @@ class TestResolveSubscriptions:
         self,
         registry: SubscriptionRegistry,
         workspace: Path,
-        memory_db: str,
+        knowledge_db: str,
     ) -> None:
         lines = "\n".join(f"line {i}" for i in range(1, 21))
         (workspace / "f.txt").write_text(lines)
         registry.add(kind="lines", target="f.txt", line_range=(5, 10))
-        results = resolve_subscriptions(registry, workspace, memory_db)
+        results = resolve_subscriptions(registry, workspace, knowledge_db)
         assert "line 5" in results[0].content
         assert "line 10" in results[0].content
         assert "line 11" not in results[0].content
 
-    def test_memory_subscription(
+    def test_knowledge_subscription(
         self,
         registry: SubscriptionRegistry,
         workspace: Path,
-        memory_db: str,
+        knowledge_db: str,
     ) -> None:
-        save_memory(memory_db, "decided to use JWT auth", ["auth"])
-        registry.add(kind="memory", target="auth")
-        results = resolve_subscriptions(registry, workspace, memory_db)
+        knowledge_root = workspace / "knowledge"
+        (knowledge_root / "memory").mkdir(parents=True)
+        (knowledge_root / "memory" / "MEMORY.md").write_text("decided to use JWT auth")
+        reindex_knowledge(knowledge_db, knowledge_root)
+
+        registry.add(kind="knowledge", target="auth")
+        results = resolve_subscriptions(registry, workspace, knowledge_db)
         assert len(results) == 1
         assert "JWT" in results[0].content
 
@@ -152,10 +156,10 @@ class TestResolveSubscriptions:
         self,
         registry: SubscriptionRegistry,
         workspace: Path,
-        memory_db: str,
+        knowledge_db: str,
     ) -> None:
         registry.add(kind="file", target="nope.txt")
-        results = resolve_subscriptions(registry, workspace, memory_db)
+        results = resolve_subscriptions(registry, workspace, knowledge_db)
         assert "not found" in results[0].content
 
 
@@ -164,7 +168,7 @@ class TestMaterializeSubscriptions:
         self,
         registry: SubscriptionRegistry,
         workspace: Path,
-        memory_db: str,
+        knowledge_db: str,
     ) -> None:
         (workspace / "ctx.md").write_text("context data")
         registry.add(kind="file", target="ctx.md")
@@ -173,7 +177,7 @@ class TestMaterializeSubscriptions:
             [user_msg],
             registry,
             workspace,
-            memory_db,
+            knowledge_db,
         )
         expected_count = 2
         assert len(result) == expected_count
@@ -185,7 +189,7 @@ class TestMaterializeSubscriptions:
         self,
         registry: SubscriptionRegistry,
         workspace: Path,
-        memory_db: str,
+        knowledge_db: str,
     ) -> None:
         (workspace / "f.txt").write_text("data")
         registry.add(kind="file", target="f.txt")
@@ -198,7 +202,7 @@ class TestMaterializeSubscriptions:
             [old_mat, user_msg],
             registry,
             workspace,
-            memory_db,
+            knowledge_db,
         )
         # Old materialization stripped, new one added
         mat_msgs = [m for m in result if is_materialization(m)]
@@ -208,13 +212,13 @@ class TestMaterializeSubscriptions:
         self,
         registry: SubscriptionRegistry,
         workspace: Path,
-        memory_db: str,
+        knowledge_db: str,
     ) -> None:
         user_msg = ModelRequest(parts=[UserPromptPart(content="hi")])
         result = materialize_subscriptions(
             [user_msg],
             registry,
             workspace,
-            memory_db,
+            knowledge_db,
         )
         assert result == [user_msg]
