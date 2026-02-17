@@ -25,8 +25,7 @@ def activate_topic_ref(topic_ref: str) -> None:
         topics_dir = resolve_workspace_root() / "topics"
         if not topics_dir.is_dir():
             return
-        from autopoiesis.topics.topic_manager import TopicRegistry
-        from autopoiesis.topics.topic_manager import update_topic_status
+        from autopoiesis.topics.topic_manager import TopicRegistry, update_topic_status
 
         registry = TopicRegistry(topics_dir)
         topic = registry.get_topic(topic_ref)
