@@ -8,11 +8,13 @@ Internal: exec_registry, otel_tracing, pty_spawn, subscription_processor, work_q
 from autopoiesis.infra.exec_registry import cleanup_exec_logs
 from autopoiesis.infra.pty_spawn import PtyProcess, read_master, spawn_pty
 from autopoiesis.infra.subscription_processor import materialize_subscriptions
-from autopoiesis.infra.work_queue import work_queue
+from autopoiesis.infra.work_queue import dispatch_workitem, get_or_create_agent_queue, work_queue
 
 __all__ = [
     "PtyProcess",
     "cleanup_exec_logs",
+    "dispatch_workitem",
+    "get_or_create_agent_queue",
     "materialize_subscriptions",
     "read_master",
     "spawn_pty",

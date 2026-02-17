@@ -100,5 +100,6 @@ class WorkItem(BaseModel):
     input: WorkItemInput
     output: WorkItemOutput | None = None
     agent_id: str = "default"
+    topic_ref: str | None = None
     payload: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
