@@ -2,9 +2,9 @@
 
 ## Overview
 
-> Updated 2026-02-17: Memory subscriptions removed (#151). File subscriptions only.
+> Updated 2026-02-17: Memory subscriptions removed (#151). File and knowledge subscriptions.
 
-Reactive context injection via file subscriptions. The agent subscribes once to a resource; before each turn, subscribed content is automatically materialized and injected into the conversation context.
+Reactive context injection via file and knowledge subscriptions. The agent subscribes once to a resource; before each turn, subscribed content is automatically materialized and injected into the conversation context.
 
 ## Files
 
@@ -20,8 +20,8 @@ Reactive context injection via file subscriptions. The agent subscribes once to 
 
 A `Subscription` is a frozen dataclass referencing a resource:
 
-- **`kind`**: `file` | `lines` | `memory`
-- **`target`**: file path (file/lines) or 
+- **`kind`**: `file` | `lines` | `knowledge`
+- **`target`**: file path (file/lines) or FTS5 query string (knowledge)
 - **`line_range`**: optional `(start, end)` for line-scoped file subscriptions
 - **`pattern`**: optional regex filter for file lines
 - **`content_hash`**: SHA-256 prefix of last materialized content
@@ -60,6 +60,7 @@ The processor chain order in `chat.py`:
 | Tool | Purpose |
 |------|---------|
 | `subscribe_file(path, lines?, pattern?)` | Subscribe to a workspace file |
+| `subscribe_knowledge(query)` | Subscribe to a knowledge FTS5 query for automatic injection each turn |
 | `unsubscribe(subscription_id)` | Remove a subscription by id |
 | `unsubscribe_all()` | Clear all subscriptions |
 | `list_subscriptions()` | Show active subscriptions |

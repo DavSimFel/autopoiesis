@@ -4,27 +4,27 @@
 Durable interactive CLI chat built with PydanticAI + DBOS, with provider switch
 between Anthropic and OpenRouter. Python 3.12+, `uv` only.
 
-- Entry point: `chat.py`
+- Entry point: `uv run autopoiesis`
 - Backend integration: `pydantic-ai-backend==0.1.6` via `pydantic_ai_backends`
 
 ## Commands
 - Setup env: `cp .env.example .env`
 - Install: `uv sync`
-- Run: `uv run python chat.py`
+- Run: `uv run autopoiesis`
 - Docker: `docker compose up --build` / `docker compose config`
 - Lint: `uv run ruff check path/to/file.py`
 - Lint all: `uv run ruff check .`
 - Format: `uv run ruff format path/to/file.py`
 - Typecheck: `uv run pyright path/to/file.py`
 - Test: `uv run pytest`
-- Compile check: `python3 -m py_compile chat.py`
+- Compile check: `python3 -m py_compile src/autopoiesis/chat.py`
 - Automated tests exist — ensure they pass before claiming completion.
 
 ## Architecture
-Entry point: `chat.py` (single file)
+Entry point: `uv run autopoiesis` (defined in `pyproject.toml` scripts)
 
 Project files:
-- `chat.py`: provider selection, env loading, backend toolset wiring, DBOS launch, interactive CLI
+- `src/autopoiesis/chat.py`: provider selection, env loading, backend toolset wiring, DBOS launch, interactive CLI
 - `pyproject.toml`: dependency source of truth
 - `uv.lock`: locked dependency graph
 - `docker-compose.yml`: interactive container runtime + DBOS volume
