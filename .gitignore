@@ -5,3 +5,5 @@ __pycache__/
 .coverage
 .venv/
 data/
+benchmarks/.venv/
+benchmarks/results/
