@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from contextlib import closing
+from datetime import UTC, datetime
 from pathlib import Path
 
 from autopoiesis.db import open_db
@@ -44,7 +45,20 @@ def migrate_memory_to_knowledge(
     if not new_rows:
         return 0
 
+    now = datetime.now(UTC).isoformat()
+    earliest = new_rows[0]["timestamp"] if new_rows else now
+
     lines: list[str] = []
+
+    # Add frontmatter if not already present
+    if not existing_content.startswith("---"):
+        lines.append("---")
+        lines.append("type: note")
+        lines.append(f"created: {earliest}")
+        lines.append(f"modified: {now}")
+        lines.append("---")
+        lines.append("")
+
     if existing_content.strip():
         lines.append(existing_content.rstrip())
         lines.append("")
