@@ -86,6 +86,11 @@ def parse_cli_args(repo_root: Path, argv: list[str] | None = None) -> argparse.N
         action="store_true",
         help="Skip approval key unlock (dev mode)",
     )
+    parser.add_argument(
+        "--config",
+        default=None,
+        help="Path to agents.toml config (default: $AUTOPOIESIS_AGENTS_CONFIG)",
+    )
     parser.add_argument("command", nargs="?", help="Subcommand: rotate-key | serve | run")
     parser.add_argument("--host", default=None, help="Server bind host (serve mode)")
     parser.add_argument("--port", type=int, default=None, help="Server bind port (serve mode)")

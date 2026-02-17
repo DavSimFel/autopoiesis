@@ -1,6 +1,6 @@
 # Autopoiesis
 
-A **durable CLI agent** built on [PydanticAI](https://ai.pydantic.dev/) + [DBOS](https://docs.dbos.dev/) with multi-agent coordination, cryptographic approval gates, and a file-first knowledge system.
+A **durable CLI agent** built on [PydanticAI](https://ai.pydantic.dev/) + [DBOS](https://docs.dbos.dev/) with multi-agent coordination, cryptographic approval gates, and a git-based knowledge system.
 
 ## What It Does
 
@@ -8,8 +8,11 @@ A **durable CLI agent** built on [PydanticAI](https://ai.pydantic.dev/) + [DBOS]
 - **Durable execution** — DBOS priority queue survives crashes, retries automatically
 - **Cryptographic approval** — Ed25519-signed envelopes gate shell/file operations
 - **Multi-agent capable** — WorkItem queue supports T1 (human) → T2 (planner) → T3 (worker) tiers
-- **File-first knowledge** — markdown files, git versioning, FTS5 search
+- **Git-based knowledge** — markdown files with typed frontmatter (type/created/modified), filtered search, and wikilink backlink index
 - **Skill system** — drop a `SKILL.md` file, agent discovers it at startup
+- **Agent identity** — `--agent` flag for named agent profiles with isolated workspaces
+- **Topic lifecycle** — typed topics (task/question/decision) with status tracking
+- **Benchmarks** — `benchmarks/` directory with [Inspect AI](https://inspect.ai/) evaluation harness
 
 ## Quick Start
 
@@ -22,8 +25,10 @@ cp .env.example .env          # configure API keys
 
 uv run pytest                 # run all tests
 uv run pytest tests/integration/  # integration tests only
-uv run python chat.py         # start the agent
+uv run autopoiesis            # start the agent
 ```
+
+Or equivalently: `uv run python -m autopoiesis`
 
 ## Verify
 
@@ -63,6 +68,8 @@ DBOS state persists in a `dbos-data` volume. Container runs as non-root `appuser
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** — system design, tool inventory, agent tiers
 - **[CONTRIBUTING.md](CONTRIBUTING.md)** — developer workflow, CI, specs
 - **[docs/testing.md](docs/testing.md)** — complete testing guide
+- **[docs/observability.md](docs/observability.md)** — SigNoz/OTEL tracing setup
+- **[docs/research/](docs/research/)** — research notes and design studies
 - **[specs/](specs/)** — module specifications (the source of truth)
 
 ## License

@@ -71,12 +71,18 @@ comes from the final `WorkItemOutput` persisted after completion.
 
 ### `src/autopoiesis/infra/work_queue.py`
 
-Single queue instance — no functions, no imports from `src/autopoiesis/cli.py`:
+Default queue instance plus multi-agent dispatch primitives (Phase B — not yet wired into worker):
 
-- Queue name: `"agent_work"`
+- Default queue name: `"agent_work"`
 - `priority_enabled=True`
 - `concurrency=1`
 - `polling_interval_sec=1.0`
+
+#### Multi-Agent Dispatch (Phase B primitives — not yet wired)
+
+- `_agent_queues: dict[str, Queue]` — registry of per-agent queues; `"default"` always present
+- `get_or_create_agent_queue(agent_id)` — returns or lazily creates a DBOS `Queue` for the given agent
+- `dispatch_workitem(item)` — routes a `WorkItem` to the correct agent queue by `agent_id`; returns the `Queue` (caller is responsible for enqueue). **Not yet called by any worker path — wiring planned for Phase B-2.**
 
 ### `src/autopoiesis/display/streaming.py`
 
