@@ -26,6 +26,7 @@ from pydantic_ai.messages import (
 from pydantic_ai.tools import DeferredToolResults, RunContext
 
 from autopoiesis.agent.runtime import Runtime, get_runtime
+from autopoiesis.agent.topic_activation import activate_topic_ref
 from autopoiesis.display.stream_formatting import forward_stream_events
 from autopoiesis.display.streaming import StreamHandle, ToolAwareStreamHandle, take_stream
 from autopoiesis.infra import otel_tracing
@@ -38,7 +39,6 @@ from autopoiesis.infra.approval.types import ApprovalScope
 from autopoiesis.infra.work_queue import dispatch_workitem
 from autopoiesis.models import AgentDeps, WorkItem, WorkItemOutput
 from autopoiesis.store.history import clear_checkpoint, load_checkpoint, save_checkpoint
-from autopoiesis.topics.topic_manager import update_topic_status
 
 try:
     from dbos import DBOS, SetEnqueueOptions
@@ -192,38 +192,6 @@ def _run_sync(
         deferred_tool_results=turn.deferred_results,
     )
     return _build_output(result.output, result.all_messages(), turn.scope, rt)
-
-
-def activate_topic_ref(topic_ref: str) -> None:
-    """Attempt to transition a topic to ``in-progress`` status.
-
-    Called before agent execution when a WorkItem carries a ``topic_ref``.
-    Failures are logged but do not block execution.
-    """
-    try:
-        from autopoiesis.tools.toolset_builder import resolve_workspace_root
-
-        topics_dir = resolve_workspace_root() / "topics"
-        if not topics_dir.is_dir():
-            return
-        from autopoiesis.topics.topic_manager import TopicRegistry
-
-        registry = TopicRegistry(topics_dir)
-        topic = registry.get_topic(topic_ref)
-        if topic is None:
-            _log.debug("topic_ref '%s' not found; skipping activation", topic_ref)
-            return
-        if topic.status == "open":
-            result = update_topic_status(registry, topic_ref, "in-progress")
-            _log.info("topic_ref auto-activation: %s", result)
-        else:
-            _log.debug(
-                "topic_ref '%s' status is '%s'; skipping activation",
-                topic_ref,
-                topic.status,
-            )
-    except Exception:
-        _log.warning("Failed to auto-activate topic_ref '%s'", topic_ref, exc_info=True)
 
 
 @DBOS.step()
