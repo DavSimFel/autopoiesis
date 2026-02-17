@@ -17,14 +17,14 @@ between Anthropic and OpenRouter. Python 3.12+, `uv` only.
 - Format: `uv run ruff format path/to/file.py`
 - Typecheck: `uv run pyright path/to/file.py`
 - Test: `uv run pytest`
-- Compile check: `python3 -m py_compile src/autopoiesis/chat.py`
+- Compile check: `python3 -m py_compile src/autopoiesis/cli.py`
 - Automated tests exist — ensure they pass before claiming completion.
 
 ## Architecture
 Entry point: `uv run autopoiesis` (defined in `pyproject.toml` scripts)
 
 Project files:
-- `src/autopoiesis/chat.py`: provider selection, env loading, backend toolset wiring, DBOS launch, interactive CLI
+- `src/autopoiesis/cli.py`: provider selection, env loading, backend toolset wiring, DBOS launch, interactive CLI
 - `pyproject.toml`: dependency source of truth
 - `uv.lock`: locked dependency graph
 - `docker-compose.yml`: interactive container runtime + DBOS volume
@@ -45,7 +45,7 @@ Runtime conventions:
 - Guard optional/runtime imports with fail-fast `SystemExit` messages recommending `uv sync`
 - `AI_PROVIDER=anthropic`: use model strings with `anthropic:` prefix
 - `AI_PROVIDER=openrouter`: use `OpenAIChatModel` + `OpenAIProvider(base_url="https://openrouter.ai/api/v1")`
-- Resolve `AGENT_WORKSPACE_ROOT` relative to `chat.py` when env value is not absolute
+- Resolve `AGENT_WORKSPACE_ROOT` relative to `cli.py` when env value is not absolute
 
 Startup order (sequence matters):
 1. `load_dotenv(dotenv_path=Path(__file__).with_name(".env"))`
@@ -140,7 +140,7 @@ Don't read everything. Start here:
 
 | Module | Description | Lines |
 |--------|-------------|-------|
-| `chat.py` | Durable CLI chat entrypoint with DBOS-backed queue execution. | 187 |
+| `cli.py` | Durable CLI chat entrypoint with DBOS-backed queue execution. | 187 |
 | `db.py` | Shared SQLite connection helpers for local stores. | 14 |
 | `io_utils.py` | Shared file-tail helpers for bounded log reads. | 36 |
 | `model_resolution.py` | Model/provider resolution helpers for chat runtime. | 102 |

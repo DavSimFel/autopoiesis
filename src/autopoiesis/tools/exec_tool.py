@@ -18,6 +18,7 @@ from autopoiesis.infra import exec_registry
 from autopoiesis.infra.pty_spawn import PtyProcess, read_master, spawn_pty
 from autopoiesis.io_utils import tail_lines
 from autopoiesis.models import AgentDeps
+from autopoiesis.tools.tier_enforcement import enforce_tier
 
 _background_tasks: set[asyncio.Task[None]] = set()
 
@@ -233,6 +234,9 @@ async def execute(
         timeout: Seconds before kill (foreground only).
         background: Return immediately with a session id for monitoring.
     """
+    blocked = enforce_tier(command, ctx.deps.approval_unlocked)
+    if blocked is not None:
+        return blocked
     workspace_root = Path(ctx.deps.backend.root_dir)
     safe_cwd = sandbox_cwd(cwd, workspace_root)
     safe_env = resolve_env(env)
@@ -268,6 +272,9 @@ async def execute_pty(
         timeout: Seconds before kill (foreground only).
         background: Return immediately with a session id for monitoring.
     """
+    blocked = enforce_tier(command, ctx.deps.approval_unlocked)
+    if blocked is not None:
+        return blocked
     workspace_root = Path(ctx.deps.backend.root_dir)
     safe_cwd = sandbox_cwd(cwd, workspace_root)
     safe_env = resolve_env(env)

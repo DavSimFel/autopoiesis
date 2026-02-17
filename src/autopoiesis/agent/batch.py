@@ -76,7 +76,7 @@ def run_batch(
         _install_timeout(timeout)
 
     rt = get_runtime()
-    deps = AgentDeps(backend=rt.backend)
+    deps = AgentDeps(backend=rt.backend, approval_unlocked=False)
     start = time.monotonic()
 
     try:

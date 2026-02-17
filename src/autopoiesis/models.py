@@ -26,6 +26,7 @@ class AgentDeps:
     """
 
     backend: LocalBackend
+    approval_unlocked: bool = False
 
 
 class WorkItemPriority(IntEnum):

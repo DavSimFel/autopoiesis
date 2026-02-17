@@ -8,7 +8,7 @@ approval signing and tier-based command enforcement.
 ## Status
 
 - **Last updated:** 2026-02-17
-- **Source:** `specs/security.md` (full approval model), `src/autopoiesis/infra/command_classifier.py`, `src/autopoiesis/tools/shell_tool.py`
+- **Source:** `specs/security.md` (full approval model), `src/autopoiesis/infra/command_classifier.py`, `src/autopoiesis/tools/shell_tool.py`, `src/autopoiesis/tools/exec_tool.py`
 
 ## Ed25519 Approval Model
 
@@ -29,9 +29,14 @@ Shell commands are classified into four tiers by `command_classifier.classify()`
 
 ### Enforcement rules
 
+Tier enforcement applies to **both** `shell_tool.py` (synchronous `shell()`)
+and `exec_tool.py` (async `execute()` / `execute_pty()`). Both code paths
+classify the command via `command_classifier.classify()` before execution.
+
 1. **Without approval unlock** (`--no-approval` or batch mode): only FREE-tier
    commands are permitted. REVIEW and APPROVE commands return a blocked
-   `ShellResult` with an informative error message.
+   `ShellResult` (shell_tool) or blocked `ToolReturn` (exec_tool) with an
+   informative error message.
 2. **With approval unlock** (normal interactive mode): FREE, REVIEW, and
    APPROVE commands are permitted. The deferred-tool approval flow (envelope
    signing) still applies for side-effecting PydanticAI tools.
