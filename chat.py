@@ -236,7 +236,7 @@ def _initialize_runtime(
     return system_database_url
 
 
-def _register_runtime(
+def _register_runtime(  # noqa: PLR0913 — runtime wiring needs all components
     *,
     agent: Any,
     backend: Any,

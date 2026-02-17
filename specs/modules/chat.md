@@ -8,14 +8,14 @@ split into focused companion modules.
 
 ## Status
 
-- **Last updated:** 2026-02-16 (Issue #141)
+- **Last updated:** 2026-02-17 (Issue #148)
 - **Source:** `chat.py`, `chat_runtime.py`, `model_resolution.py`, `toolset_builder.py`, `chat_worker.py`, `chat_approval.py`, `chat_cli.py`
 
 ## File Structure
 
 | File | Responsibility |
 |------|---------------|
-| `chat.py` | Entrypoint, rotate-key command, DBOS launch, runtime wiring |
+| `chat.py` | Entrypoint, rotate-key command, runtime initialization (all modes), DBOS launch, serve/chat dispatch |
 | `chat_runtime.py` | Runtime singleton state, `AgentOptions`, agent assembly, instrumentation toggle |
 | `model_resolution.py` | Provider detection, required env access, model settings/env parsing, fallback model resolution |
 | `toolset_builder.py` | Workspace/backend creation, console+skills+exec+memory/subscription toolset composition, strict tool schema preparation |
@@ -79,6 +79,11 @@ split into focused companion modules.
 - `chat_runtime.instrument_agent(agent)` — Enables OpenTelemetry instrumentation when
   `OTEL_EXPORTER_OTLP_ENDPOINT` is set. Returns `True` if applied.
 
+- `_resolve_startup_config()` — resolves provider, agent name, and DBOS system database URL from env
+- `_prepare_toolset_context(memory_db_path)` — initializes stores (subscriptions, knowledge, topics) and builds toolsets
+- `_build_history_processors(...)` — builds ordered message history processors (truncation, compaction, subscriptions, topics, checkpointing)
+- `_initialize_runtime(base_dir, *, require_approval_unlock)` — full runtime init for all modes (chat/batch/serve); assembles provider, backend, toolsets, agent, registers runtime
+- `_register_runtime(...)` — initializes history storage and calls set_runtime() with all components
 ### Runtime State
 
 - `Runtime` dataclass holds agent + backend + approval store + unlocked key manager + tool policy for the process lifetime
