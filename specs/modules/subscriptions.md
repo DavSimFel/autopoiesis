@@ -42,7 +42,7 @@ This ensures the LLM always sees fresh subscription content at the optimal posit
 
 ### Integration
 
-The processor chain order in `src/autopoiesis/cli.py`:
+The processor chain order in `chat.py`:
 1. `truncate_tool_results` — cap oversized tool outputs
 2. `compact_history` — compress older messages
 3. `materialize_subscriptions` — inject subscription content
@@ -66,10 +66,6 @@ The processor chain order in `src/autopoiesis/cli.py`:
 
 ## Dependencies
 
-<<<<<<< HEAD
-=======
-- `src/autopoiesis/store/memory.py` — for memory subscription resolution (FTS5 search)
->>>>>>> b8ed9c3 (refactor: move source to src/autopoiesis/ layout (closes #152))
 - PydanticAI `HistoryProcessor` — for message injection
 - PydanticAI `ModelRequest.metadata` — for tagging materialization messages
 

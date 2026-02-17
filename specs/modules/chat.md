@@ -15,25 +15,14 @@ split into focused companion modules.
 
 | File | Responsibility |
 |------|---------------|
-<<<<<<< HEAD
-| `chat.py` | Entrypoint, rotate-key command, runtime initialization (all modes), DBOS launch, serve/chat dispatch (≤300 lines) |
-| `agent/history.py` | History processor pipeline construction (extracted from chat.py) |
-| `chat_runtime.py` | Runtime singleton state, `AgentOptions`, agent assembly, instrumentation toggle |
-| `model_resolution.py` | Provider detection, required env access, model settings/env parsing, fallback model resolution |
-| `toolset_builder.py` | Workspace/backend creation, console+skills+exec+subscription toolset composition, strict tool schema preparation |
-| `chat_worker.py` | DBOS workflow/step functions, enqueue helpers, history serialization |
-| `chat_approval.py` | Approval scope, request/result serialization, CLI approval collection |
-| `chat_cli.py` | Interactive CLI loop and approval re-enqueue flow |
-=======
 | `src/autopoiesis/cli.py` | Entrypoint, rotate-key command, runtime initialization (all modes), DBOS launch, serve/chat dispatch (≤300 lines) |
 | `src/autopoiesis/agent/history.py` | History processor pipeline construction (extracted from chat.py) |
-| `agent/runtime.py` | Runtime singleton state, `AgentOptions`, agent assembly, instrumentation toggle |
+| `src/autopoiesis/agent/runtime.py` | Runtime singleton state, `AgentOptions`, agent assembly, instrumentation toggle |
 | `src/autopoiesis/agent/model_resolution.py` | Provider detection, required env access, model settings/env parsing, fallback model resolution |
-| `src/autopoiesis/tools/toolset_builder.py` | Workspace/backend creation, console+skills+exec+memory/subscription toolset composition, strict tool schema preparation |
-| `agent/worker.py` | DBOS workflow/step functions, enqueue helpers, history serialization |
-| `infra/approval/chat_approval.py` | Approval scope, request/result serialization, CLI approval collection |
-| `agent/cli.py` | Interactive CLI loop and approval re-enqueue flow |
->>>>>>> b8ed9c3 (refactor: move source to src/autopoiesis/ layout (closes #152))
+| `src/autopoiesis/tools/toolset_builder.py` | Workspace/backend creation, console+skills+exec+subscription toolset composition, strict tool schema preparation |
+| `src/autopoiesis/agent/worker.py` | DBOS workflow/step functions, enqueue helpers, history serialization |
+| `src/autopoiesis/infra/approval/chat_approval.py` | Approval scope, request/result serialization, CLI approval collection |
+| `src/autopoiesis/agent/cli.py` | Interactive CLI loop and approval re-enqueue flow |
 | `agent/batch.py` | Non-interactive batch execution with auto-approval and JSON output |
 | `src/autopoiesis/models.py` | `AgentDeps`, `WorkItem`, `WorkItemInput`, `WorkItemOutput`, priority/type enums |
 | `src/autopoiesis/skills/skills.py` | Skill discovery, progressive loading, skills toolset |
