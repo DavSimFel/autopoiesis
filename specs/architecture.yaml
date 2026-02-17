@@ -1,0 +1,32 @@
+# Architecture constraints — verified by scripts/arch_check.py
+# See issue #156 for rationale.
+
+# Module dependency rules: module -> allowed internal imports
+dependencies:
+  agent: [models, store, tools, infra, approval, display, topic_manager, toolset_builder, model_resolution, run_simple, prompts]
+  server: [agent, models, store, approval, infra, display, tools, chat, db, topic_manager, toolset_builder, model_resolution, skills, skillmaker_tools, prompts, io_utils, run_simple]
+  tools: [models, store, infra, db, agent]  # agent: exec_tool enqueues work items
+  store: [db, models]
+  infra: [models, db, store, topic_manager, tools]
+  approval: [models, db]
+  display: [models, infra]
+  # Root modules (chat, toolset_builder, etc.) are not constrained here
+
+# Explicitly forbidden imports (regardless of dependency rules)
+forbidden:
+  - tools -> server        # tools must not know about server
+  - store -> agent         # store must not know about agent
+  - store -> server        # store must not know about server
+  - approval -> agent      # approval must not know about agent
+  - approval -> server     # approval must not know about server
+
+# Maximum lines per file
+max_lines: 300
+
+# Files exempt from max_lines (pre-existing, to be refactored)
+max_lines_exempt:
+  - src/autopoiesis/store/knowledge.py     # 340 lines — tracked for refactor
+  - src/autopoiesis/topics/topic_manager.py  # 445 lines — new module, to be refactored
+
+# Pattern constraints — these strings must not appear in source
+no_globals: []
