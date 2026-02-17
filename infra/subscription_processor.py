@@ -86,9 +86,7 @@ def _read_knowledge(
         return "(no matches)"
     parts: list[str] = []
     for entry in results:
-        parts.append(
-            f"- {entry.file_path}:{entry.line_start}-{entry.line_end}\n  {entry.snippet}"
-        )
+        parts.append(f"- {entry.file_path}:{entry.line_start}-{entry.line_end}\n  {entry.snippet}")
     return "\n".join(parts)
 
 

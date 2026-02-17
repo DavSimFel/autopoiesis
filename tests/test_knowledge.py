@@ -284,4 +284,3 @@ class TestSanitizeFtsQuery:
         assert "passwd" in result
         assert ":" not in result
         assert '"' not in result
-
