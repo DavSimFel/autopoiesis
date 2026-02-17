@@ -13,7 +13,7 @@ def run_server(host: str | None = None, port: int | None = None) -> None:
     resolved_port = port or int(os.getenv("AUTOPOIESIS_PORT", "8420"))
 
     uvicorn.run(
-        "server.app:app",
+        "autopoiesis.server.app:app",
         host=resolved_host,
         port=resolved_port,
         log_level="info",

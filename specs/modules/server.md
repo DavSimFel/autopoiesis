@@ -34,7 +34,7 @@ streaming support.
 
 ### REST Endpoints
 
-- `GET /health` — Health check
+- `GET /api/health` — Health check
 - `POST /api/chat` — Send a message, receive agent response
 - `GET /api/sessions` — List sessions
 - `POST /api/sessions` — Create a session
@@ -42,7 +42,7 @@ streaming support.
 
 ### WebSocket
 
-- `WS /ws/{session_id}` — Real-time bidirectional agent interaction
+- `WS /api/ws/{session_id}` — Real-time bidirectional agent interaction
 
 ### Environment Variables
 
