@@ -24,7 +24,6 @@ tests/
     ├── test_agent_isolation.py  # S2: Agent Isolation
     ├── test_history.py          # S3: History & Recovery
     ├── test_skills.py           # S4: Skill Loading
-    ├── test_shell_tool.py       # S5: Shell Tool
     ├── test_command_classification.py  # S6: Command Classification
     ├── test_toolset_assembly.py # S7: Toolset Assembly
     ├── test_knowledge.py        # S8: Knowledge System
@@ -49,9 +48,9 @@ tests/
 
 | Section | Tests | Status | What it tests |
 |---------|-------|--------|---------------|
-| **S5: Shell Tool** | 10 | New | Single `shell(command)` interface, output capture, timeout handling |
-| **S6: Command Classification** | 10 | New | Security tier assignment (FREE/REVIEW/APPROVE/BLOCK) for commands |
-| **S7: Toolset Assembly** | 5 | New | All tools register correctly, no missing/duplicate registrations |
+| **S5: Tier Enforcement** | 10 | ✅ All green | `enforce_tier` behavior across FREE/REVIEW/APPROVE/BLOCK with locked/unlocked approvals |
+| **S6: Command Classification** | 11 | ✅ All green | Security tier assignment (including `python`/`tmux` as REVIEW) and chained-command worst-tier behavior |
+| **S7: Toolset Assembly** | 4 | ✅ All green | Runtime toolset composition and strict-tool cap behavior |
 
 ### Tier 3 — Content & Context
 
@@ -70,9 +69,8 @@ tests/
 
 ### Current Totals
 
-- **38 green** — passing reliably
-- **13 skip** — blocked on dependencies or unmerged work
-- **25 incoming** — shell/security tests (Tier 2)
+Run `uv run pytest` for the authoritative pass/skip totals in your local
+environment and branch state.
 
 ## xfail and skip Conventions
 
@@ -91,8 +89,8 @@ def test_workitem_routes_to_topic_owner():
 Marks a test that **cannot run** due to an external dependency (unmerged PR, missing infrastructure, etc.).
 
 ```python
-@pytest.mark.skip(reason="Blocked on shell tool PR #171")
-def test_shell_command_classification():
+@pytest.mark.skip(reason="Blocked on upstream API change #171")
+def test_external_integration():
     ...
 ```
 

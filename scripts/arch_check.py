@@ -79,6 +79,9 @@ def _parse_list_value(v: str) -> str | int | list[str]:
 # ---------------------------------------------------------------------------
 
 SKIP_DIRS = {".venv", "benchmarks", "__pycache__", ".git", "node_modules"}
+_SRC_LAYOUT_MIN_PARTS = 3
+_SRC_LAYOUT_APPROVAL_PARTS = 4
+_AUTOPIESIS_APPROVAL_IMPORT_PARTS = 3
 
 
 def find_py_files(root: Path) -> list[Path]:
@@ -100,9 +103,13 @@ def extract_imports(filepath: Path) -> list[tuple[int, str]]:
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
-                results.append((node.lineno, alias.name.split(".")[0]))
+                mod = _normalize_import_module(alias.name)
+                if mod is not None:
+                    results.append((node.lineno, mod))
         elif isinstance(node, ast.ImportFrom) and node.module:
-            results.append((node.lineno, node.module.split(".")[0]))
+            mod = _normalize_import_module(node.module)
+            if mod is not None:
+                results.append((node.lineno, mod))
     return results
 
 
@@ -112,12 +119,43 @@ def extract_imports(filepath: Path) -> list[tuple[int, str]]:
 
 
 def module_of(filepath: Path, root: Path) -> str | None:
-    """Return the top-level module directory, or None for root-level files."""
+    """Return architecture module key for a source file path."""
     rel = filepath.relative_to(root)
     parts = rel.parts
+    if len(parts) < _SRC_LAYOUT_MIN_PARTS:
+        return None
+    if parts[0] != "src" or parts[1] != "autopoiesis":
+        return None
+    if len(parts) == _SRC_LAYOUT_MIN_PARTS:
+        return None  # src/autopoiesis/<root-module>.py (unconstrained)
+    if (
+        parts[2] == "infra"
+        and len(parts) >= _SRC_LAYOUT_APPROVAL_PARTS
+        and parts[3] == "approval"
+    ):
+        return "approval"
+    return parts[2]
+
+
+def _normalize_import_module(module: str) -> str | None:
+    """Normalize import string to architecture module keys.
+
+    Returns ``None`` for external imports.
+    """
+    parts = module.split(".")
+    if not parts:
+        return None
+    if parts[0] != "autopoiesis":
+        return parts[0]
     if len(parts) == 1:
-        return None  # root-level .py file
-    return parts[0]
+        return None
+    if (
+        parts[1] == "infra"
+        and len(parts) >= _AUTOPIESIS_APPROVAL_IMPORT_PARTS
+        and parts[2] == "approval"
+    ):
+        return "approval"
+    return parts[1]
 
 
 def check_dependencies(

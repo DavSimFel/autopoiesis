@@ -171,7 +171,7 @@ class TestConfigLoadingInStartup:
         ):
             import autopoiesis.cli as cli_mod
 
-            cli_mod._agent_configs.clear()  # pyright: ignore[reportPrivateUsage]
+            cli_mod.get_agent_configs().clear()
             import sys
 
             old_argv = sys.argv

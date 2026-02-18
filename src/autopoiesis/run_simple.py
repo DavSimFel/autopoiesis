@@ -39,6 +39,7 @@ def run_simple(
     *,
     message_history: list[ModelMessage] | None = None,
     max_rounds: int = _MAX_APPROVAL_ROUNDS,
+    auto_approve_deferred: bool = True,
 ) -> SimpleResult:
     """Run an agent synchronously, auto-approving any deferred tool requests.
 
@@ -49,8 +50,8 @@ def run_simple(
     plain string is returned.
 
     Raises:
-        RuntimeError: If the agent keeps requesting approvals beyond
-            *max_rounds* iterations.
+        RuntimeError: If deferred approvals are disabled and requested, or if
+            the agent keeps requesting approvals beyond *max_rounds* iterations.
     """
     output_type: list[type[AgentOutput]] = [str, DeferredToolRequests]
     history = list(message_history) if message_history else []
@@ -71,6 +72,9 @@ def run_simple(
                 all_messages=result.all_messages(),
                 approval_rounds=round_idx,
             )
+
+        if not auto_approve_deferred:
+            raise RuntimeError("Deferred approvals unsupported in this mode")
 
         logger.info(
             "Auto-approving %d deferred tool(s) (round %d)",

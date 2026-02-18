@@ -78,3 +78,9 @@ class TestRunSimpleApprovalFlow:
 
         assert isinstance(result2.text, str)
         assert len(result2.all_messages) > len(result1.all_messages)
+
+    def test_rejects_deferred_when_auto_approve_disabled(self) -> None:
+        """Deferred requests fail deterministically when auto approval is disabled."""
+        agent = _build_agent_with_approval()
+        with pytest.raises(RuntimeError, match="Deferred approvals unsupported in this mode"):
+            run_simple(agent, "hello", _make_deps(), auto_approve_deferred=False)

@@ -80,7 +80,12 @@ def run_batch(
     start = time.monotonic()
 
     try:
-        simple_result = run_simple(rt.agent, resolved_task, deps)
+        simple_result = run_simple(
+            rt.agent,
+            resolved_task,
+            deps,
+            auto_approve_deferred=False,
+        )
         batch_result = BatchResult(
             success=True,
             result=simple_result.text,

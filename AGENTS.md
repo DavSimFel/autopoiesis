@@ -128,7 +128,7 @@ Don't read everything. Start here:
 | Change system prompt | `prompts.py` | `toolset_builder.py` (prompt composition + tool wiring) |
 | Add a new tool | `tools/_PATTERN.md` | existing `tools/*_tools.py`, then `toolset_builder.py` |
 | Fix approval bug | `approval/types.py` | target `approval/*.py` |
-| Fix persistence | `store/history.py` or `store/memory.py` | `db.py`, `store/subscriptions.py`, `models.py` |
+| Fix persistence | `store/history.py` or `store/knowledge.py` | `db.py`, `store/subscriptions.py`, `models.py` |
 | Fix streaming/display | `display/streaming.py` | `display/rich_display.py` or `display/stream_formatting.py` |
 | Fix agent execution | `agent/runtime.py` | `agent/worker.py` |
 | Fix CLI interaction | `agent/cli.py` | `approval/chat_approval.py` |
@@ -140,43 +140,64 @@ Don't read everything. Start here:
 
 | Module | Description | Lines |
 |--------|-------------|-------|
-| `cli.py` | Durable CLI chat entrypoint with DBOS-backed queue execution. | 187 |
-| `db.py` | Shared SQLite connection helpers for local stores. | 14 |
-| `io_utils.py` | Shared file-tail helpers for bounded log reads. | 36 |
-| `model_resolution.py` | Model/provider resolution helpers for chat runtime. | 102 |
-| `models.py` | Work item types for DBOS-backed priority queue execution. | 103 |
-| `prompts.py` | Static system prompt constants for the agent runtime. | 43 |
-| `run_simple.py` | Convenience wrapper for `agent.run_sync()` that auto-approves deferred tools. | 92 |
-| `skillmaker_tools.py` | Linting and validation helpers for SKILL.md files. | 165 |
-| `skills.py` | Filesystem-based skill system with progressive disclosure. | 294 |
-| `toolset_builder.py` | Toolset, backend, and workspace wiring for chat runtime. | 203 |
+| `agent/batch.py` | Non-interactive batch execution for programmatic agent invocation. | 120 |
 | `agent/cli.py` | Interactive CLI loop and approval handling. | 112 |
+| `agent/config.py` | Agent configuration loading and TOML parsing. | 145 |
 | `agent/context.py` | Sliding-window context management with token-based compaction. | 144 |
-| `agent/runtime.py` | Agent construction and process runtime state for CLI chat. | 141 |
+| `agent/history.py` | History processor pipeline construction. | 62 |
+| `agent/model_resolution.py` | Model/provider resolution helpers for chat runtime. | 102 |
+| `agent/runtime.py` | Agent construction and process runtime state for CLI chat. | 153 |
+| `agent/spawner.py` | Ephemeral agent spawning from template configs. | 62 |
+| `agent/topic_activation.py` | Auto-activate topics when WorkItems carry a `topic_ref`. | 45 |
 | `agent/truncation.py` | Truncate large tool results and persist full output to disk. | 92 |
-| `agent/worker.py` | DBOS worker and queue helpers for chat work items. | 266 |
-| `approval/chat_approval.py` | Approval scope construction and approval decision serialization helpers. | 204 |
-| `approval/crypto.py` | Cryptographic helpers for approval signing keys. | 221 |
-| `approval/key_files.py` | Filesystem and serialization helpers for approval key material. | 98 |
-| `approval/keys.py` | Key management and signing for approval envelopes. | 267 |
-| `approval/policy.py` | Immutable tool classification policy for deferred approvals. | 61 |
-| `approval/store.py` | SQLite approval envelope storage and verification workflow. | 281 |
-| `approval/store_schema.py` | Schema and migration helpers for approval envelope storage. | 123 |
-| `approval/store_verify.py` | Verification and parsing helpers for approval submissions. | 161 |
-| `approval/types.py` | Shared data models and canonicalization helpers for approval security. | 215 |
-| `tools/exec_tool.py` | Shell execution tool with PTY support, timeout, and background mode. | 285 |
-| `tools/memory_tools.py` | PydanticAI tool definitions for persistent chat memory. | 95 |
-| `tools/process_tool.py` | Process management tool for inspecting and controlling running sessions. | 190 |
-| `tools/subscription_tools.py` | PydanticAI tool definitions for subscription management. | 152 |
-| `tools/toolset_wrappers.py` | Observable toolset wrapper for logging tool call metrics. | 57 |
-| `store/history.py` | SQLite-backed checkpoint store for durable agent message history. | 129 |
-| `store/memory.py` | SQLite FTS5-backed persistent memory store for cross-session knowledge. | 253 |
-| `store/subscriptions.py` | Subscription registry for reactive context injection. | 221 |
+| `agent/validation.py` | Centralized name/slug validation for agent identifiers. | 30 |
+| `agent/worker.py` | DBOS worker and queue helpers for chat work items. | 290 |
+| `agent/workspace.py` | Agent identity and workspace path resolution. | 79 |
+| `cli.py` | Durable CLI chat entrypoint with DBOS-backed queue execution. | 245 |
+| `db.py` | Shared SQLite connection helpers for local stores. | 14 |
 | `display/rich_display.py` | Rich live display manager with per-section streaming channels. | 243 |
 | `display/stream_formatting.py` | Stream event formatting and forwarding helpers. | 103 |
 | `display/streaming.py` | In-process stream handles for real-time work item output. | 239 |
+| `infra/approval/chat_approval.py` | Approval scope construction and approval decision serialization helpers. | 204 |
+| `infra/approval/crypto.py` | Cryptographic helpers for approval signing keys. | 221 |
+| `infra/approval/key_files.py` | Filesystem and serialization helpers for approval key material. | 98 |
+| `infra/approval/keys.py` | Key management and signing for approval envelopes. | 267 |
+| `infra/approval/policy.py` | Immutable tool classification policy for deferred approvals. | 61 |
+| `infra/approval/store.py` | SQLite approval envelope storage and verification workflow. | 281 |
+| `infra/approval/store_schema.py` | Schema and migration helpers for approval envelope storage. | 123 |
+| `infra/approval/store_verify.py` | Verification and parsing helpers for approval submissions. | 161 |
+| `infra/approval/types.py` | Shared data models and canonicalization helpers for approval security. | 215 |
+| `infra/command_classifier.py` | Command classification for shell security layer (Issue #170). | 176 |
 | `infra/exec_registry.py` | In-memory registry for tracked subprocess sessions. | 147 |
 | `infra/otel_tracing.py` | OpenTelemetry tracing helpers for autopoiesis. | 112 |
 | `infra/pty_spawn.py` | Thin typed wrapper around stdlib pty for async subprocess spawning. | 63 |
 | `infra/subscription_processor.py` | History processor that materializes subscriptions before each agent turn. | 173 |
-| `infra/work_queue.py` | DBOS queue instances for background agent work. | 20 |
+| `infra/topic_processor.py` | History processor that injects active topic instructions before each turn. | 62 |
+| `infra/work_queue.py` | DBOS queue instances for background agent work. | 62 |
+| `io_utils.py` | Shared file-tail helpers for bounded log reads. | 36 |
+| `models.py` | Work item types for DBOS-backed priority queue execution. | 106 |
+| `prompts.py` | Static system prompt constants for the agent runtime. | 43 |
+| `run_simple.py` | Convenience wrapper for `agent.run_sync()` that auto-approves deferred tools. | 96 |
+| `server/app.py` | FastAPI application setup and route registration. | 84 |
+| `server/auth.py` | API key authentication for the server. | 43 |
+| `server/cli.py` | Server CLI entry point — `autopoiesis serve`. | 20 |
+| `server/connections.py` | WebSocket connection manager for multi-device session support. | 88 |
+| `server/models.py` | Pydantic models for server API requests, responses, and WebSocket messages. | 63 |
+| `server/routes.py` | Route handlers for the FastAPI server. | 283 |
+| `server/sessions.py` | In-memory session store for the server. | 113 |
+| `server/stream_handle.py` | WebSocket stream handle implementing the streaming protocol. | 130 |
+| `skills/skillmaker_tools.py` | Linting and validation helpers for SKILL.md files. | 165 |
+| `skills/skills.py` | Filesystem-based skill system with progressive disclosure. | 294 |
+| `store/history.py` | SQLite-backed checkpoint store for durable agent message history. | 129 |
+| `store/knowledge.py` | File-based knowledge management with FTS5 search indexing. | 508 |
+| `store/knowledge_migration.py` | Migration from SQLite memory store to file-based knowledge. | 74 |
+| `store/subscriptions.py` | Subscription registry for reactive context injection. | 221 |
+| `tools/exec_tool.py` | Shell execution tool with PTY support, timeout, and background mode. | 292 |
+| `tools/knowledge_tools.py` | PydanticAI tool definitions for file-based knowledge search. | 104 |
+| `tools/process_tool.py` | Process management tool for inspecting and controlling running sessions. | 190 |
+| `tools/subscription_tools.py` | PydanticAI tool definitions for subscription management. | 152 |
+| `tools/tier_enforcement.py` | Command tier enforcement shared by shell execution tools. | 34 |
+| `tools/toolset_builder.py` | Toolset, backend, and workspace wiring for chat runtime. | 260 |
+| `tools/toolset_wrappers.py` | Observable toolset wrapper for logging tool call metrics. | 57 |
+| `tools/topic_tools.py` | PydanticAI tool definitions for topic management. | 215 |
+| `topics/topic_manager.py` | Topic loader and activation manager. | 445 |

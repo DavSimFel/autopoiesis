@@ -1,7 +1,7 @@
-"""Command tier enforcement shared by exec_tool and shell_tool.
+"""Command tier enforcement shared by shell execution tools.
 
 Dependencies: infra.command_classifier
-Wired in: tools/exec_tool.py, tools/shell_tool.py
+Wired in: tools/exec_tool.py
 """
 
 from __future__ import annotations

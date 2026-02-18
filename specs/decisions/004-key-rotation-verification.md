@@ -13,7 +13,7 @@ signatures must remain verifiable for forensic purposes.
   public key bytes (full 64-char hex digest).
 - `key_id` is stored on every `ApprovalEnvelope` and every audit log
   entry.
-- On rotation (`python chat.py rotate-key`):
+- On rotation (`uv run autopoiesis rotate-key`):
   1. Old public key + metadata archived to keyring
      (`$APPROVAL_KEYRING_PATH`, default:
      `$APPROVAL_KEY_DIR/keyring.json`)
