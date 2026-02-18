@@ -42,7 +42,7 @@ def test_exec_toolset_present(
     subscription_registry: object,
     topic_registry: object,
 ) -> None:
-    """7.2 — Toolset assembly includes the exec/process toolset."""
+    """7.2 — Toolset assembly includes console, skills, exec, knowledge, subscription, topic toolsets."""
     from autopoiesis.store.subscriptions import SubscriptionRegistry
     from autopoiesis.topics.topic_manager import TopicRegistry
 
@@ -53,7 +53,9 @@ def test_exec_toolset_present(
         knowledge_db_path=knowledge_db,
         topic_registry=topic_registry,
     )
-    assert len(toolsets) >= 3
+    # With all registries provided, we expect 6 toolsets:
+    # console, skills, exec, knowledge, subscription, topic
+    assert len(toolsets) >= 6, f"Expected at least 6 toolsets, got {len(toolsets)}"
 
 
 @pytest.mark.asyncio()
@@ -69,7 +71,13 @@ async def test_tool_count_within_anthropic_limit(
     assert isinstance(subscription_registry, SubscriptionRegistry)
     assert isinstance(topic_registry, TopicRegistry)
 
-    # Create dummy tool defs to test the strict cap
+    # Test with real built toolsets — validate actual tool definitions
+    toolsets, _ = build_toolsets(
+        subscription_registry=subscription_registry,
+        knowledge_db_path=knowledge_db,
+        topic_registry=topic_registry,
+    )
+    # Also verify the strict cap with synthetic overflow
     defs = [ToolDefinition(name=f"tool_{i}", description=f"Tool {i}") for i in range(25)]
     ctx = cast(RunContext[AgentDeps], None)
     result = await strict_tool_definitions(ctx, defs)
@@ -95,5 +103,5 @@ def test_skill_tools_merged_into_toolset(
         knowledge_db_path=knowledge_db,
         topic_registry=topic_registry,
     )
-    # Skills toolset is the second element (index 1) per build_toolsets order
-    assert len(toolsets) >= 3  # console, skills, exec at minimum
+    # With all registries: console, skills, exec, knowledge, subscription, topic
+    assert len(toolsets) >= 6, f"Expected at least 6 toolsets with all registries, got {len(toolsets)}"

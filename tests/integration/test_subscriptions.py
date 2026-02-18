@@ -95,7 +95,11 @@ class TestTopicSubscriptionKind:
     Blocked on #150 Phase 2: topic subscription kind not yet implemented.
     """
 
-    @pytest.mark.skip(reason="Blocked on #150 Phase 2 - topic subscription kind")
+    @pytest.mark.xfail(
+        reason="Blocked on #150 Phase 2 - topic subscription kind not yet implemented",
+        raises=NotImplementedError,
+        strict=True,
+    )
     def test_topic_status_change_materializes(
         self,
         workspace_root: Path,

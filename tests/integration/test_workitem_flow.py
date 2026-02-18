@@ -14,7 +14,11 @@ _SKIP_REASON = (
     "Phase B-3: needs planner/coder/reviewer agent configs and topic-status-triggered routing"
 )
 
-pytestmark = pytest.mark.skip(reason=_SKIP_REASON)
+pytestmark = pytest.mark.xfail(
+    reason=_SKIP_REASON + " — tests define expected behavior",
+    raises=NotImplementedError,
+    strict=True,
+)
 
 
 def write_topic(topics_dir: Path, name: str, content: str) -> Path:
