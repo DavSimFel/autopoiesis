@@ -128,11 +128,7 @@ def module_of(filepath: Path, root: Path) -> str | None:
         return None
     if len(parts) == _SRC_LAYOUT_MIN_PARTS:
         return None  # src/autopoiesis/<root-module>.py (unconstrained)
-    if (
-        parts[2] == "infra"
-        and len(parts) >= _SRC_LAYOUT_APPROVAL_PARTS
-        and parts[3] == "approval"
-    ):
+    if parts[2] == "infra" and len(parts) >= _SRC_LAYOUT_APPROVAL_PARTS and parts[3] == "approval":
         return "approval"
     return parts[2]
 

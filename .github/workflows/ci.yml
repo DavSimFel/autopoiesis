@@ -139,7 +139,9 @@ jobs:
             ["src/autopoiesis/agent/context.py"]="specs/modules/context.md"
             ["src/autopoiesis/infra/exec_registry.py"]="specs/modules/exec.md"
             ["src/autopoiesis/infra/command_classifier.py"]="specs/modules/security.md"
+            ["src/autopoiesis/infra/audit_log.py"]="specs/modules/security.md"
             ["src/autopoiesis/tools/exec_tool.py"]="specs/modules/exec.md"
+            ["src/autopoiesis/tools/shell_tool.py"]="specs/modules/security.md"
             ["src/autopoiesis/io_utils.py"]="specs/modules/exec.md"
             ["src/autopoiesis/store/history.py"]="specs/modules/memory.md"
             ["src/autopoiesis/store/knowledge.py"]="specs/modules/memory.md"
@@ -173,6 +175,7 @@ jobs:
             ["src/autopoiesis/topics/topic_manager.py"]="specs/modules/topics.md"
             ["src/autopoiesis/tools/topic_tools.py"]="specs/modules/topics.md"
             ["src/autopoiesis/infra/topic_processor.py"]="specs/modules/topics.md"
+            ["scripts/arch_check.py"]="specs/architecture.yaml"
           )
 
           missing_specs=()
