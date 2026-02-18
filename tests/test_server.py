@@ -9,6 +9,7 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
+from autopoiesis.agent.worker import DeferredApprovalLockedError
 from autopoiesis.server.app import app, get_session_store, set_connection_manager, set_session_store
 from autopoiesis.server.connections import ConnectionManager
 from autopoiesis.server.models import WSIncoming, WSOutgoing
@@ -220,7 +221,7 @@ class TestChatEndpoint:
             patch("autopoiesis.agent.runtime.get_runtime"),
             patch(
                 "autopoiesis.agent.worker.enqueue_and_wait",
-                side_effect=RuntimeError("Deferred approvals require unlocked approval keys."),
+                side_effect=DeferredApprovalLockedError("Deferred approvals require unlocked approval keys."),
             ),
             patch("autopoiesis.display.streaming.register_stream"),
         ):

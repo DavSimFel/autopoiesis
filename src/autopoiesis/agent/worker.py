@@ -26,6 +26,12 @@ from pydantic_ai.messages import (
 from pydantic_ai.tools import DeferredToolResults, RunContext
 
 from autopoiesis.agent.runtime import Runtime, get_runtime
+
+
+class DeferredApprovalLockedError(RuntimeError):
+    """Raised when deferred approvals are attempted with locked approval keys."""
+
+    pass
 from autopoiesis.agent.topic_activation import activate_topic_ref
 from autopoiesis.display.stream_formatting import forward_stream_events
 from autopoiesis.display.streaming import StreamHandle, ToolAwareStreamHandle, take_stream
@@ -117,7 +123,7 @@ def _build_output(
     """Convert agent output to a WorkItemOutput, handling deferred approvals."""
     if isinstance(result_output, DeferredToolRequests):
         if not rt.approval_unlocked:
-            raise RuntimeError("Deferred approvals require unlocked approval keys.")
+            raise DeferredApprovalLockedError("Deferred approvals require unlocked approval keys.")
         return WorkItemOutput(
             deferred_tool_requests_json=serialize_deferred_requests(
                 result_output,
