@@ -12,7 +12,7 @@ Responses stream back to a Rich terminal UI.
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│  chat.py  (entrypoint)                                       │
+│  src/autopoiesis/cli.py (entrypoint)                         │
 │  ┌────────────┐  ┌───────────────┐  ┌──────────────────┐    │
 │  │ agent/cli  │→│ agent/worker  │→│ agent/runtime    │    │
 │  │ (REPL)     │  │ (DBOS queue)  │  │ (agent builder)  │    │
@@ -27,8 +27,8 @@ Responses stream back to a Rich terminal UI.
 │                 ┌──────────┬───────────────┼────────┐       │
 │                 ▼          ▼               ▼        ▼       │
 │          ┌──────────┐ ┌────────┐ ┌──────────┐ ┌────────┐   │
-│          │ shell    │ │ know-  │ │ topics/  │ │ skills │   │
-│          │ tool     │ │ ledge  │ │ subs     │ │        │   │
+│          │ exec +   │ │ know-  │ │ topics/  │ │ skills │   │
+│          │ process  │ │ ledge  │ │ subs     │ │        │   │
 │          └──────────┘ └────────┘ └──────────┘ └────────┘   │
 └──────────────────────────────────────────────────────────────┘
 ```
@@ -37,21 +37,21 @@ Responses stream back to a Rich terminal UI.
 
 | Tool | Module | Approval | Purpose |
 |------|--------|----------|---------|
-| **shell** | `tools/shell_tool.py` | Yes | Single `shell(command)` interface replacing exec+process. Commands classified into security tiers. |
-| **knowledge** | `tools/memory_tools.py` | No | FTS5-backed persistent memory: write, search, auto-load, delete |
-| **topics** | `tools/subscription_tools.py` | No | Topic lifecycle: activate, deactivate, status transitions |
+| **exec** | `tools/exec_tool.py`, `tools/process_tool.py` | Yes | Shell execution, PTY sessions, process inspection/control with tier checks |
+| **knowledge** | `tools/knowledge_tools.py` | No | File-based knowledge search and retrieval |
+| **topics** | `tools/topic_tools.py` | No | Topic lifecycle: activate, deactivate, status transitions |
 | **subscriptions** | `tools/subscription_tools.py` | No | File/topic subscriptions for reactive context injection |
 | **skills** | `skills.py` | No | Filesystem skill discovery, progressive disclosure |
 | **skillmaker** | `skillmaker_tools.py` | No | Validate and lint skill files |
 
 ### Shell Command Classification
 
-The shell tool classifies commands into security tiers via `infra/command_classifier.py`:
+Execution tools classify commands into security tiers via `infra/command_classifier.py`:
 
 | Tier | Approval | Examples |
 |------|----------|---------|
 | **FREE** | None | `ls`, `cat`, `git status`, `find` |
-| **REVIEW** | User reviews | `git commit`, `pip install` |
+| **REVIEW** | User reviews | `git commit`, `pip install`, `python -c ...`, `tmux new -d ...` |
 | **APPROVE** | Explicit sign | `rm`, `curl \| sh`, write operations |
 | **BLOCK** | Denied | `sudo`, commands with `&&` chaining dangerous ops |
 
@@ -103,7 +103,7 @@ All work flows through one priority queue. DBOS handles retries and persistence.
 Shell and file operations require Ed25519-signed envelopes with nonce-based replay protection. This is a real security boundary, not a confirmation dialog.
 
 ### Flat Entry Point
-`chat.py` is the single `main()`. No framework magic, no plugin discovery. Read it and see the full startup.
+`src/autopoiesis/cli.py` is the single `main()` entrypoint. No framework magic, no plugin discovery. Read it and see the full startup.
 
 ### File-First Philosophy
 - **Specs** are markdown files in `specs/modules/`
@@ -119,11 +119,11 @@ Contract-based plan execution with hard verification. Plans define expected outc
 
 | Cluster | Key Files | Purpose |
 |---------|-----------|---------|
-| **Entry & CLI** | `chat.py`, `agent/cli.py` | Env loading, DBOS bootstrap, REPL |
+| **Entry & CLI** | `src/autopoiesis/cli.py`, `agent/cli.py` | Env loading, DBOS bootstrap, REPL |
 | **Agent Runtime** | `agent/runtime.py`, `agent/worker.py`, `infra/work_queue.py` | Agent construction, queue worker, work items |
 | **Tool Wiring** | `toolset_builder.py`, `tools/toolset_wrappers.py`, `prompts.py` | Assembles toolsets, composes system prompt |
-| **Shell** | `tools/shell_tool.py`, `infra/command_classifier.py`, `infra/audit_log.py` | Unified shell interface, command classification, audit trail |
-| **Knowledge** | `tools/memory_tools.py`, `store/memory.py` | FTS5-backed persistent memory |
+| **Execution** | `tools/exec_tool.py`, `tools/process_tool.py`, `infra/command_classifier.py`, `tools/tier_enforcement.py` | Shell/process execution with command classification and approval gating |
+| **Knowledge** | `tools/knowledge_tools.py`, `store/knowledge.py` | File-backed persistent knowledge store |
 | **Skills** | `skills.py`, `skillmaker_tools.py` | Filesystem skill discovery, validation |
 | **Subscriptions** | `tools/subscription_tools.py`, `store/subscriptions.py`, `infra/subscription_processor.py` | Reactive context injection |
 | **Approval** | `approval/` | Ed25519 signing, envelope storage, policy |

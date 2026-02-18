@@ -2,7 +2,7 @@
 
 ## Overview
 
-Shell execution with background process management, PTY support, and queue integration. Processes run **outside** the DBOS queue — they are ephemeral, not durable.
+Shell execution with background process management, PTY support, and queue integration. Processes run **outside** the DBOS queue — they are ephemeral, not durable. `exec_tool` and `process_tool` are the authoritative shell/process interfaces.
 
 ## Files
 
@@ -56,6 +56,8 @@ Uses stdlib `pty.openpty()` — zero external dependencies. Enables interactive 
 
 ## Change Log
 
+- 2026-02-18: Removed legacy `shell_tool` path from documentation; exec/process
+  tools are now the only supported command-execution interfaces. (Issue #170)
 - 2026-02-16: Replaced module-level mutable session dict in
   `exec_registry.py` with a lock-protected `ExecRegistry` class and
   injectable registry helpers (`get_registry()` / `set_registry()`).
@@ -83,4 +85,3 @@ Uses stdlib `pty.openpty()` — zero external dependencies. Enables interactive 
 ### Changelog
 - 2026-02-16: Modules moved into subdirectories (`agent/`, `approval/`, `display/`, `infra/`, `store/`, `tools/`) as part of subdirectory restructuring (#119)
 - 2026-02-16: Added Dependencies/Wired-in docstring headers as part of #121 documentation update
-

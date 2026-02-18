@@ -134,6 +134,7 @@ def test_cli_approval_flow_enqueue_reenqueue_and_consume(
         approval_store=approval_store,
         key_manager=key_manager,
         tool_policy=ToolPolicyRegistry.default(),
+        approval_unlocked=True,
     )
 
     captured_items: list[WorkItem] = []

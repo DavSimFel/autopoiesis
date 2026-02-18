@@ -97,7 +97,7 @@ decrypt the private key, and hold it in memory. Failed decryption
 signing key. This is the "proof of human" for Phase 1.
 
 **R1.4** Key rotation: the system MUST support re-keying via
-`python chat.py rotate-key` by generating a NEW keypair, encrypting the
+`uv run autopoiesis rotate-key` by generating a NEW keypair, encrypting the
 new private key with the new passphrase, and switching active signing
 to the new `key_id`. Outstanding pending envelopes are invalidated on
 rotation.

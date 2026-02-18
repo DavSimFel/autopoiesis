@@ -7,17 +7,10 @@ ENV PYTHONUNBUFFERED=1
 ENV UV_LINK_MODE=copy
 
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev
-
-COPY *.py ./
-COPY agent/ ./agent/
-COPY approval/ ./approval/
-COPY tools/ ./tools/
-COPY store/ ./store/
-COPY display/ ./display/
-COPY infra/ ./infra/
+COPY src/ ./src/
 COPY skills/ ./skills/
+RUN uv sync --frozen --no-dev
 RUN useradd --create-home --shell /usr/sbin/nologin appuser && chown -R appuser:appuser /app
 USER appuser
 
-CMD ["uv", "run", "python", "chat.py"]
+CMD ["uv", "run", "autopoiesis"]

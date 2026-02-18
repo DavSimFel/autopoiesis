@@ -29,8 +29,6 @@ _FREE_COMMANDS: frozenset[str] = frozenset(
         "pwd",
         "grep",
         "find",
-        "python",
-        "python3",
         "pytest",
         "ruff",
         "pyright",
@@ -64,7 +62,6 @@ _FREE_COMMANDS: frozenset[str] = frozenset(
         "readlink",
         "test",
         "sleep",
-        "tmux",
     }
 )
 
@@ -76,7 +73,7 @@ _REVIEW_GIT: frozenset[str] = frozenset(
 )
 _APPROVE_GIT: frozenset[str] = frozenset({"push", "force-push"})
 
-_REVIEW_COMMANDS: frozenset[str] = frozenset({"pip", "pip3"})
+_REVIEW_COMMANDS: frozenset[str] = frozenset({"pip", "pip3", "python", "python3", "tmux"})
 _APPROVE_COMMANDS: frozenset[str] = frozenset(
     {
         "rm",

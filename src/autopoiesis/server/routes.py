@@ -29,6 +29,12 @@ _log = logging.getLogger(__name__)
 
 router = APIRouter()
 
+_APPROVAL_UNSUPPORTED: dict[str, str] = {
+    "code": "approval_unsupported",
+    "message": "Deferred approvals are not supported in server mode yet.",
+}
+_DEFERRED_LOCKED_MESSAGE = "Deferred approvals require unlocked approval keys."
+
 # These are set by ``configure_routes`` before the app starts serving.
 _sessions: SessionStore
 _manager: ConnectionManager
@@ -46,6 +52,11 @@ def _serialize_messages_for_api(messages: list[ModelMessage]) -> list[dict[str, 
     raw = ModelMessagesTypeAdapter.dump_json(messages)
     result: list[dict[str, Any]] = json.loads(raw)
     return result
+
+
+def _is_locked_deferred_error(exc: RuntimeError) -> bool:
+    """Return True when worker failed due to locked deferred approval flow."""
+    return _DEFERRED_LOCKED_MESSAGE in str(exc)
 
 
 # --- Health ---
@@ -145,11 +156,15 @@ async def chat(request: ChatRequest) -> ChatResponse:
         register_stream(item.id, ws_handle)
         output = await asyncio.to_thread(enqueue_and_wait, item)
         _sessions.set_history_json(session_id, output.message_history_json)
+        if output.deferred_tool_requests_json:
+            raise HTTPException(status_code=409, detail=_APPROVAL_UNSUPPORTED)
         return ChatResponse(
             session_id=session_id,
             content=output.text or "",
         )
     except RuntimeError as exc:
+        if _is_locked_deferred_error(exc):
+            raise HTTPException(status_code=409, detail=_APPROVAL_UNSUPPORTED) from exc
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
@@ -233,18 +248,9 @@ async def _handle_message(
         _sessions.set_history_json(session_id, output.message_history_json)
 
         if output.deferred_tool_requests_json:
-            payload = json.loads(output.deferred_tool_requests_json)
-            # TODO: Full approval over WebSocket needs client-side key management.
-            # The current flow is a placeholder acceptable for MVP.
             await _manager.broadcast(
                 session_id,
-                WSOutgoing(
-                    op="approval_request",
-                    data={
-                        "request_id": payload.get("nonce", ""),
-                        "requests": payload.get("requests", []),
-                    },
-                ),
+                WSOutgoing(op="error", data=_APPROVAL_UNSUPPORTED),
             )
         elif output.text:
             # Final text already streamed via tokens; send done
@@ -253,6 +259,12 @@ async def _handle_message(
                 WSOutgoing(op="done", data={"content": output.text}),
             )
     except RuntimeError as exc:
+        if _is_locked_deferred_error(exc):
+            await _manager.broadcast(
+                session_id,
+                WSOutgoing(op="error", data=_APPROVAL_UNSUPPORTED),
+            )
+            return
         await _manager.broadcast(
             session_id,
             WSOutgoing(op="error", data={"message": str(exc)}),
@@ -263,26 +275,9 @@ async def _handle_approve(
     session_id: str,
     data: dict[str, Any],
 ) -> None:
-    """Handle an approval response from the client.
-
-    .. note::
-        This is a placeholder acceptable for the MVP.  Full approval over
-        WebSocket requires client-side key management — see issue #126.
-    """
-    # TODO: Wire to approval store; full approval over WebSocket needs
-    # client-side key management (see issue #126).
-    request_id = data.get("request_id", "")
-    approved = data.get("approved", False)
-    _log.info(
-        "Approval for session %s: request=%s approved=%s",
-        session_id,
-        request_id,
-        approved,
-    )
+    """Reject WebSocket approval calls until signed server approval exists."""
+    _ = data
     await _manager.broadcast(
         session_id,
-        WSOutgoing(
-            op="approval_ack",
-            data={"request_id": request_id, "approved": approved},
-        ),
+        WSOutgoing(op="error", data=_APPROVAL_UNSUPPORTED),
     )

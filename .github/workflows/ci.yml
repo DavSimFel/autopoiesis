@@ -121,32 +121,41 @@ jobs:
             ["src/autopoiesis/agent/worker.py"]="specs/modules/chat.md"
             ["src/autopoiesis/agent/batch.py"]="specs/modules/chat.md"
             ["src/autopoiesis/agent/model_resolution.py"]="specs/modules/chat.md"
+            ["src/autopoiesis/agent/history.py"]="specs/modules/chat.md"
+            ["src/autopoiesis/agent/topic_activation.py"]="specs/modules/agent-runtime.md"
+            ["src/autopoiesis/agent/truncation.py"]="specs/modules/context.md"
+            ["src/autopoiesis/agent/validation.py"]="specs/modules/agent-runtime.md"
             ["src/autopoiesis/tools/toolset_builder.py"]="specs/modules/chat.md"
+            ["src/autopoiesis/tools/toolset_wrappers.py"]="specs/modules/chat.md"
+            ["src/autopoiesis/tools/tier_enforcement.py"]="specs/modules/security.md"
             ["src/autopoiesis/db.py"]="specs/modules/memory.md"
             ["src/autopoiesis/infra/approval/store.py"]="specs/modules/chat.md"
             ["src/autopoiesis/infra/approval/store_schema.py"]="specs/modules/chat.md"
+            ["src/autopoiesis/infra/approval/crypto.py"]="specs/modules/chat.md"
+            ["src/autopoiesis/infra/approval/key_files.py"]="specs/modules/chat.md"
+            ["src/autopoiesis/infra/approval/policy.py"]="specs/modules/chat.md"
+            ["src/autopoiesis/infra/approval/store_verify.py"]="specs/modules/chat.md"
+            ["src/autopoiesis/infra/approval/types.py"]="specs/modules/chat.md"
             ["src/autopoiesis/agent/context.py"]="specs/modules/context.md"
             ["src/autopoiesis/infra/exec_registry.py"]="specs/modules/exec.md"
+            ["src/autopoiesis/infra/command_classifier.py"]="specs/modules/security.md"
+            ["src/autopoiesis/infra/audit_log.py"]="specs/modules/security.md"
             ["src/autopoiesis/tools/exec_tool.py"]="specs/modules/exec.md"
+            ["src/autopoiesis/tools/shell_tool.py"]="specs/modules/security.md"
             ["src/autopoiesis/io_utils.py"]="specs/modules/exec.md"
             ["src/autopoiesis/store/history.py"]="specs/modules/memory.md"
             ["src/autopoiesis/store/knowledge.py"]="specs/modules/memory.md"
             ["src/autopoiesis/store/knowledge_migration.py"]="specs/modules/memory.md"
-            ["src/autopoiesis/store/memory.py"]="specs/modules/memory.md"
             ["src/autopoiesis/tools/knowledge_tools.py"]="specs/modules/memory.md"
             ["src/autopoiesis/tools/memory_tools.py"]="specs/modules/memory.md"
             ["src/autopoiesis/tools/process_tool.py"]="specs/modules/exec.md"
             ["src/autopoiesis/infra/pty_spawn.py"]="specs/modules/exec.md"
             ["src/autopoiesis/display/rich_display.py"]="specs/modules/rich-display.md"
             ["src/autopoiesis/run_simple.py"]="specs/modules/chat.md"
+            ["src/autopoiesis/models.py"]="specs/modules/queue.md"
+            ["src/autopoiesis/prompts.py"]="specs/modules/chat.md"
             ["src/autopoiesis/skills/skillmaker_tools.py"]="specs/modules/skillmaker-tools.md"
             ["src/autopoiesis/skills/skills.py"]="specs/modules/skills.md"
-            ["skills/skillmaker/SKILL.md"]="specs/modules/skills.md"
-            ["skills/skillmaker/quality-checklist.md"]="specs/modules/skills.md"
-            ["skills/skillmaker/skill-template.md"]="specs/modules/skills.md"
-            ["skills/skillmaker/SKILL.md"]="specs/modules/skills.md"
-            ["skills/skillmaker/quality-checklist.md"]="specs/modules/skills.md"
-            ["skills/skillmaker/skill-template.md"]="specs/modules/skills.md"
             ["src/autopoiesis/display/stream_formatting.py"]="specs/modules/rich-display.md"
             ["src/autopoiesis/display/streaming.py"]="specs/modules/rich-display.md"
             ["src/autopoiesis/server/app.py"]="specs/modules/server.md"
@@ -156,6 +165,7 @@ jobs:
             ["src/autopoiesis/server/auth.py"]="specs/modules/server.md"
             ["src/autopoiesis/server/models.py"]="specs/modules/server.md"
             ["src/autopoiesis/server/cli.py"]="specs/modules/server.md"
+            ["src/autopoiesis/server/routes.py"]="specs/modules/server.md"
             ["src/autopoiesis/infra/subscription_processor.py"]="specs/modules/subscriptions.md"
             ["src/autopoiesis/tools/subscription_tools.py"]="specs/modules/subscriptions.md"
             ["src/autopoiesis/store/subscriptions.py"]="specs/modules/subscriptions.md"
@@ -165,6 +175,7 @@ jobs:
             ["src/autopoiesis/topics/topic_manager.py"]="specs/modules/topics.md"
             ["src/autopoiesis/tools/topic_tools.py"]="specs/modules/topics.md"
             ["src/autopoiesis/infra/topic_processor.py"]="specs/modules/topics.md"
+            ["scripts/arch_check.py"]="specs/architecture.yaml"
           )
 
           missing_specs=()
@@ -172,10 +183,10 @@ jobs:
             # Look up by full relative path
             expected_spec="${source_to_spec[$src_path]-}"
             if [ -z "$expected_spec" ]; then
-              # Warn about unmapped source files (skip __init__.py and conftest.py)
+              # Fail on unmapped source files (skip __init__.py and conftest.py)
               base="$(basename "$src_path")"
               if [ "$base" != "__init__.py" ] && [ "$base" != "conftest.py" ]; then
-                echo "::warning::Changed source file has no spec mapping: $src_path"
+                missing_specs+=("$src_path -> (no mapping)")
               fi
               continue
             fi

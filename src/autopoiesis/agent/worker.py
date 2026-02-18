@@ -116,6 +116,8 @@ def _build_output(
 ) -> WorkItemOutput:
     """Convert agent output to a WorkItemOutput, handling deferred approvals."""
     if isinstance(result_output, DeferredToolRequests):
+        if not rt.approval_unlocked:
+            raise RuntimeError("Deferred approvals require unlocked approval keys.")
         return WorkItemOutput(
             deferred_tool_requests_json=serialize_deferred_requests(
                 result_output,

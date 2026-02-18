@@ -1,21 +1,10 @@
-"""Integration tests for command classification security layer (S6 — Issue #170)."""
-
-# pyright: reportUnknownVariableType=false, reportUnknownMemberType=false
+"""Integration tests for command classification security layer (S6)."""
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 
-pytest.importorskip(
-    "autopoiesis.infra.command_classifier",
-    reason="Blocked on #170 — command classifier not implemented",
-)
-
-from autopoiesis.infra.command_classifier import Tier, classify  # type: ignore[import-not-found]
-
-pytestmark = pytest.mark.xfail(reason="Blocked on #170 — command classifier not implemented")
+from autopoiesis.infra.command_classifier import Tier, classify
 
 
 @pytest.mark.parametrize("cmd", ["ls", "cat x", "head -n 10 file.txt", "wc -l foo"])
@@ -50,27 +39,26 @@ def test_pip_install_review() -> None:
     assert classify("pip install requests") == Tier.REVIEW
 
 
+def test_python_is_review() -> None:
+    """6.7 — python interpreter commands require REVIEW."""
+    assert classify("python -c \"print('ok')\"") == Tier.REVIEW
+
+
+def test_tmux_is_review() -> None:
+    """6.8 — tmux session commands require REVIEW."""
+    assert classify("tmux new -d -s task 'sleep 1'") == Tier.REVIEW
+
+
 def test_write_outside_workspace() -> None:
-    """6.7 — Writing outside workspace requires APPROVE."""
+    """6.9 — Writing outside workspace requires APPROVE."""
     assert classify("echo x > /tmp/outside") == Tier.APPROVE
 
 
 def test_prefix_aware() -> None:
-    """6.8 — Classification is prefix-aware; echo of dangerous string is FREE."""
+    """6.10 — Classification is prefix-aware; echo of dangerous string is FREE."""
     assert classify("echo rm -rf /") == Tier.FREE
 
 
 def test_chained_commands_most_dangerous() -> None:
-    """6.9 — Chained commands take the most dangerous tier."""
+    """6.11 — Chained commands take the most dangerous tier."""
     assert classify("ls && rm file") == Tier.APPROVE
-
-
-def test_audit_trail(tmp_path: Path) -> None:
-    """6.10 — Shell execution logs commands to an audit file."""
-    from autopoiesis.tools.shell_tool import shell  # type: ignore[import-not-found]
-
-    audit_log = tmp_path / "audit.log"
-    shell("echo audit_test", audit_path=audit_log)
-    assert audit_log.exists()
-    contents = audit_log.read_text()
-    assert "echo audit_test" in contents

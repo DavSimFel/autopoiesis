@@ -52,7 +52,7 @@ For workflow rationale, see `specs/decisions/001-trunk-based-workflow.md`.
 
 ## Module Index
 
-- `chat.py`: `specs/modules/chat.md`
+- `src/autopoiesis/cli.py`: `specs/modules/chat.md`
 - Context management: `specs/modules/context.md`
 - Exec/process tooling: `specs/modules/exec.md`
 - Memory + history storage: `specs/modules/memory.md`

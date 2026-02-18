@@ -133,6 +133,34 @@ class TestWebSocket:
         with client.websocket_connect("/api/ws/auto-session"):
             assert store.exists("auto-session")
 
+    def test_websocket_approve_returns_unsupported(self, client: TestClient) -> None:
+        with client.websocket_connect("/api/ws/test-session") as ws:
+            ws.send_json({"op": "approve", "data": {"request_id": "abc", "approved": True}})
+            resp = ws.receive_json()
+            assert resp["op"] == "error"
+            assert resp["data"]["code"] == "approval_unsupported"
+
+    def test_websocket_message_with_deferred_returns_unsupported(self, client: TestClient) -> None:
+        deferred_output = type(
+            "DeferredOutput",
+            (),
+            {
+                "text": None,
+                "message_history_json": "[]",
+                "deferred_tool_requests_json": '{"nonce":"abc","requests":[]}',
+            },
+        )()
+        with (
+            patch("autopoiesis.agent.runtime.get_runtime"),
+            patch("autopoiesis.agent.worker.enqueue_and_wait", return_value=deferred_output),
+            patch("autopoiesis.display.streaming.register_stream"),
+            client.websocket_connect("/api/ws/test-session") as ws,
+        ):
+            ws.send_json({"op": "message", "data": {"content": "hello"}})
+            resp = ws.receive_json()
+            assert resp["op"] == "error"
+            assert resp["data"]["code"] == "approval_unsupported"
+
 
 class TestChatEndpoint:
     def test_chat_returns_200_when_runtime_initialized(self, client: TestClient) -> None:
@@ -164,6 +192,42 @@ class TestChatEndpoint:
             resp = client.post("/api/chat", json={"content": "hello"})
         assert resp.status_code == 503
         assert "Runtime not initialised" in resp.json()["detail"]
+
+    def test_chat_returns_409_when_deferred_approvals_needed(self, client: TestClient) -> None:
+        """Serve mode reports deferred approvals as unsupported."""
+        mock_output = type(
+            "DeferredOutput",
+            (),
+            {
+                "text": None,
+                "message_history_json": "[]",
+                "deferred_tool_requests_json": '{"nonce":"abc","requests":[]}',
+            },
+        )()
+        with (
+            patch("autopoiesis.agent.runtime.get_runtime"),
+            patch("autopoiesis.agent.worker.enqueue_and_wait", return_value=mock_output),
+            patch("autopoiesis.display.streaming.register_stream"),
+        ):
+            resp = client.post("/api/chat", json={"content": "hello"})
+        assert resp.status_code == 409
+        detail = resp.json()["detail"]
+        assert detail["code"] == "approval_unsupported"
+
+    def test_chat_maps_locked_deferred_runtime_error_to_409(self, client: TestClient) -> None:
+        """Worker deferred-lock errors map to approval_unsupported."""
+        with (
+            patch("autopoiesis.agent.runtime.get_runtime"),
+            patch(
+                "autopoiesis.agent.worker.enqueue_and_wait",
+                side_effect=RuntimeError("Deferred approvals require unlocked approval keys."),
+            ),
+            patch("autopoiesis.display.streaming.register_stream"),
+        ):
+            resp = client.post("/api/chat", json={"content": "hello"})
+        assert resp.status_code == 409
+        detail = resp.json()["detail"]
+        assert detail["code"] == "approval_unsupported"
 
 
 class TestConnectionManager:

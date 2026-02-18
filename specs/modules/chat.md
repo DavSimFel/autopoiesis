@@ -8,7 +8,7 @@ split into focused companion modules.
 
 ## Status
 
-- **Last updated:** 2026-02-17 (Issue #148)
+- **Last updated:** 2026-02-18 (Issue #170)
 - **Source:** `src/autopoiesis/cli.py`, `agent/runtime.py`, `src/autopoiesis/agent/model_resolution.py`, `src/autopoiesis/tools/toolset_builder.py`, `agent/worker.py`, `infra/approval/chat_approval.py`, `agent/cli.py`
 
 ## File Structure
@@ -23,7 +23,7 @@ split into focused companion modules.
 | `src/autopoiesis/agent/worker.py` | DBOS workflow/step functions, enqueue helpers, history serialization |
 | `src/autopoiesis/infra/approval/chat_approval.py` | Approval scope, request/result serialization, CLI approval collection |
 | `src/autopoiesis/agent/cli.py` | Interactive CLI loop and approval re-enqueue flow |
-| `agent/batch.py` | Non-interactive batch execution with auto-approval and JSON output |
+| `agent/batch.py` | Non-interactive batch execution with deferred approvals disabled and JSON output |
 | `src/autopoiesis/models.py` | `AgentDeps`, `WorkItem`, `WorkItemInput`, `WorkItemOutput`, priority/type enums |
 | `src/autopoiesis/skills/skills.py` | Skill discovery, progressive loading, skills toolset |
 | `src/autopoiesis/infra/work_queue.py` | Queue instance only (no functions importing from `src/autopoiesis/cli.py`) |
@@ -123,9 +123,9 @@ split into focused companion modules.
 
 ### CLI Approval Display
 
-- `_display_approval_requests(requests_json)` — display pending tool calls
+- `display_approval_requests(requests_json)` — display pending tool calls
   with tool name and full arguments; returns parsed approval payload
-- `_gather_approvals(payload, approval_store, key_manager)` — prompt user for y/n on each tool call,
+- `gather_approvals(payload, approval_store, key_manager)` — prompt user for y/n on each tool call,
   persist signed approval object + signature on the envelope, then return
   serialized submission (`nonce` + per-call decisions)
   (supports approve-all, deny-all, or pick individually); returns serialized
@@ -134,7 +134,8 @@ split into focused companion modules.
 ### Batch Mode
 
 - `run_batch(task, output_path, timeout)` — execute a single task non-interactively
-  using `run_simple()` for auto-approval, produce structured JSON output, and exit
+  using `run_simple(..., auto_approve_deferred=False)`, produce structured
+  JSON output, and exit
   with code 0 (success) or 1 (failure). Supports stdin input (`--task -`), file output
   (`--output`), and SIGALRM-based timeout (`--timeout`).
 - `format_output(result)` — serialize `BatchResult` to JSON
@@ -179,8 +180,9 @@ for simplicity. Durability guarantees (crash recovery, retry) do not apply to
 batch runs. This is intentional: batch tasks are single-shot and short-lived;
 the calling process (CI, scripts) handles retry at a higher level.
 
-Batch mode does not require approval key unlock — it operates with
-FREE-tier-only shell access (see `specs/modules/security.md`).
+Batch mode does not require approval key unlock. It operates with FREE-tier
+shell access and explicitly rejects deferred approval requests with
+`RuntimeError("Deferred approvals unsupported in this mode")`.
 
 ## Security Model
 
@@ -192,6 +194,7 @@ exception, and `--no-approval` behavior.
 
 - All **interactive** work goes through the queue. Batch mode (`run` subcommand)
   is an intentional exception — it uses direct `run_simple()` / `agent.run_sync()`.
+- Batch mode must call `run_simple(..., auto_approve_deferred=False)`.
 - All agent calls use `output_type=[str, DeferredToolRequests]`.
 - Required env vars fail with `SystemExit`, not `KeyError`.
 - `.env` loads relative to `src/autopoiesis/cli.py`, not CWD.
@@ -217,6 +220,10 @@ exception, and `--no-approval` behavior.
 
 ## Change Log
 
+- 2026-02-18: Added explicit deferred-approval behavior for non-interactive
+  execution. `run_simple()` gained `auto_approve_deferred`, batch mode now
+  disables auto-approval, and docs now reflect deterministic batch failure on
+  deferred requests. (Issue #170)
 - 2026-02-16: `build_agent()` now applies strict tool schema preparation only for
   `AI_PROVIDER=openrouter`. Anthropic runs without strict tool forcing to avoid
   provider-side schema compilation failures with larger toolsets. Worker execution
@@ -344,5 +351,4 @@ describe actual enforcement honestly — cwd/path validation, not hard sandbox.
 - 2026-02-16: Non-interactive batch mode via `run` subcommand with auto-approval,
   structured JSON output, timeout, and exit codes (#138)
 - 2026-02-16: Knowledge system integration — startup indexing, knowledge tools wiring, memory store deprecated (#130)
-
 

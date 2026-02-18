@@ -7,8 +7,8 @@ approval signing and tier-based command enforcement.
 
 ## Status
 
-- **Last updated:** 2026-02-17
-- **Source:** `specs/security.md` (full approval model), `src/autopoiesis/infra/command_classifier.py`, `src/autopoiesis/tools/shell_tool.py`, `src/autopoiesis/tools/exec_tool.py`
+- **Last updated:** 2026-02-18 (Issue #170)
+- **Source:** `specs/security.md` (full approval model), `src/autopoiesis/infra/command_classifier.py`, `src/autopoiesis/tools/tier_enforcement.py`, `src/autopoiesis/tools/exec_tool.py`
 
 ## Ed25519 Approval Model
 
@@ -23,20 +23,19 @@ Shell commands are classified into four tiers by `command_classifier.classify()`
 | Tier | Examples | Behavior |
 |------|----------|----------|
 | **FREE** | `ls`, `cat`, `echo`, `grep`, `git status` | Always allowed |
-| **REVIEW** | `pip install`, `git commit` | Requires approval unlock |
+| **REVIEW** | `pip install`, `git commit`, `python -c ...`, `tmux new -d ...` | Requires approval unlock |
 | **APPROVE** | `rm`, `curl`, `git push` | Requires approval unlock |
 | **BLOCK** | `sudo`, `su`, `doas` | Always denied |
 
 ### Enforcement rules
 
-Tier enforcement applies to **both** `shell_tool.py` (synchronous `shell()`)
-and `exec_tool.py` (async `execute()` / `execute_pty()`). Both code paths
-classify the command via `command_classifier.classify()` before execution.
+Tier enforcement is applied by `tools/tier_enforcement.py` and used by
+`exec_tool.py` (`execute()` / `execute_pty()`). Commands are always classified
+by `command_classifier.classify()` before execution.
 
 1. **Without approval unlock** (`--no-approval` or batch mode): only FREE-tier
    commands are permitted. REVIEW and APPROVE commands return a blocked
-   `ShellResult` (shell_tool) or blocked `ToolReturn` (exec_tool) with an
-   informative error message.
+   `ToolReturn` with an informative error message.
 2. **With approval unlock** (normal interactive mode): FREE, REVIEW, and
    APPROVE commands are permitted. The deferred-tool approval flow (envelope
    signing) still applies for side-effecting PydanticAI tools.
@@ -47,8 +46,8 @@ classify the command via `command_classifier.classify()` before execution.
 When the execution backend is a Docker or container-based sandbox, all tiers
 (except BLOCK) are permitted without approval unlock. The container **is** the
 sandbox — the host is not at risk. This exception is evaluated at the backend
-level, not inside `shell()` itself. Container backends pass
-`approval_unlocked=True` when invoking the shell tool.
+level, not inside the tool call itself. Container backends pass
+`approval_unlocked=True` when invoking execution tools.
 
 ### `--no-approval` flag
 
@@ -62,3 +61,9 @@ only. It enables development and read-only workflows without key material.
 - Without approval unlock, only FREE-tier commands run.
 - Tier classification is determined by `command_classifier.classify()` and
   covers chained commands (pipes, `&&`, `||`, `;`) — the worst tier wins.
+
+## Change Log
+
+- 2026-02-18: Removed legacy `shell_tool` references, documented
+  `python`/`python3`/`tmux` as REVIEW-tier commands, and aligned enforcement
+  docs to `tier_enforcement.py` + `exec_tool.py`. (Issue #170)

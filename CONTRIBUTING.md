@@ -153,13 +153,13 @@ PRs are subject to the following merge policy:
 
 | Area | Files |
 |------|-------|
-| Entry point | `chat.py` |
+| Entry point | `src/autopoiesis/cli.py` |
 | CLI loop | `agent/cli.py` |
 | Agent builder | `agent/runtime.py` |
 | Queue worker | `agent/worker.py` |
 | Tool wiring | `toolset_builder.py`, `tools/toolset_wrappers.py` |
-| Shell tool | `tools/shell_tool.py`, `infra/command_classifier.py` |
-| Memory tools | `tools/memory_tools.py`, `store/memory.py` |
+| Execution tools | `tools/exec_tool.py`, `tools/process_tool.py`, `infra/command_classifier.py` |
+| Knowledge tools | `tools/knowledge_tools.py`, `store/knowledge.py` |
 | Skills | `skills.py`, `skillmaker_tools.py` |
 | Subscriptions | `tools/subscription_tools.py`, `store/subscriptions.py` |
 | Approval | `approval/` |

@@ -109,12 +109,17 @@ class TestBatchModeProducesJSON:
         output_file = tmp_path / "result.json"
         fake_result = SimpleResult(text="done", all_messages=[], approval_rounds=0)
 
+        run_simple_mock = MagicMock(return_value=fake_result)
         with (
             patch("autopoiesis.agent.batch.get_runtime", return_value=mock_rt),
-            patch("autopoiesis.agent.batch.run_simple", return_value=fake_result),
+            patch("autopoiesis.agent.batch.run_simple", run_simple_mock),
             pytest.raises(SystemExit),
         ):
             run_batch("say hello", output_path=str(output_file))
+
+        assert run_simple_mock.call_count == 1
+        _, kwargs = run_simple_mock.call_args
+        assert kwargs.get("auto_approve_deferred") is False
 
         if output_file.exists():
             data = json.loads(output_file.read_text())

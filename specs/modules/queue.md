@@ -7,8 +7,8 @@ chat, background research, code generation, reviews. One queue, one path.
 
 ## Status
 
-- **Last updated:** 2026-02-16 (Issue #19, #21)
-- **Source:** `src/autopoiesis/models.py`, `src/autopoiesis/infra/work_queue.py`, `src/autopoiesis/display/streaming.py`, `agent/worker.py`, `agent/cli.py`
+- **Last updated:** 2026-02-18 (Issue #19, #21, #170)
+- **Source:** `src/autopoiesis/models.py`, `src/autopoiesis/infra/work_queue.py`, `src/autopoiesis/display/streaming.py`, `src/autopoiesis/agent/worker.py`, `src/autopoiesis/agent/cli.py`
 
 ## Core Concept: WorkItem
 
@@ -107,6 +107,11 @@ either way.
 5. Worker checks for stream handle: if present → `run_stream_sync()`, else → `run_sync()`
 6. Returns `WorkItemOutput` as durable result
 
+If a deferred request is produced while runtime approval keys are locked,
+`run_agent_step()` fails with
+`RuntimeError("Deferred approvals require unlocked approval keys.")` so callers
+receive an explicit, stable failure instead of a key-manager internals error.
+
 ## History Checkpointing
 
 History checkpointing adds per-round persistence for in-flight work item
@@ -138,6 +143,8 @@ execution so DBOS replay can resume with minimal repeated model work.
 
 ## Change Log
 
+- 2026-02-18: Worker now raises an explicit runtime error when deferred tool
+  requests are emitted while approval keys are locked. (Issue #170)
 - 2026-02-16: Checkpoint loading now validates `checkpoint_version` and falls
   back to input history on mismatch. Active checkpoint state in workers is
   context-local (`ContextVar`) instead of module-global mutable state.
