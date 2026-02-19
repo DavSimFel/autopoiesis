@@ -81,7 +81,7 @@ def _parse_list_value(v: str) -> str | int | list[str]:
 SKIP_DIRS = {".venv", "benchmarks", "__pycache__", ".git", "node_modules"}
 _SRC_LAYOUT_MIN_PARTS = 3
 _SRC_LAYOUT_APPROVAL_PARTS = 4
-_AUTOPIESIS_APPROVAL_IMPORT_PARTS = 3
+_AUTOPOIESIS_APPROVAL_IMPORT_PARTS = 3
 
 
 def find_py_files(root: Path) -> list[Path]:
@@ -147,7 +147,7 @@ def _normalize_import_module(module: str) -> str | None:
         return None
     if (
         parts[1] == "infra"
-        and len(parts) >= _AUTOPIESIS_APPROVAL_IMPORT_PARTS
+        and len(parts) >= _AUTOPOIESIS_APPROVAL_IMPORT_PARTS
         and parts[2] == "approval"
     ):
         return "approval"

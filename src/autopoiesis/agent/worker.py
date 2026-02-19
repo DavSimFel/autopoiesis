@@ -50,6 +50,10 @@ except ModuleNotFoundError as exc:
     ) from exc
 
 
+class DeferredApprovalLockedError(RuntimeError):
+    """Raised when deferred approvals are attempted with locked approval keys."""
+
+
 AgentOutput = str | DeferredToolRequests
 
 
@@ -117,7 +121,7 @@ def _build_output(
     """Convert agent output to a WorkItemOutput, handling deferred approvals."""
     if isinstance(result_output, DeferredToolRequests):
         if not rt.approval_unlocked:
-            raise RuntimeError("Deferred approvals require unlocked approval keys.")
+            raise DeferredApprovalLockedError("Deferred approvals require unlocked approval keys.")
         return WorkItemOutput(
             deferred_tool_requests_json=serialize_deferred_requests(
                 result_output,

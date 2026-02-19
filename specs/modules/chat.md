@@ -279,6 +279,9 @@ exception, and `--no-approval` behavior.
   the agent. Set `end_strategy='exhaustive'` on all agents for reliable
   tool execution when model returns text alongside tool calls.
   (Issue #55, Issue #56)
+- 2026-02-18: Introduced typed `DeferredApprovalLockedError` in `agent/worker.py`
+  to replace string-matching heuristic for locked approval key detection.
+  Server routes now catch the typed exception directly. (PR #184)
 - 2026-02-16: Replaced module-global active checkpoint state with
   context-local `ContextVar` storage for safer worker execution.
   (Issue #21, PR #23)

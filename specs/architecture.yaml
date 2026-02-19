@@ -1,5 +1,6 @@
 # Architecture constraints — verified by scripts/arch_check.py
 # See issue #156 for rationale.
+# 2026-02-18: Fixed typo in arch_check.py constant (_AUTOPIESIS → _AUTOPOIESIS).
 
 # Module dependency rules: module -> allowed internal imports
 dependencies:

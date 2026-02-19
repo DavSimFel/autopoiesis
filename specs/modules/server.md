@@ -56,7 +56,9 @@ Serve mode does not implement signed deferred approval submission yet.
   when agent output contains deferred tool requests.
 - WebSocket message handling emits `op="error"` with the same code/message
   instead of an `approval_request` event.
-- Worker locked-deferred errors are normalized to the same unsupported response.
+- Worker locked-deferred errors are caught via typed `DeferredApprovalLockedError`
+  exception (replacing string-matching heuristic) and normalized to the same
+  unsupported response.
 
 ### Environment Variables
 

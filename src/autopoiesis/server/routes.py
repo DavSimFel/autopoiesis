@@ -12,6 +12,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
 from pydantic_ai.messages import ModelMessage, ModelMessagesTypeAdapter
 
+from autopoiesis.agent.worker import DeferredApprovalLockedError
 from autopoiesis.server.auth import verify_api_key, verify_ws_api_key
 from autopoiesis.server.connections import ConnectionManager
 from autopoiesis.server.models import (
@@ -33,8 +34,6 @@ _APPROVAL_UNSUPPORTED: dict[str, str] = {
     "code": "approval_unsupported",
     "message": "Deferred approvals are not supported in server mode yet.",
 }
-_DEFERRED_LOCKED_MESSAGE = "Deferred approvals require unlocked approval keys."
-
 # These are set by ``configure_routes`` before the app starts serving.
 _sessions: SessionStore
 _manager: ConnectionManager
@@ -52,11 +51,6 @@ def _serialize_messages_for_api(messages: list[ModelMessage]) -> list[dict[str, 
     raw = ModelMessagesTypeAdapter.dump_json(messages)
     result: list[dict[str, Any]] = json.loads(raw)
     return result
-
-
-def _is_locked_deferred_error(exc: RuntimeError) -> bool:
-    """Return True when worker failed due to locked deferred approval flow."""
-    return _DEFERRED_LOCKED_MESSAGE in str(exc)
 
 
 # --- Health ---
@@ -162,9 +156,9 @@ async def chat(request: ChatRequest) -> ChatResponse:
             session_id=session_id,
             content=output.text or "",
         )
+    except DeferredApprovalLockedError as exc:
+        raise HTTPException(status_code=409, detail=_APPROVAL_UNSUPPORTED) from exc
     except RuntimeError as exc:
-        if _is_locked_deferred_error(exc):
-            raise HTTPException(status_code=409, detail=_APPROVAL_UNSUPPORTED) from exc
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
@@ -258,13 +252,13 @@ async def _handle_message(
                 session_id,
                 WSOutgoing(op="done", data={"content": output.text}),
             )
+    except DeferredApprovalLockedError:
+        await _manager.broadcast(
+            session_id,
+            WSOutgoing(op="error", data=_APPROVAL_UNSUPPORTED),
+        )
+        return
     except RuntimeError as exc:
-        if _is_locked_deferred_error(exc):
-            await _manager.broadcast(
-                session_id,
-                WSOutgoing(op="error", data=_APPROVAL_UNSUPPORTED),
-            )
-            return
         await _manager.broadcast(
             session_id,
             WSOutgoing(op="error", data={"message": str(exc)}),
