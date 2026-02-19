@@ -6,11 +6,8 @@ Mock only the LLM API (agent execution), not internal infrastructure.
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 from autopoiesis.models import (
     WorkItem,
@@ -24,7 +21,7 @@ from autopoiesis.store.history import (
     load_checkpoint,
     save_checkpoint,
 )
-from autopoiesis.topics.topic_manager import TopicRegistry, create_topic, update_topic_status
+from autopoiesis.topics.topic_manager import TopicRegistry
 
 
 class TestCheckpointRecovery:
@@ -62,9 +59,7 @@ class TestTopicAutoActivation:
         from autopoiesis.agent.topic_activation import activate_topic_ref
 
         # Write topic with explicit open status in frontmatter
-        (topics_dir / "fix-bug.md").write_text(
-            "---\ntype: task\nstatus: open\n---\nFix the bug."
-        )
+        (topics_dir / "fix-bug.md").write_text("---\ntype: task\nstatus: open\n---\nFix the bug.")
         registry = TopicRegistry(topics_dir)
         topic = registry.get_topic("fix-bug")
         assert topic is not None

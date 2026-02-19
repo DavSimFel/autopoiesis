@@ -1,10 +1,9 @@
-"""Extended subscription integration tests — lines/knowledge kinds, regex, path escapes, replacement."""
+"""Extended subscription integration tests — lines/knowledge kinds, regex, path escapes."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
 from pydantic_ai.messages import ModelMessage, ModelRequest, UserPromptPart
 
 from autopoiesis.infra.subscription_processor import (
@@ -29,7 +28,9 @@ class TestLinesSubscriptionKind:
         subscription_registry.add("lines", "big.py", line_range=(5, 10))
 
         msgs: list[ModelMessage] = [ModelRequest(parts=[UserPromptPart(content="check")])]
-        result = materialize_subscriptions(msgs, subscription_registry, workspace_root, knowledge_db)
+        result = materialize_subscriptions(
+            msgs, subscription_registry, workspace_root, knowledge_db
+        )
         mat = result[0]
         assert isinstance(mat, ModelRequest)
         content = str(mat.parts[0].content)
@@ -85,7 +86,9 @@ class TestRegexPatternFailure:
         subscription_registry.add("file", "code.py", pattern="[invalid")
 
         msgs: list[ModelMessage] = [ModelRequest(parts=[UserPromptPart(content="check")])]
-        result = materialize_subscriptions(msgs, subscription_registry, workspace_root, knowledge_db)
+        result = materialize_subscriptions(
+            msgs, subscription_registry, workspace_root, knowledge_db
+        )
         mat = result[0]
         assert isinstance(mat, ModelRequest)
         content = str(mat.parts[0].content)
@@ -108,7 +111,9 @@ class TestPathEscapeProtection:
         subscription_registry.add("file", "../secret.txt")
 
         msgs: list[ModelMessage] = [ModelRequest(parts=[UserPromptPart(content="check")])]
-        result = materialize_subscriptions(msgs, subscription_registry, workspace_root, knowledge_db)
+        result = materialize_subscriptions(
+            msgs, subscription_registry, workspace_root, knowledge_db
+        )
         mat = result[0]
         assert isinstance(mat, ModelRequest)
         content = str(mat.parts[0].content)
@@ -130,12 +135,16 @@ class TestMaterializationReplacement:
         subscription_registry.add("file", "data.txt")
 
         msgs: list[ModelMessage] = [ModelRequest(parts=[UserPromptPart(content="turn 1")])]
-        result1 = materialize_subscriptions(msgs, subscription_registry, workspace_root, knowledge_db)
+        result1 = materialize_subscriptions(
+            msgs, subscription_registry, workspace_root, knowledge_db
+        )
 
         # Now update file and pass result1 as history
         target.write_text("version 2")
         result1.append(ModelRequest(parts=[UserPromptPart(content="turn 2")]))
-        result2 = materialize_subscriptions(result1, subscription_registry, workspace_root, knowledge_db)
+        result2 = materialize_subscriptions(
+            result1, subscription_registry, workspace_root, knowledge_db
+        )
 
         # Should only have ONE materialization message (old one replaced)
         mat_count = sum(1 for m in result2 if is_materialization(m))

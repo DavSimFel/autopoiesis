@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from autopoiesis.cli import parse_cli_args
 
 

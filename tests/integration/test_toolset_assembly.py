@@ -42,7 +42,7 @@ def test_exec_toolset_present(
     subscription_registry: object,
     topic_registry: object,
 ) -> None:
-    """7.2 — Toolset assembly includes console, skills, exec, knowledge, subscription, topic toolsets."""
+    """7.2 — Toolset assembly includes console, skills, exec, knowledge, subscription, topics."""
     from autopoiesis.store.subscriptions import SubscriptionRegistry
     from autopoiesis.topics.topic_manager import TopicRegistry
 
@@ -72,7 +72,7 @@ async def test_tool_count_within_anthropic_limit(
     assert isinstance(topic_registry, TopicRegistry)
 
     # Test with real built toolsets — validate actual tool definitions
-    toolsets, _ = build_toolsets(
+    _toolsets, _ = build_toolsets(
         subscription_registry=subscription_registry,
         knowledge_db_path=knowledge_db,
         topic_registry=topic_registry,
@@ -104,4 +104,4 @@ def test_skill_tools_merged_into_toolset(
         topic_registry=topic_registry,
     )
     # With all registries: console, skills, exec, knowledge, subscription, topic
-    assert len(toolsets) >= 6, f"Expected at least 6 toolsets with all registries, got {len(toolsets)}"
+    assert len(toolsets) >= 6, f"Expected >=6 toolsets with all registries, got {len(toolsets)}"

@@ -10,7 +10,6 @@ from autopoiesis.store.history import init_history_store, load_checkpoint, save_
 from autopoiesis.store.knowledge import (
     index_file,
     init_knowledge_index,
-    reindex_knowledge,
     search_knowledge,
 )
 from autopoiesis.store.subscriptions import SubscriptionRegistry

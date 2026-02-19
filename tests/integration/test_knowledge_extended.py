@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -13,7 +13,6 @@ from autopoiesis.store.knowledge import (
     index_file,
     init_knowledge_index,
     load_knowledge_context,
-    reindex_knowledge,
     sanitize_fts_query,
     search_knowledge,
 )
@@ -102,9 +101,7 @@ class TestMetadataFilters:
         index_file(db_path, knowledge_root, new_file)
 
         since = datetime(2024, 1, 1, tzinfo=UTC)
-        results = search_knowledge(
-            db_path, "Python", since=since, knowledge_root=knowledge_root
-        )
+        results = search_knowledge(db_path, "Python", since=since, knowledge_root=knowledge_root)
         assert any(r.file_path == "new.md" for r in results)
         assert not any(r.file_path == "old.md" for r in results)
 
