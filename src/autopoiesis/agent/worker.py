@@ -26,12 +26,6 @@ from pydantic_ai.messages import (
 from pydantic_ai.tools import DeferredToolResults, RunContext
 
 from autopoiesis.agent.runtime import Runtime, get_runtime
-
-
-class DeferredApprovalLockedError(RuntimeError):
-    """Raised when deferred approvals are attempted with locked approval keys."""
-
-    pass
 from autopoiesis.agent.topic_activation import activate_topic_ref
 from autopoiesis.display.stream_formatting import forward_stream_events
 from autopoiesis.display.streaming import StreamHandle, ToolAwareStreamHandle, take_stream
@@ -54,6 +48,10 @@ except ModuleNotFoundError as exc:
         f"Missing DBOS dependency package `{missing_package}`. Run `uv sync` so "
         "`pydantic-ai-slim[dbos,mcp]` and `dbos` are installed."
     ) from exc
+
+
+class DeferredApprovalLockedError(RuntimeError):
+    """Raised when deferred approvals are attempted with locked approval keys."""
 
 
 AgentOutput = str | DeferredToolRequests

@@ -221,7 +221,9 @@ class TestChatEndpoint:
             patch("autopoiesis.agent.runtime.get_runtime"),
             patch(
                 "autopoiesis.agent.worker.enqueue_and_wait",
-                side_effect=DeferredApprovalLockedError("Deferred approvals require unlocked approval keys."),
+                side_effect=DeferredApprovalLockedError(
+                    "Deferred approvals require unlocked approval keys."
+                ),
             ),
             patch("autopoiesis.display.streaming.register_stream"),
         ):

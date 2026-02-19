@@ -12,6 +12,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
 from pydantic_ai.messages import ModelMessage, ModelMessagesTypeAdapter
 
+from autopoiesis.agent.worker import DeferredApprovalLockedError
 from autopoiesis.server.auth import verify_api_key, verify_ws_api_key
 from autopoiesis.server.connections import ConnectionManager
 from autopoiesis.server.models import (
@@ -24,7 +25,6 @@ from autopoiesis.server.models import (
     WSOutgoing,
 )
 from autopoiesis.server.sessions import SessionStore
-from autopoiesis.agent.worker import DeferredApprovalLockedError
 
 _log = logging.getLogger(__name__)
 
