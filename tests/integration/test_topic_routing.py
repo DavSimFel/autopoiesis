@@ -23,8 +23,10 @@ def write_topic(topics_dir: Path, name: str, content: str) -> Path:
     return p
 
 
-_SKIP_ROUTING = pytest.mark.skip(
-    reason="Phase B-3: needs full multi-agent runtime with owner-based routing"
+_SKIP_ROUTING = pytest.mark.xfail(
+    reason="Phase B-3: WorkItem dispatch not yet implemented — tests define expected behavior",
+    raises=NotImplementedError,
+    strict=True,
 )
 
 _DAILY_BRIEFING = (

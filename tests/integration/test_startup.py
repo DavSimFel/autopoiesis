@@ -121,7 +121,7 @@ class TestBatchModeProducesJSON:
         _, kwargs = run_simple_mock.call_args
         assert kwargs.get("auto_approve_deferred") is False
 
-        if output_file.exists():
-            data = json.loads(output_file.read_text())
-            assert "success" in data
-            assert "elapsed_seconds" in data
+        assert output_file.exists(), "Batch run must write output file"
+        data = json.loads(output_file.read_text())
+        assert "success" in data
+        assert "elapsed_seconds" in data
