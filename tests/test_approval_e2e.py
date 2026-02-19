@@ -83,6 +83,7 @@ class _FakeRuntime:
     approval_store: ApprovalStore
     key_manager: ApprovalKeyManager
     tool_policy: ToolPolicyRegistry
+    agent_name: str = "default"
     approval_unlocked: bool = False
 
 

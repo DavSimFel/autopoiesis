@@ -214,7 +214,7 @@ def run_agent_step(work_item_dict: dict[str, Any]) -> dict[str, Any]:
     history_json = recovered_history_json or item.input.message_history_json
     history = _deserialize_history(history_json)
     deps = AgentDeps(backend=rt.backend, approval_unlocked=rt.approval_unlocked)
-    agent_name = rt.agent.name or os.getenv("DBOS_AGENT_NAME", "chat")
+    agent_name = rt.agent_name
     approval_context_id = item.input.approval_context_id or item.id
     scope = build_approval_scope(approval_context_id, rt.backend, agent_name)
 

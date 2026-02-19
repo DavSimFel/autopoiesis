@@ -51,6 +51,7 @@ def _run_turn(
         item = WorkItem(
             type=WorkItemType.CHAT,
             priority=WorkItemPriority.CRITICAL,
+            agent_id=rt.agent_name,
             input=WorkItemInput(
                 prompt=prompt,
                 message_history_json=history_json,
