@@ -86,6 +86,7 @@ class TestResolveStartupConfigSignature:
             "agent_name must come from the CLI/env resolution path, not DBOS_AGENT_NAME"
         )
 
+    @pytest.mark.verifies("CHAT-V6")
     def test_dbos_agent_name_not_in_return(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Even if DBOS_AGENT_NAME is set it must not leak into the return value."""
         monkeypatch.setenv("AI_PROVIDER", "anthropic")
@@ -135,6 +136,7 @@ class TestInitializeRuntimeSignature:
 class TestRunTurnSetsAgentId:
     """_run_turn must set WorkItem.agent_id from rt.agent_name."""
 
+    @pytest.mark.verifies("CHAT-V1")
     def test_workitem_uses_runtime_agent_name(self, tmp_path: Path) -> None:
         """WorkItem.agent_id must equal the runtime's agent_name, not 'default'."""
         from autopoiesis.models import WorkItem, WorkItemOutput
@@ -342,6 +344,7 @@ class TestAgentNameResolutionFlow:
 
         assert resolve_agent_name(None) == "from-env"
 
+    @pytest.mark.verifies("CHAT-V7")
     def test_default_when_neither_set(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("AUTOPOIESIS_AGENT", raising=False)
         from autopoiesis.agent.workspace import resolve_agent_name

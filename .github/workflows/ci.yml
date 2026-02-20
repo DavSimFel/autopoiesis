@@ -95,7 +95,7 @@ jobs:
             exit 1
           fi
 
-          mapfile -t changed_sources < <(git diff --name-only origin/main...HEAD -- '*.py' ':!tests/**')
+          mapfile -t changed_sources < <(git diff --name-only origin/main...HEAD -- '*.py' ':!tests/**' ':!scripts/**')
           if [ "${#changed_sources[@]}" -eq 0 ]; then
             echo "No Python source changes detected."
             exit 0
@@ -208,3 +208,12 @@ jobs:
             done
             exit 1
           fi
+
+  rtm-check:
+    name: RTM Coverage Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run RTM checker
+        run: |
+          python scripts/rtm_check.py --specs specs/modules --tests tests
