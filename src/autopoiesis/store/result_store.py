@@ -13,6 +13,9 @@ Storage layout::
         └── YYYY-MM-DD/
             └── {cmd_short_hash}.log
 
+All date-directories anywhere under ``tmp/`` are treated uniformly by
+:func:`rotate_results`: first by age, then by total-size budget.
+
 Dependencies: (none — leaf module)
 Wired in: agent/truncation.py, tools/exec_tool.py, agent/worker.py
 """
@@ -24,6 +27,7 @@ import json
 import shutil
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
+
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -45,6 +49,25 @@ def _ensure_date_dir(base: Path) -> Path:
     date_dir = base / _today_str()
     date_dir.mkdir(parents=True, exist_ok=True)
     return date_dir
+
+
+def _dir_size(path: Path) -> int:
+    """Return total byte size of all files recursively under *path*."""
+    return sum(f.stat().st_size for f in path.rglob("*") if f.is_file())
+
+
+def _collect_date_dirs(tmp_dir: Path) -> list[tuple[date, Path]]:
+    """Return all ``YYYY-MM-DD`` directories anywhere under *tmp_dir*, sorted oldest-first."""
+    found: list[tuple[date, Path]] = []
+    for candidate in tmp_dir.rglob("*"):
+        if not candidate.is_dir():
+            continue
+        try:
+            found.append((date.fromisoformat(candidate.name), candidate))
+        except ValueError:
+            pass
+    found.sort(key=lambda t: t[0])
+    return found
 
 
 # ---------------------------------------------------------------------------
@@ -76,7 +99,6 @@ def store_tool_result(
     base = tmp_dir / "tool-results"
     date_dir = _ensure_date_dir(base)
     short = _short_hash(content)
-    # Sanitise tool_name for use in a filename.
     safe_name = tool_name.replace("/", "_").replace(" ", "_")[:64]
     out_path = date_dir / f"{safe_name}_{short}.out"
     header = json.dumps({"tool": tool_name, "stored_at": _today_str(), **metadata})
@@ -148,39 +170,54 @@ def get_result(path: Path) -> str:
 def rotate_results(
     tmp_dir: Path,
     retention_days: int,
-    *,
-    subtree: str | None = None,
+    max_size_mb: int,
 ) -> list[Path]:
-    """Delete date directories older than *retention_days*.
+    """Clean up ``tmp/`` by age then by size budget.
+
+    All ``YYYY-MM-DD`` directories anywhere under *tmp_dir* are treated
+    uniformly — no distinction between ``tool-results/`` and ``shell/``
+    subtrees.
+
+    Pass 1 — **age**: delete any date-dir strictly older than
+    ``today - retention_days``.
+
+    Pass 2 — **size**: if the surviving directories still exceed
+    *max_size_mb* in total, delete the oldest remaining date-dirs first
+    until the total is within budget.
 
     Args:
         tmp_dir: Agent ``tmp/`` directory.
-        retention_days: Number of days to keep.  Directories whose date
-            is strictly older than ``today - retention_days`` are removed.
-        subtree: Which subdirectory to rotate.  ``"tool-results"`` or
-            ``"shell"``; when ``None`` both are rotated.
+        retention_days: Days to keep.
+        max_size_mb: Size ceiling for all of ``tmp/`` in megabytes.
 
     Returns:
         List of deleted directory paths.
     """
+    if not tmp_dir.is_dir():
+        return []
+
     cutoff: date = datetime.now(UTC).date() - timedelta(days=retention_days)
+    date_dirs = _collect_date_dirs(tmp_dir)  # oldest-first
     deleted: list[Path] = []
-    subtrees: tuple[Path, ...]
-    if subtree is not None:
-        subtrees = (tmp_dir / subtree,)
-    else:
-        subtrees = (tmp_dir / "tool-results", tmp_dir / "shell")
-    for tree in subtrees:
-        if not tree.is_dir():
-            continue
-        for date_dir in tree.iterdir():
-            if not date_dir.is_dir():
-                continue
-            try:
-                dir_date = date.fromisoformat(date_dir.name)
-            except ValueError:
-                continue  # skip non-date directories
-            if dir_date < cutoff:
-                shutil.rmtree(date_dir, ignore_errors=True)
-                deleted.append(date_dir)
+
+    # Pass 1: age-based eviction.
+    surviving: list[tuple[date, Path]] = []
+    for dir_date, dir_path in date_dirs:
+        if dir_date < cutoff:
+            shutil.rmtree(dir_path, ignore_errors=True)
+            deleted.append(dir_path)
+        else:
+            surviving.append((dir_date, dir_path))
+
+    # Pass 2: size-based eviction (oldest first).
+    max_bytes = max_size_mb * 1024 * 1024
+    total = sum(_dir_size(p) for _, p in surviving)
+    for _, dir_path in surviving:
+        if total <= max_bytes:
+            break
+        size = _dir_size(dir_path)
+        shutil.rmtree(dir_path, ignore_errors=True)
+        deleted.append(dir_path)
+        total -= size
+
     return deleted
