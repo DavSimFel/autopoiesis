@@ -144,6 +144,7 @@ jobs:
             ["src/autopoiesis/infra/command_classifier.py"]="specs/modules/security.md"
             ["src/autopoiesis/tools/exec_tool.py"]="specs/modules/exec.md"
             ["src/autopoiesis/io_utils.py"]="specs/modules/exec.md"
+            ["src/autopoiesis/store/result_store.py"]="specs/modules/exec.md"
             ["src/autopoiesis/store/history.py"]="specs/modules/memory.md"
             ["src/autopoiesis/store/knowledge.py"]="specs/modules/memory.md"
             ["src/autopoiesis/store/knowledge_migration.py"]="specs/modules/memory.md"

@@ -85,3 +85,4 @@ Uses stdlib `pty.openpty()` — zero external dependencies. Enables interactive 
 ### Changelog
 - 2026-02-16: Modules moved into subdirectories (`agent/`, `approval/`, `display/`, `infra/`, `store/`, `tools/`) as part of subdirectory restructuring (#119)
 - 2026-02-16: Added Dependencies/Wired-in docstring headers as part of #121 documentation update
+- 2026-02-20: Added result_store.py to store/ — persistent storage for tool results and shell outputs, wired into exec_tool.py and agent/worker.py (#212)
