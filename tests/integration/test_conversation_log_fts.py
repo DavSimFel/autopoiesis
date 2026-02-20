@@ -70,9 +70,7 @@ class TestFts5Integration:
         assert len(results) >= 1
         assert any("fts-agent" in r.file_path for r in results)
 
-    def test_log_file_path_in_results(
-        self, knowledge_root: Path, knowledge_db: str
-    ) -> None:
+    def test_log_file_path_in_results(self, knowledge_root: Path, knowledge_db: str) -> None:
         """Search results reference the correct log file path."""
         messages = [
             _user_request("Unique content about tachyon_propulsion_system_xyz."),
@@ -111,9 +109,7 @@ class TestFts5Integration:
         assert any("alpha-agent" in r.file_path for r in zeta_results)
         assert any("beta-agent" in r.file_path for r in delta_results)
 
-    def test_updated_log_reindexed(
-        self, knowledge_root: Path, knowledge_db: str
-    ) -> None:
+    def test_updated_log_reindexed(self, knowledge_root: Path, knowledge_db: str) -> None:
         """A second append_turn on the same day re-indexes the updated file."""
         ts1 = datetime(2026, 2, 20, 8, 0, 0, tzinfo=UTC)
         ts2 = datetime(2026, 2, 20, 9, 0, 0, tzinfo=UTC)

@@ -90,18 +90,14 @@ class TestLogFileFormat:
             _make_assistant_message("Quantum computing has seen great progress."),
         ]
 
-        result_path = append_turn(
-            knowledge_root, knowledge_db, "my-agent", messages, timestamp=ts
-        )
+        result_path = append_turn(knowledge_root, knowledge_db, "my-agent", messages, timestamp=ts)
 
         assert result_path is not None
         expected = knowledge_root / "logs" / "my-agent" / "2026-02-20.md"
         assert result_path == expected
         assert result_path.exists()
 
-    def test_file_contains_timestamp_header(
-        self, knowledge_root: Path, knowledge_db: str
-    ) -> None:
+    def test_file_contains_timestamp_header(self, knowledge_root: Path, knowledge_db: str) -> None:
         """Each entry block has an ISO timestamp as a markdown H2 header."""
         ts = datetime(2026, 2, 20, 14, 39, 0, tzinfo=UTC)
         messages = [_make_user_message("test question")]
@@ -111,9 +107,7 @@ class TestLogFileFormat:
         content = (knowledge_root / "logs" / "agent1" / "2026-02-20.md").read_text()
         assert "## 2026-02-20T14:39:00+00:00" in content
 
-    def test_file_contains_role_labels(
-        self, knowledge_root: Path, knowledge_db: str
-    ) -> None:
+    def test_file_contains_role_labels(self, knowledge_root: Path, knowledge_db: str) -> None:
         """Roles 'user' and 'assistant' appear as bold labels in the log."""
         ts = datetime(2026, 2, 20, 15, 0, 0, tzinfo=UTC)
         messages = [
@@ -165,16 +159,12 @@ class TestLogFileFormat:
         assert "First question" in content
         assert "Second question" in content
 
-    def test_empty_messages_returns_none(
-        self, knowledge_root: Path, knowledge_db: str
-    ) -> None:
+    def test_empty_messages_returns_none(self, knowledge_root: Path, knowledge_db: str) -> None:
         """No log file is written when messages list is empty."""
         result = append_turn(knowledge_root, knowledge_db, "agent5", [])
         assert result is None
 
-    def test_content_summary_truncated(
-        self, knowledge_root: Path, knowledge_db: str
-    ) -> None:
+    def test_content_summary_truncated(self, knowledge_root: Path, knowledge_db: str) -> None:
         """Content longer than 200 chars is truncated with an ellipsis."""
         long_text = "word " * 100  # 500 chars
         ts = datetime(2026, 2, 20, 12, 0, 0, tzinfo=UTC)
@@ -194,9 +184,7 @@ class TestLogFileFormat:
 
 
 class TestToolCallCapture:
-    def test_tool_names_appear_in_log(
-        self, knowledge_root: Path, knowledge_db: str
-    ) -> None:
+    def test_tool_names_appear_in_log(self, knowledge_root: Path, knowledge_db: str) -> None:
         """Tool call names from ToolCallPart are recorded in the log."""
         ts = datetime(2026, 2, 20, 14, 0, 0, tzinfo=UTC)
         messages = [
@@ -212,9 +200,7 @@ class TestToolCallCapture:
         assert "search_knowledge" in content
         assert "web_search" in content
 
-    def test_tool_results_excluded_from_log(
-        self, knowledge_root: Path, knowledge_db: str
-    ) -> None:
+    def test_tool_results_excluded_from_log(self, knowledge_root: Path, knowledge_db: str) -> None:
         """ToolReturnPart results (potentially large) are excluded from logs."""
         ts = datetime(2026, 2, 20, 14, 0, 0, tzinfo=UTC)
         large_result = "LARGE_RESULT_DATA: " + "x" * 1000
@@ -242,10 +228,7 @@ class TestToolCallCapture:
 
         # ToolReturnPart on a request message should be skipped entirely
         roles = [role for role, _, _ in entries]
-        assert "user" not in roles or all(
-            "SECRET_RESULT_CONTENT" not in s
-            for _, s, _ in entries
-        )
+        assert "user" not in roles or all("SECRET_RESULT_CONTENT" not in s for _, s, _ in entries)
 
         # Find the assistant entry
         assistant_entries = [(r, s, t) for r, s, t in entries if r == "assistant"]
