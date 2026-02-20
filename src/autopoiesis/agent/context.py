@@ -28,10 +28,10 @@ from autopoiesis.agent.context_tokens import (
 __all__ = [
     "CHARS_PER_TOKEN",
     "CHARS_PER_TOKEN_CODE",
-    "estimate_tokens",
-    "estimate_tokens_for_model",
     "check_context_usage",
     "compact_history",
+    "estimate_tokens",
+    "estimate_tokens_for_model",
 ]
 
 _log = logging.getLogger(__name__)
