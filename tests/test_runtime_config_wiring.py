@@ -13,15 +13,16 @@ Covers:
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from autopoiesis.agent.config import AgentConfig, load_agent_configs
 from autopoiesis.agent.model_resolution import resolve_model_from_config
-from autopoiesis.tools.toolset_builder import (
-    _TOOL_CATEGORY_ALIASES,
-    _resolve_enabled_categories,
+from autopoiesis.tools.categories import (
+    TOOL_CATEGORY_ALIASES,
+    resolve_enabled_categories,
 )
 
 # ---------------------------------------------------------------------------
@@ -84,42 +85,42 @@ class TestResolveModelFromConfig:
 
 
 # ---------------------------------------------------------------------------
-# _resolve_enabled_categories / tool name filtering
+# resolve_enabled_categories / tool name filtering
 # ---------------------------------------------------------------------------
 
 
 class TestResolveEnabledCategories:
-    """_resolve_enabled_categories converts AgentConfig tool names to category sets."""
+    """resolve_enabled_categories converts AgentConfig tool names to category sets."""
 
     def test_none_returns_none(self) -> None:
         """None → None means 'all toolsets enabled' (backward-compatible)."""
-        assert _resolve_enabled_categories(None) is None
+        assert resolve_enabled_categories(None) is None
 
     def test_empty_list_returns_empty_frozenset(self) -> None:
         """Empty list → empty frozenset (no optional toolsets)."""
-        result = _resolve_enabled_categories([])
+        result = resolve_enabled_categories([])
         assert result is not None
         assert len(result) == 0
 
     def test_shell_maps_to_console(self) -> None:
-        result = _resolve_enabled_categories(["shell"])
+        result = resolve_enabled_categories(["shell"])
         assert result is not None
         assert "console" in result
 
     def test_search_maps_to_knowledge(self) -> None:
-        result = _resolve_enabled_categories(["search"])
+        result = resolve_enabled_categories(["search"])
         assert result is not None
         assert "knowledge" in result
 
     def test_multiple_names(self) -> None:
-        result = _resolve_enabled_categories(["shell", "search", "topics"])
+        result = resolve_enabled_categories(["shell", "search", "topics"])
         assert result is not None
         assert "console" in result
         assert "knowledge" in result
         assert "topics" in result
 
     def test_canonical_names_pass_through(self) -> None:
-        result = _resolve_enabled_categories(["console", "exec", "subscriptions"])
+        result = resolve_enabled_categories(["console", "exec", "subscriptions"])
         assert result is not None
         assert "console" in result
         assert "exec" in result
@@ -127,23 +128,23 @@ class TestResolveEnabledCategories:
 
     def test_unknown_name_passes_through_lowercase(self) -> None:
         """Unrecognised tool names are lowercased and passed through (forward-compat)."""
-        result = _resolve_enabled_categories(["UnknownTool"])
+        result = resolve_enabled_categories(["UnknownTool"])
         assert result is not None
         assert "unknowntool" in result
 
     def test_case_insensitive_matching(self) -> None:
-        result = _resolve_enabled_categories(["SHELL", "Topics"])
+        result = resolve_enabled_categories(["SHELL", "Topics"])
         assert result is not None
         assert "console" in result
         assert "topics" in result
 
     def test_all_aliases_covered(self) -> None:
-        """Every alias in _TOOL_CATEGORY_ALIASES resolves to a known canonical category."""
-        from autopoiesis.tools.toolset_builder import _CANONICAL_CATEGORIES
+        """Every alias in TOOL_CATEGORY_ALIASES resolves to a known canonical category."""
+        from autopoiesis.tools.categories import CANONICAL_CATEGORIES
 
-        for alias, canonical in _TOOL_CATEGORY_ALIASES.items():
-            assert canonical in _CANONICAL_CATEGORIES, (
-                f"Alias '{alias}' maps to '{canonical}' which is not in _CANONICAL_CATEGORIES"
+        for alias, canonical in TOOL_CATEGORY_ALIASES.items():
+            assert canonical in CANONICAL_CATEGORIES, (
+                f"Alias '{alias}' maps to '{canonical}' which is not in CANONICAL_CATEGORIES"
             )
 
 
@@ -320,12 +321,12 @@ system_prompt = "knowledge/identity/executor.md"
 
 
 # ---------------------------------------------------------------------------
-# _initialize_runtime model/tool/shell-tier wiring
+# initialize_runtime model/tool/shell-tier wiring
 # ---------------------------------------------------------------------------
 
 
 class TestInitializeRuntimeWiring:
-    """_initialize_runtime propagates AgentConfig fields to the built Runtime."""
+    """initialize_runtime propagates AgentConfig fields to the built Runtime."""
 
     def _make_config(
         self,
@@ -353,6 +354,7 @@ class TestInitializeRuntimeWiring:
         fake_agent = MagicMock()
         fake_runtime = Runtime(
             agent=fake_agent,
+            agent_name="test-agent",
             backend=MagicMock(),
             history_db_path=str(tmp_path / "h.sqlite"),
             knowledge_db_path=str(tmp_path / "k.sqlite"),
@@ -417,17 +419,16 @@ class TestInitializeRuntimeWiring:
             patch("autopoiesis.cli.cleanup_stale_checkpoints"),
             patch("autopoiesis.cli.set_runtime"),
         ):
-            from autopoiesis.agent.workspace import resolve_agent_workspace
-            from autopoiesis.cli import _initialize_runtime
+            from autopoiesis.cli import initialize_runtime
 
-            agent_paths = (
-                resolve_agent_workspace.__wrapped__("test-agent")
-                if hasattr(resolve_agent_workspace, "__wrapped__")
-                else MagicMock(root=tmp_path)
-            )
             agent_paths = MagicMock(root=tmp_path)
 
-            _initialize_runtime(agent_paths, require_approval_unlock=False, agent_config=cfg)
+            initialize_runtime(
+                agent_paths,
+                "test-agent",
+                require_approval_unlock=False,
+                agent_config=cfg,
+            )
 
         assert captured["model_override"] == "anthropic:claude-haiku-4"
         # DBOS agent name should come from config name, not env default.
@@ -441,7 +442,7 @@ class TestInitializeRuntimeWiring:
 
         captured_tool_names: list[str] | None = None
 
-        def _fake_prepare(history_db_path: str, tool_names: list[str] | None = None) -> tuple:  # type: ignore[type-arg]
+        def _fake_prepare(history_db_path: str, tool_names: list[str] | None = None) -> Any:
             nonlocal captured_tool_names
             captured_tool_names = tool_names
             return (
@@ -471,10 +472,11 @@ class TestInitializeRuntimeWiring:
             patch("autopoiesis.cli.cleanup_stale_checkpoints"),
             patch("autopoiesis.cli.set_runtime"),
         ):
-            from autopoiesis.cli import _initialize_runtime
+            from autopoiesis.cli import initialize_runtime
 
-            _initialize_runtime(
+            initialize_runtime(
                 MagicMock(root=tmp_path),
+                "test-agent",
                 require_approval_unlock=False,
                 agent_config=cfg,
             )
@@ -487,7 +489,7 @@ class TestInitializeRuntimeWiring:
         """Without AgentConfig, tool_names=None is passed (backward-compatible all-tools)."""
         captured_tool_names: list[str] | None | str = "sentinel"
 
-        def _fake_prepare(history_db_path: str, tool_names: list[str] | None = None) -> tuple:  # type: ignore[type-arg]
+        def _fake_prepare(history_db_path: str, tool_names: list[str] | None = None) -> Any:
             nonlocal captured_tool_names
             captured_tool_names = tool_names
             return (
@@ -515,10 +517,11 @@ class TestInitializeRuntimeWiring:
             patch("autopoiesis.cli.cleanup_stale_checkpoints"),
             patch("autopoiesis.cli.set_runtime"),
         ):
-            from autopoiesis.cli import _initialize_runtime
+            from autopoiesis.cli import initialize_runtime
 
-            _initialize_runtime(
+            initialize_runtime(
                 MagicMock(root=tmp_path),
+                "test-agent",
                 require_approval_unlock=False,
                 agent_config=None,
             )
@@ -587,10 +590,11 @@ class TestInitializeRuntimeWiring:
             patch("autopoiesis.cli.cleanup_stale_checkpoints"),
             patch("autopoiesis.cli.set_runtime"),
         ):
-            from autopoiesis.cli import _initialize_runtime
+            from autopoiesis.cli import initialize_runtime
 
-            _initialize_runtime(
+            initialize_runtime(
                 MagicMock(root=tmp_path),
+                "test-agent",
                 require_approval_unlock=False,
                 agent_config=cfg,
             )
@@ -655,10 +659,11 @@ class TestInitializeRuntimeWiring:
             patch("autopoiesis.cli.cleanup_stale_checkpoints"),
             patch("autopoiesis.cli.set_runtime"),
         ):
-            from autopoiesis.cli import _initialize_runtime
+            from autopoiesis.cli import initialize_runtime
 
-            _initialize_runtime(
+            initialize_runtime(
                 MagicMock(root=tmp_path),
+                "test-agent",
                 require_approval_unlock=False,
                 agent_config=cfg,
             )

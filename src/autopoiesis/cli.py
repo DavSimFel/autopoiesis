@@ -116,14 +116,11 @@ def parse_cli_args(repo_root: Path, argv: list[str] | None = None) -> argparse.N
 def _resolve_startup_config() -> tuple[str, str]:
     """Resolve provider name and DBOS system database URL."""
     provider = resolve_provider(os.getenv("AI_PROVIDER"))
-    system_database_url = os.getenv(
-        "DBOS_SYSTEM_DATABASE_URL",
-        "sqlite:///dbostest.sqlite",
-    )
+    system_database_url = os.getenv("DBOS_SYSTEM_DATABASE_URL", "sqlite:///dbostest.sqlite")
     return provider, system_database_url
 
 
-def _initialize_runtime(
+def initialize_runtime(
     agent_paths: AgentPaths,
     agent_name: str,
     *,
@@ -265,7 +262,7 @@ def main() -> None:
     is_batch = args.command == "run"
     is_serve = args.command == "serve"
     try:
-        system_database_url = _initialize_runtime(
+        system_database_url = initialize_runtime(
             agent_paths,
             agent_name,
             require_approval_unlock=not args.no_approval and not is_batch and not is_serve,

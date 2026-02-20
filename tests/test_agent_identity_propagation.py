@@ -107,9 +107,9 @@ class TestInitializeRuntimeSignature:
     """_initialize_runtime must accept agent_name as an explicit positional arg."""
 
     def test_agent_name_is_required_parameter(self) -> None:
-        from autopoiesis.cli import _initialize_runtime  # type: ignore[reportPrivateUsage]
+        from autopoiesis.cli import initialize_runtime
 
-        sig = inspect.signature(_initialize_runtime)
+        sig = inspect.signature(initialize_runtime)
         params = list(sig.parameters.keys())
         assert "agent_name" in params, (
             "_initialize_runtime must accept agent_name so the CLI-resolved "
@@ -117,9 +117,9 @@ class TestInitializeRuntimeSignature:
         )
 
     def test_agent_name_is_positional_not_keyword_only(self) -> None:
-        from autopoiesis.cli import _initialize_runtime  # type: ignore[reportPrivateUsage]
+        from autopoiesis.cli import initialize_runtime
 
-        sig = inspect.signature(_initialize_runtime)
+        sig = inspect.signature(initialize_runtime)
         p = sig.parameters["agent_name"]
         assert p.kind not in (
             inspect.Parameter.KEYWORD_ONLY,
