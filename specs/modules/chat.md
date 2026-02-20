@@ -373,3 +373,11 @@ AgentConfig is now source of truth for runtime construction:
 - System prompt file override
 - Backward compatible when no config present
 
+
+## Agent-Aware Toolset (#202)
+
+Toolset initialization is now agent-aware:
+- `prepare_toolset_context_for_agent(agent_id)` derives isolated workspace per agent
+- `build_backend_for_agent(agent_workspace)` scoped to agent's workspace subtree
+- Per-agent exec-log cleanup
+
