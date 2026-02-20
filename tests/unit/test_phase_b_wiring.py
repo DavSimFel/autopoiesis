@@ -167,7 +167,7 @@ class TestConfigLoadingInStartup:
             ),
             patch("autopoiesis.cli.load_dotenv"),
             patch("autopoiesis.cli.otel_tracing"),
-            patch("autopoiesis.cli._initialize_runtime", side_effect=SystemExit("stop")),
+            patch("autopoiesis.cli.initialize_runtime", side_effect=SystemExit("stop")),
         ):
             import autopoiesis.cli as cli_mod
 

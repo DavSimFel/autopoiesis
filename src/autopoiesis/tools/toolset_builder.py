@@ -25,6 +25,7 @@ from autopoiesis.store.knowledge import (
     reindex_knowledge,
 )
 from autopoiesis.store.subscriptions import SubscriptionRegistry
+from autopoiesis.tools.categories import resolve_enabled_categories
 from autopoiesis.tools.knowledge_tools import create_knowledge_toolset
 from autopoiesis.tools.subscription_tools import create_subscription_toolset
 from autopoiesis.tools.toolset_wrappers import wrap_toolsets
@@ -178,32 +179,52 @@ def build_toolsets(
     knowledge_db_path: str | None = None,
     knowledge_context: str = "",
     topic_registry: TopicRegistry | None = None,
+    tool_names: list[str] | None = None,
 ) -> tuple[list[AbstractToolset[AgentDeps]], str]:
-    """Build all toolsets and return their static capability system prompt."""
+    """Build toolsets and return their static capability system prompt.
+
+    *tool_names* is an optional whitelist of tool category names as declared in
+    ``AgentConfig.tools`` (e.g. ``["shell", "search", "topics"]``).  When
+    ``None`` (default) every toolset is included for backward compatibility.
+    When provided, only toolsets whose canonical category appears in the list
+    are included; unknown aliases are silently ignored.
+
+    The *console* and *skills* toolsets are always included — they represent
+    core read/write and skill-invocation capabilities that every agent needs.
+    """
+    enabled = resolve_enabled_categories(tool_names)
+
+    def _enabled(category: str) -> bool:
+        """Return True when *category* should be included."""
+        return enabled is None or category in enabled
+
     validate_console_deps_contract()
     console = create_console_toolset(include_execute=False, require_write_approval=True)
     skills_toolset, skills_instr = create_skills_toolset(_build_skill_directories())
 
-    toolsets: list[AbstractToolset[AgentDeps]] = [console, skills_toolset, _build_exec_toolset()]
+    # Console and skills are always present (they are core primitives).
+    toolsets: list[AbstractToolset[AgentDeps]] = [console, skills_toolset]
     prompt_fragments: list[str] = [BASE_SYSTEM_PROMPT, CONSOLE_INSTRUCTIONS, skills_instr]
 
-    exec_enabled = os.getenv("ENABLE_EXECUTE", "").lower() in ("1", "true", "yes")
-    if exec_enabled:
-        prompt_fragments.append(EXEC_INSTRUCTIONS)
+    if _enabled("exec"):
+        toolsets.append(_build_exec_toolset())
+        exec_enabled = os.getenv("ENABLE_EXECUTE", "").lower() in ("1", "true", "yes")
+        if exec_enabled:
+            prompt_fragments.append(EXEC_INSTRUCTIONS)
 
-    if knowledge_db_path is not None:
+    if knowledge_db_path is not None and _enabled("knowledge"):
         knowledge_toolset, knowledge_instr = create_knowledge_toolset(knowledge_db_path)
         toolsets.append(knowledge_toolset)
         prompt_fragments.append(knowledge_instr)
         if knowledge_context:
             prompt_fragments.append(knowledge_context)
 
-    if subscription_registry is not None:
+    if subscription_registry is not None and _enabled("subscriptions"):
         sub_toolset, sub_instr = create_subscription_toolset(subscription_registry)
         toolsets.append(sub_toolset)
         prompt_fragments.append(sub_instr)
 
-    if topic_registry is not None:
+    if topic_registry is not None and _enabled("topics"):
         topic_toolset, topic_instr = create_topic_toolset(topic_registry)
         toolsets.append(topic_toolset)
         prompt_fragments.append(topic_instr)
@@ -213,6 +234,7 @@ def build_toolsets(
 
 def prepare_toolset_context(
     history_db_path: str,
+    tool_names: list[str] | None = None,
 ) -> tuple[
     Path,
     str,
@@ -221,7 +243,11 @@ def prepare_toolset_context(
     list[AbstractToolset[AgentDeps]],
     str,
 ]:
-    """Initialize runtime stores needed for toolset construction."""
+    """Initialize runtime stores needed for toolset construction.
+
+    *tool_names* is forwarded to :func:`build_toolsets` to filter which toolsets
+    are included.  Pass ``None`` (default) to include all toolsets.
+    """
     workspace_root = resolve_workspace_root()
     sub_db_path = str(Path(history_db_path).with_name("subscriptions.sqlite"))
     subscription_registry = SubscriptionRegistry(sub_db_path)
@@ -237,6 +263,7 @@ def prepare_toolset_context(
         knowledge_db_path=knowledge_db_path,
         knowledge_context=knowledge_context,
         topic_registry=topic_registry,
+        tool_names=tool_names,
     )
     return (
         workspace_root,

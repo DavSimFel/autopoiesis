@@ -363,3 +363,13 @@ Runtime now propagates the selected agent identity through the full stack:
 - `runtime.py`: stores agent_id, uses it for WorkItem routing
 - `worker.py`: tags outbound messages with agent identity
 
+
+## AgentConfig Wiring (#201)
+
+AgentConfig is now source of truth for runtime construction:
+- Model resolution from config (Anthropic, OpenRouter, passthrough)
+- Tool filtering via config whitelist
+- Shell tier from config
+- System prompt file override
+- Backward compatible when no config present
+

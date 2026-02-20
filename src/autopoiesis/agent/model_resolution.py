@@ -100,3 +100,47 @@ def resolve_model(provider: str | None = None) -> Model | str:
     if has_anthropic:
         return FallbackModel(primary, _build_anthropic_model())
     return primary
+
+
+def resolve_model_from_config(model_id: str) -> Model | str:
+    """Resolve a pydantic_ai Model from an ``AgentConfig`` model identifier.
+
+    Accepts ``"provider/model-name"`` format (e.g. ``"anthropic/claude-sonnet-4"``)
+    and converts it to the appropriate pydantic_ai model, checking for required
+    API keys.  Falls back to treating the string as a raw pydantic_ai model
+    identifier when no known provider prefix is found.
+
+    Examples::
+
+        resolve_model_from_config("anthropic/claude-sonnet-4")
+        # → "anthropic:claude-sonnet-4"  (requires ANTHROPIC_API_KEY)
+
+        resolve_model_from_config("openrouter/openai/gpt-4o-mini")
+        # → OpenAIChatModel(...)         (requires OPENROUTER_API_KEY)
+
+        resolve_model_from_config("anthropic:claude-3-5-sonnet-latest")
+        # → "anthropic:claude-3-5-sonnet-latest"  (pass-through)
+    """
+    if "/" not in model_id:
+        # No slash → treat as a raw pydantic_ai model string and return as-is.
+        return model_id
+
+    prefix, model_name = model_id.split("/", 1)
+    provider = prefix.strip().lower()
+
+    if provider == "anthropic":
+        required_env("ANTHROPIC_API_KEY")
+        return f"anthropic:{model_name}"
+
+    if provider == "openrouter":
+        api_key = required_env("OPENROUTER_API_KEY")
+        return OpenAIChatModel(
+            model_name,
+            provider=OpenAIProvider(
+                base_url="https://openrouter.ai/api/v1",
+                api_key=api_key,
+            ),
+        )
+
+    # Unknown provider — pass through as-is and let pydantic_ai handle it.
+    return model_id

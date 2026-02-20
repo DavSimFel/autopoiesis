@@ -11,3 +11,7 @@ benchmarks/results/
 .pytest_cache/
 .ruff_cache/
 src/autopoiesis.egg-info/
+tests/unit/test_crypto.py
+tests/unit/test_key_files.py
+tests/unit/test_keys.py
+tests/unit/test_store_verify.py
