@@ -24,12 +24,10 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 from pydantic_ai.messages import (
     ModelMessage,
     ModelRequest,
-    ModelResponse,
     SystemPromptPart,
     TextPart,
     ToolCallPart,
@@ -37,9 +35,6 @@ from pydantic_ai.messages import (
 )
 
 from autopoiesis.store.knowledge import index_file, init_knowledge_index
-
-if TYPE_CHECKING:
-    pass
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +93,7 @@ def _parse_messages(
                     entries.append(("system", _summarize(_extract_content(part)), []))
                 # ToolReturnPart is a request part but we skip it (it's a result)
 
-        elif isinstance(msg, ModelResponse):
+        else:  # ModelResponse
             tool_names: list[str] = []
             text_parts: list[str] = []
             for part in msg.parts:
@@ -119,10 +114,7 @@ def _format_entry(
     """Render a single turn block as a markdown string."""
     lines: list[str] = [f"## {timestamp.isoformat()}", ""]
     for role, summary, tools in entries:
-        if tools:
-            tool_str = f" *(tools: {', '.join(tools)})*"
-        else:
-            tool_str = ""
+        tool_str = f" *(tools: {', '.join(tools)})*" if tools else ""
         lines.append(f"- **{role}**: {summary}{tool_str}")
     lines.append("")
     return "\n".join(lines)

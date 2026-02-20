@@ -15,7 +15,6 @@ from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserProm
 from autopoiesis.store.conversation_log import append_turn
 from autopoiesis.store.knowledge import init_knowledge_index, search_knowledge
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------

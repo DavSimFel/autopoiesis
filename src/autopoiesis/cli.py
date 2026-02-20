@@ -130,23 +130,9 @@ def initialize_runtime(
 ) -> str:
     """Build runtime dependencies and register the process-wide runtime.
 
-    When *agent_config* is provided it acts as the source of truth for:
-
-    * **model** — ``AgentConfig.model`` is resolved via
-      :func:`~autopoiesis.agent.model_resolution.resolve_model_from_config` and
-      passed to :func:`~autopoiesis.agent.runtime.build_agent` as
-      *model_override*, bypassing the provider-based default.
-    * **tools** — ``AgentConfig.tools`` is forwarded to
-      :func:`~autopoiesis.tools.toolset_builder.prepare_toolset_context` to
-      filter which toolsets are assembled.
-    * **system prompt** — when ``AgentConfig.system_prompt`` resolves to an
-      existing file under *agent_paths.root* its contents replace the
-      auto-composed prompt.
-    * **shell tier** — ``AgentConfig.shell_tier`` is stored on
-      :class:`~autopoiesis.agent.runtime.Runtime` for downstream enforcement.
-
-    When *agent_config* is ``None`` all defaults are used (backward-compatible
-    behaviour).
+    When *agent_config* is provided it drives model selection, tool filtering,
+    system prompt, shell tier, and conversation logging settings.
+    When ``None`` all defaults apply (backward-compatible behaviour).
     """
     provider, system_database_url = _resolve_startup_config()
 

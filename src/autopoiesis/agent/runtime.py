@@ -74,9 +74,7 @@ class AgentRegistry:
         self._runtimes: dict[str, Runtime] = {}
         self._lock = threading.Lock()
 
-    # ------------------------------------------------------------------
-    # Primary multi-agent API
-    # ------------------------------------------------------------------
+    # --- Primary multi-agent API ---
 
     def register(self, agent_id: str, runtime: Runtime) -> None:
         """Register *runtime* under *agent_id*, replacing any existing entry."""
@@ -144,9 +142,7 @@ class AgentRegistry:
         with self._lock:
             return sorted(k for k in self._runtimes if k != self._DEFAULT_KEY)
 
-    # ------------------------------------------------------------------
-    # Backward-compatible single-runtime API
-    # ------------------------------------------------------------------
+    # --- Backward-compatible single-runtime API ---
 
     def set(self, runtime: Runtime) -> None:
         """Register *runtime* under the ``"__default__"`` sentinel key.
@@ -157,9 +153,7 @@ class AgentRegistry:
         self.register(self._DEFAULT_KEY, runtime)
 
 
-#: Backward-compatible alias so that existing imports of ``RuntimeRegistry``
-#: continue to resolve without modification.
-RuntimeRegistry = AgentRegistry
+RuntimeRegistry = AgentRegistry  #: backward-compatible alias for ``AgentRegistry``
 
 # ---------------------------------------------------------------------------
 # Process-wide registry instance
@@ -167,9 +161,7 @@ RuntimeRegistry = AgentRegistry
 
 _agent_registry: AgentRegistry = AgentRegistry()
 
-#: Alias kept for code that references ``_runtime_registry`` directly (rare)
-#: or that calls :func:`get_runtime_registry` / :func:`set_runtime_registry`.
-_runtime_registry: AgentRegistry = _agent_registry
+_runtime_registry: AgentRegistry = _agent_registry  # backward-compat alias
 
 
 def get_runtime_registry() -> AgentRegistry:

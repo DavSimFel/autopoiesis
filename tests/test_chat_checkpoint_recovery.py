@@ -49,6 +49,9 @@ class _FakeRuntime:
     key_manager: Any = None
     approval_unlocked: bool = False
     tool_policy: Any = None
+    log_conversations: bool = False
+    knowledge_root: Path | None = None
+    conversation_log_retention_days: int = 0
 
 
 def _fake_deserialize_history(history_json: str | None) -> list[str]:

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 from pydantic_ai.messages import (
@@ -24,7 +23,6 @@ from autopoiesis.store.conversation_log import (
     rotate_logs,
 )
 from autopoiesis.store.knowledge import init_knowledge_index
-
 
 # ---------------------------------------------------------------------------
 # Helpers

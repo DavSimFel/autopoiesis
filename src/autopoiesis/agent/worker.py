@@ -283,10 +283,7 @@ def execute_work_item(work_item_dict: dict[str, Any]) -> dict[str, Any]:
 
 
 def enqueue(item: WorkItem) -> str:
-    """Enqueue a work item and return its id.
-
-    Routes to the correct per-agent queue via :func:`dispatch_workitem`.
-    """
+    """Enqueue a work item and return its id via :func:`dispatch_workitem`."""
     queue = dispatch_workitem(item)
     with SetEnqueueOptions(priority=int(item.priority)):
         queue.enqueue(execute_work_item, item.model_dump())
@@ -294,10 +291,7 @@ def enqueue(item: WorkItem) -> str:
 
 
 def enqueue_and_wait(item: WorkItem) -> WorkItemOutput:
-    """Enqueue a work item and block until complete.
-
-    Routes to the correct per-agent queue via :func:`dispatch_workitem`.
-    """
+    """Enqueue a work item, block until complete, via :func:`dispatch_workitem`."""
     queue = dispatch_workitem(item)
     with SetEnqueueOptions(priority=int(item.priority)):
         handle = queue.enqueue(execute_work_item, item.model_dump())

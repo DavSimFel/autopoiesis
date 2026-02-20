@@ -61,6 +61,13 @@ agent entry. Missing config file → single `"default"` agent (backward compat).
 - Knowledge, topics, skills directories are per-agent
 - DBOS system database is shared; `agent_id` on WorkItem provides logical isolation
 
+## Conversation Logging Config (#189)
+
+`AgentConfig` adds two fields controlling T2 reflection log storage:
+- `log_conversations: bool` (default `True`) — when False, `worker.run_agent_step()` skips `append_turn()`.
+- `conversation_log_retention_days: int` (default `30`) — files older than this are deleted by `rotate_logs()`.
+Both fields can be set per-agent in `agents.toml` and inherit from `[defaults]`.
+
 ## Topic Auto-Activation (Phase B — wired)
 
 When a WorkItem with `topic_ref` is dequeued, `run_agent_step()` calls
