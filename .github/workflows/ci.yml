@@ -140,6 +140,7 @@ jobs:
             ["src/autopoiesis/infra/approval/store_verify.py"]="specs/modules/chat.md"
             ["src/autopoiesis/infra/approval/types.py"]="specs/modules/chat.md"
             ["src/autopoiesis/agent/context.py"]="specs/modules/context.md"
+            ["src/autopoiesis/agent/context_tokens.py"]="specs/modules/context.md"
             ["src/autopoiesis/infra/exec_registry.py"]="specs/modules/exec.md"
             ["src/autopoiesis/infra/command_classifier.py"]="specs/modules/security.md"
             ["src/autopoiesis/tools/exec_tool.py"]="specs/modules/exec.md"
