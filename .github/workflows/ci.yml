@@ -127,6 +127,7 @@ jobs:
             ["src/autopoiesis/agent/validation.py"]="specs/modules/agent-runtime.md"
             ["src/autopoiesis/tools/categories.py"]="specs/modules/chat.md"
             ["src/autopoiesis/tools/toolset_builder.py"]="specs/modules/chat.md"
+            ["src/autopoiesis/tools/agent_toolset.py"]="specs/modules/chat.md"
             ["src/autopoiesis/tools/toolset_wrappers.py"]="specs/modules/chat.md"
             ["src/autopoiesis/tools/tier_enforcement.py"]="specs/modules/security.md"
             ["src/autopoiesis/db.py"]="specs/modules/memory.md"

@@ -136,8 +136,13 @@ async def _prepare_exec_tools(
     return tool_defs
 
 
-def _build_exec_toolset() -> AbstractToolset[AgentDeps]:
-    """Build the exec/process toolset with dynamic visibility and approval."""
+def _build_exec_toolset(workspace_root: Path | None = None) -> AbstractToolset[AgentDeps]:
+    """Build the exec/process toolset with dynamic visibility and approval.
+
+    *workspace_root* specifies the directory used for exec-log cleanup.  When
+    ``None`` the global :func:`resolve_workspace_root` value is used so that
+    existing call-sites remain backward-compatible.
+    """
     from pydantic_ai import FunctionToolset, Tool
 
     from autopoiesis.tools.exec_tool import execute, execute_pty
@@ -170,7 +175,7 @@ def _build_exec_toolset() -> AbstractToolset[AgentDeps]:
     # Startup cleanup avoids stale logs from prior runs polluting process views.
     from autopoiesis.infra.exec_registry import cleanup_exec_logs
 
-    cleanup_exec_logs(resolve_workspace_root())
+    cleanup_exec_logs(workspace_root or resolve_workspace_root())
     return toolset.prepared(_prepare_exec_tools).approval_required(_needs_exec_approval)
 
 
@@ -180,6 +185,8 @@ def build_toolsets(
     knowledge_context: str = "",
     topic_registry: TopicRegistry | None = None,
     tool_names: list[str] | None = None,
+    *,
+    workspace_root: Path | None = None,
 ) -> tuple[list[AbstractToolset[AgentDeps]], str]:
     """Build toolsets and return their static capability system prompt.
 
@@ -191,6 +198,9 @@ def build_toolsets(
 
     The *console* and *skills* toolsets are always included — they represent
     core read/write and skill-invocation capabilities that every agent needs.
+
+    *workspace_root* is forwarded to :func:`_build_exec_toolset` for per-agent
+    exec-log isolation.  When ``None`` the global workspace root is used.
     """
     enabled = resolve_enabled_categories(tool_names)
 
@@ -207,7 +217,7 @@ def build_toolsets(
     prompt_fragments: list[str] = [BASE_SYSTEM_PROMPT, CONSOLE_INSTRUCTIONS, skills_instr]
 
     if _enabled("exec"):
-        toolsets.append(_build_exec_toolset())
+        toolsets.append(_build_exec_toolset(workspace_root=workspace_root))
         exec_enabled = os.getenv("ENABLE_EXECUTE", "").lower() in ("1", "true", "yes")
         if exec_enabled:
             prompt_fragments.append(EXEC_INSTRUCTIONS)
@@ -264,6 +274,7 @@ def prepare_toolset_context(
         knowledge_context=knowledge_context,
         topic_registry=topic_registry,
         tool_names=tool_names,
+        workspace_root=workspace_root,
     )
     return (
         workspace_root,
