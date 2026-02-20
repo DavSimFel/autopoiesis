@@ -56,6 +56,12 @@ class AgentConfig:
     """Number of days to retain conversation log files before rotation
     removes them.  Set to ``0`` to disable automatic cleanup."""
 
+    tmp_retention_days: int = 14
+    """Days to keep date-directories under ``tmp/`` before deletion."""
+
+    tmp_max_size_mb: int = 500
+    """Maximum total size of ``tmp/`` in MB; oldest dirs purged when exceeded."""
+
 
 _DEFAULT_AGENT_CONFIG = AgentConfig(
     name="default",
@@ -108,6 +114,8 @@ def _parse_agent_entry(
     ephemeral = bool(_get("ephemeral", False))
     log_conversations = bool(_get("log_conversations", True))
     conversation_log_retention_days = int(str(_get("conversation_log_retention_days", 30)))
+    tmp_retention_days = int(_get("tmp_retention_days", 14))
+    tmp_max_size_mb = int(_get("tmp_max_size_mb", 500))
 
     return AgentConfig(
         name=name,
@@ -119,6 +127,8 @@ def _parse_agent_entry(
         ephemeral=ephemeral,
         log_conversations=log_conversations,
         conversation_log_retention_days=conversation_log_retention_days,
+        tmp_retention_days=tmp_retention_days,
+        tmp_max_size_mb=tmp_max_size_mb,
     )
 
 

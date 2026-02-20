@@ -51,6 +51,9 @@ class Runtime:
     conversation_log_retention_days: int = 30
     """Retain conversation log files for this many days; 0 disables rotation."""
 
+    tmp_retention_days: int = 14  # days before date-dirs are purged
+    tmp_max_size_mb: int = 500  # size ceiling for tmp/ in MB
+
 
 @dataclass
 class AgentOptions:
@@ -184,11 +187,7 @@ def set_runtime_registry(registry: AgentRegistry) -> AgentRegistry:
 
 
 def get_agent_registry() -> AgentRegistry:
-    """Return the active agent-keyed registry.
-
-    Preferred over :func:`get_runtime_registry` for new code that is
-    explicitly multi-agent aware.
-    """
+    """Return the active agent-keyed registry (preferred over get_runtime_registry)."""
     return _agent_registry
 
 
