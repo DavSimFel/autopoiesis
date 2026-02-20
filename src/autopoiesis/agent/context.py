@@ -173,7 +173,7 @@ def estimate_tokens(text: str, model_name: str = "") -> int:
         if enc is not None:
             try:
                 return max(1, len(enc.encode(text)))  # type: ignore[attr-defined]
-            except Exception:
+            except Exception:  # nosec B110 — intentional fallback to char-based estimation
                 pass  # fall through to char-based
 
     return max(1, len(text) // CHARS_PER_TOKEN)
@@ -203,7 +203,7 @@ def estimate_tokens_for_model(text: str, model_name: str) -> int:
     if enc is not None:
         try:
             return max(1, len(enc.encode(text)))  # type: ignore[attr-defined]
-        except Exception:
+        except Exception:  # nosec B110 — intentional fallback to char-based estimation
             pass
 
     # Character-based fallback with model-specific ratio.

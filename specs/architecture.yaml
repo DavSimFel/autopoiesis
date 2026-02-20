@@ -29,6 +29,7 @@ max_lines: 300
 max_lines_exempt:
   - src/autopoiesis/store/knowledge.py     # 340 lines — tracked for refactor
   - src/autopoiesis/topics/topic_manager.py  # 445 lines — new module, to be refactored
+  - src/autopoiesis/agent/context.py       # 366 lines — context/token estimation, tracked for split (#193)
 
 # Pattern constraints — these strings must not appear in source
 no_globals: []

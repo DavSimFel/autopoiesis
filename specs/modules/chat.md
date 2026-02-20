@@ -8,8 +8,14 @@ split into focused companion modules.
 
 ## Status
 
-- **Last updated:** 2026-02-18 (Issue #170)
+- **Last updated:** 2026-02-20 (Issue #218)
 - **Source:** `src/autopoiesis/cli.py`, `agent/runtime.py`, `src/autopoiesis/agent/model_resolution.py`, `src/autopoiesis/tools/toolset_builder.py`, `agent/worker.py`, `infra/approval/chat_approval.py`, `agent/cli.py`
+
+## Changelog
+
+### 2026-02-20 — Issue #218
+- `src/autopoiesis/cli.py`: Removed recursive `main()` self-call that caused
+  an infinite restart loop when the agent exited normally.
 
 ## File Structure
 
