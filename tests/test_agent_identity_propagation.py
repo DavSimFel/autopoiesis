@@ -20,7 +20,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -79,7 +78,7 @@ class TestResolveStartupConfigSignature:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
         monkeypatch.delenv("DBOS_SYSTEM_DATABASE_URL", raising=False)
 
-        from autopoiesis.cli import _resolve_startup_config
+        from autopoiesis.cli import _resolve_startup_config  # type: ignore[reportPrivateUsage]
 
         result = _resolve_startup_config()
         assert len(result) == 2, (
@@ -93,7 +92,7 @@ class TestResolveStartupConfigSignature:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
         monkeypatch.setenv("DBOS_AGENT_NAME", "should-not-appear")
 
-        from autopoiesis.cli import _resolve_startup_config
+        from autopoiesis.cli import _resolve_startup_config  # type: ignore[reportPrivateUsage]
 
         result = _resolve_startup_config()
         assert "should-not-appear" not in result
@@ -108,7 +107,7 @@ class TestInitializeRuntimeSignature:
     """_initialize_runtime must accept agent_name as an explicit positional arg."""
 
     def test_agent_name_is_required_parameter(self) -> None:
-        from autopoiesis.cli import _initialize_runtime
+        from autopoiesis.cli import _initialize_runtime  # type: ignore[reportPrivateUsage]
 
         sig = inspect.signature(_initialize_runtime)
         params = list(sig.parameters.keys())
@@ -118,7 +117,7 @@ class TestInitializeRuntimeSignature:
         )
 
     def test_agent_name_is_positional_not_keyword_only(self) -> None:
-        from autopoiesis.cli import _initialize_runtime
+        from autopoiesis.cli import _initialize_runtime  # type: ignore[reportPrivateUsage]
 
         sig = inspect.signature(_initialize_runtime)
         p = sig.parameters["agent_name"]
@@ -156,7 +155,7 @@ class TestRunTurnSetsAgentId:
             patch.object(agent_cli, "RichStreamHandle", MagicMock),
             patch.object(agent_cli, "register_stream", MagicMock()),
         ):
-            agent_cli._run_turn("hello", None)
+            agent_cli._run_turn("hello", None)  # type: ignore[reportPrivateUsage]
 
         assert captured, "enqueue_and_wait was never called"
         assert captured[0].agent_id == "staging", (
@@ -184,7 +183,7 @@ class TestRunTurnSetsAgentId:
             patch.object(agent_cli, "RichStreamHandle", MagicMock),
             patch.object(agent_cli, "register_stream", MagicMock()),
         ):
-            agent_cli._run_turn("hello", None)
+            agent_cli._run_turn("hello", None)  # type: ignore[reportPrivateUsage]
 
         assert captured[0].agent_id == "default"
 
@@ -221,7 +220,7 @@ class TestWorkerUsesRuntimeAgentName:
             backend=MagicMock(root_dir=str(tmp_path)),
         )
 
-        import autopoiesis.agent.worker as worker
+        from autopoiesis.agent import worker
 
         original_build_scope = worker.build_approval_scope
 

@@ -130,7 +130,7 @@ def _initialize_runtime(
     """Build runtime dependencies and register the process-wide runtime."""
     provider, system_database_url = _resolve_startup_config()
 
-    backend: LocalBackend = build_backend(agent_paths)
+    backend: LocalBackend = build_backend()
     approval_store = ApprovalStore.from_env(base_dir=agent_paths.root)
     key_manager = ApprovalKeyManager.from_env(base_dir=agent_paths.root)
     if require_approval_unlock:
@@ -144,7 +144,7 @@ def _initialize_runtime(
         topic_registry,
         toolsets,
         system_prompt,
-    ) = prepare_toolset_context(agent_paths)
+    ) = prepare_toolset_context(history_db_path)
     history_processors = build_history_processors(
         subscription_registry=subscription_registry,
         workspace_root=workspace_root,
