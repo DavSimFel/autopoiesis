@@ -22,12 +22,12 @@ Wired in: agent/truncation.py, tools/exec_tool.py, agent/worker.py
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import shutil
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
-
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -62,10 +62,8 @@ def _collect_date_dirs(tmp_dir: Path) -> list[tuple[date, Path]]:
     for candidate in tmp_dir.rglob("*"):
         if not candidate.is_dir():
             continue
-        try:
+        with contextlib.suppress(ValueError):
             found.append((date.fromisoformat(candidate.name), candidate))
-        except ValueError:
-            pass
     found.sort(key=lambda t: t[0])
     return found
 
