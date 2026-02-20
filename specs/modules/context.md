@@ -49,3 +49,12 @@ Both modules are wired as `history_processors` in the PydanticAI agent
 ### Changelog
 - 2026-02-16: Modules moved into subdirectories (`agent/`, `approval/`, `display/`, `infra/`, `store/`, `tools/`) as part of subdirectory restructuring (#119)
 - 2026-02-16: Added Dependencies/Wired-in docstring headers (#121)
+
+## Context Window Management (#193)
+
+Tool result truncation and proactive context overflow prevention:
+- Individual tool results capped at configurable max (default 10KB)
+- Truncation markers indicate what was cut
+- Proactive warning at 80% context capacity
+- Automatic compaction before overflow
+
