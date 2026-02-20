@@ -54,61 +54,197 @@ class AgentOptions:
     model_settings: ModelSettings | None = None
 
 
-class RuntimeRegistry:
-    """Thread-safe storage for process-wide runtime dependencies."""
+class AgentRegistry:
+    """Thread-safe registry mapping agent_id to Runtime.
+
+    Backward-compatible: set()/get() without agent_id still work.
+    Multi-agent: register()/get(agent_id) for per-agent isolation.
+    """
+
+    _DEFAULT_KEY: str = "__default__"
 
     def __init__(self) -> None:
-        self._runtime: Runtime | None = None
+        self._runtimes: dict[str, Runtime] = {}
         self._lock = threading.Lock()
 
-    def set(self, runtime: Runtime) -> None:
-        """Store runtime after startup wiring completes."""
-        with self._lock:
-            self._runtime = runtime
+    # ------------------------------------------------------------------
+    # Primary multi-agent API
+    # ------------------------------------------------------------------
 
-    def get(self) -> Runtime:
-        """Return configured runtime, raising when startup has not run."""
+    def register(self, agent_id: str, runtime: Runtime) -> None:
+        """Register *runtime* under *agent_id*, replacing any existing entry."""
         with self._lock:
-            runtime = self._runtime
-        if runtime is None:
+            self._runtimes[agent_id] = runtime
+
+    def get(self, agent_id: str | None = None) -> Runtime:
+        """Return the :class:`Runtime` for *agent_id*.
+
+        When *agent_id* is ``None``:
+
+        * If exactly one runtime is registered (or only the ``"__default__"``
+          sentinel is present), it is returned.
+        * If multiple runtimes are registered the ``"__default__"`` entry is
+          returned when present.
+        * Otherwise :class:`RuntimeError` is raised.
+        """
+        with self._lock:
+            runtimes = dict(self._runtimes)
+
+        if agent_id is not None:
+            rt = runtimes.get(agent_id)
+            if rt is None:
+                visible = sorted(k for k in runtimes if k != self._DEFAULT_KEY)
+                registered = ", ".join(visible) if visible else "none"
+                raise RuntimeError(
+                    f"No runtime registered for agent '{agent_id}'. "
+                    f"Registered agents: {registered}."
+                )
+            return rt
+
+        # --- backward-compatible single-runtime access ---
+        if not runtimes:
             raise RuntimeError("Runtime not initialised. Start the app via main().")
-        return runtime
+        if len(runtimes) == 1:
+            return next(iter(runtimes.values()))
+        # Multiple runtimes: return default sentinel if present.
+        default = runtimes.get(self._DEFAULT_KEY)
+        if default is not None:
+            return default
+        visible = sorted(k for k in runtimes if k != self._DEFAULT_KEY)
+        raise RuntimeError(
+            f"Multiple runtimes registered ({', '.join(visible)}). "
+            "Call get_runtime(agent_id=...) to select one."
+        )
 
-    def reset(self) -> None:
-        """Clear configured runtime for tests."""
+    def reset(self, agent_id: str | None = None) -> None:
+        """Clear the registry.
+
+        When *agent_id* is given only that agent's entry is removed; when
+        ``None`` the entire registry is cleared (useful for testing).
+        """
         with self._lock:
-            self._runtime = None
+            if agent_id is None:
+                self._runtimes.clear()
+            else:
+                self._runtimes.pop(agent_id, None)
+
+    def list_agents(self) -> list[str]:
+        """Return sorted agent IDs that have registered runtimes.
+
+        The ``"__default__"`` sentinel (used by the backward-compatible
+        :meth:`set` path) is excluded from the returned list.
+        """
+        with self._lock:
+            return sorted(k for k in self._runtimes if k != self._DEFAULT_KEY)
+
+    # ------------------------------------------------------------------
+    # Backward-compatible single-runtime API
+    # ------------------------------------------------------------------
+
+    def set(self, runtime: Runtime) -> None:
+        """Register *runtime* under the ``"__default__"`` sentinel key.
+
+        Preserves call-site compatibility with the old ``RuntimeRegistry.set``
+        method.
+        """
+        self.register(self._DEFAULT_KEY, runtime)
 
 
-_runtime_registry = RuntimeRegistry()
+#: Backward-compatible alias so that existing imports of ``RuntimeRegistry``
+#: continue to resolve without modification.
+RuntimeRegistry = AgentRegistry
+
+# ---------------------------------------------------------------------------
+# Process-wide registry instance
+# ---------------------------------------------------------------------------
+
+_agent_registry: AgentRegistry = AgentRegistry()
+
+#: Alias kept for code that references ``_runtime_registry`` directly (rare)
+#: or that calls :func:`get_runtime_registry` / :func:`set_runtime_registry`.
+_runtime_registry: AgentRegistry = _agent_registry
 
 
-def get_runtime_registry() -> RuntimeRegistry:
-    """Return the active runtime registry."""
-    return _runtime_registry
+def get_runtime_registry() -> AgentRegistry:
+    """Return the active agent registry (backward-compatible name)."""
+    return _agent_registry
 
 
-def set_runtime_registry(registry: RuntimeRegistry) -> RuntimeRegistry:
-    """Replace the active runtime registry and return the previous one."""
-    global _runtime_registry
-    previous = _runtime_registry
+def set_runtime_registry(registry: AgentRegistry) -> AgentRegistry:
+    """Replace the active registry and return the previous one (testing).
+
+    Accepts an :class:`AgentRegistry` (or the :data:`RuntimeRegistry` alias)
+    so that existing test fixtures that construct ``RuntimeRegistry()`` work
+    without modification.
+    """
+    global _agent_registry, _runtime_registry
+    previous = _agent_registry
+    _agent_registry = registry
     _runtime_registry = registry
     return previous
 
 
+def get_agent_registry() -> AgentRegistry:
+    """Return the active agent-keyed registry.
+
+    Preferred over :func:`get_runtime_registry` for new code that is
+    explicitly multi-agent aware.
+    """
+    return _agent_registry
+
+
+def set_agent_registry(registry: AgentRegistry) -> AgentRegistry:
+    """Replace the active agent registry and return the previous one.
+
+    Functionally identical to :func:`set_runtime_registry`; provided as a
+    clearer name for new multi-agent code.
+    """
+    return set_runtime_registry(registry)
+
+
+# ---------------------------------------------------------------------------
+# Module-level convenience wrappers
+# ---------------------------------------------------------------------------
+
+
+def register_runtime(agent_id: str, runtime: Runtime) -> None:
+    """Register *runtime* under *agent_id* in the process-wide registry.
+
+    Preferred over :func:`set_runtime` for multi-agent startups where each
+    agent has its own identity.  After this call,
+    ``get_runtime(agent_id)`` returns *runtime*.
+    """
+    _agent_registry.register(agent_id, runtime)
+
+
 def set_runtime(runtime: Runtime) -> None:
-    """Set process-wide runtime after startup wiring is complete."""
-    _runtime_registry.set(runtime)
+    """Register *runtime* under the backward-compatible ``"__default__"`` key.
+
+    Preserved for call-sites that are not yet agent-id-aware.  Prefer
+    :func:`register_runtime` when an explicit *agent_id* is available.
+    """
+    _agent_registry.set(runtime)
 
 
-def get_runtime() -> Runtime:
-    """Fetch process-wide runtime or raise when uninitialized."""
-    return _runtime_registry.get()
+def get_runtime(agent_id: str | None = None) -> Runtime:
+    """Fetch a runtime from the process-wide registry.
+
+    When *agent_id* is supplied the runtime registered under that identifier
+    is returned; a :class:`RuntimeError` is raised if the agent is unknown.
+    When *agent_id* is ``None`` the legacy single-runtime behaviour applies
+    (see :meth:`AgentRegistry.get` for the full resolution order).
+    """
+    return _agent_registry.get(agent_id)
 
 
-def reset_runtime() -> None:
-    """Clear process-wide runtime (testing only)."""
-    _runtime_registry.reset()
+def reset_runtime(agent_id: str | None = None) -> None:
+    """Clear runtime state from the process-wide registry.
+
+    When *agent_id* is given only that agent's entry is removed; when
+    ``None`` (default) the entire registry is cleared.  Intended for
+    test teardown only.
+    """
+    _agent_registry.reset(agent_id)
 
 
 def prepare_tools_for_provider(

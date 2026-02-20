@@ -121,6 +121,7 @@ jobs:
             ["src/autopoiesis/agent/worker.py"]="specs/modules/chat.md"
             ["src/autopoiesis/agent/batch.py"]="specs/modules/chat.md"
             ["src/autopoiesis/agent/model_resolution.py"]="specs/modules/chat.md"
+            ["src/autopoiesis/agent/registry.py"]="specs/modules/chat.md"
             ["src/autopoiesis/agent/history.py"]="specs/modules/chat.md"
             ["src/autopoiesis/agent/topic_activation.py"]="specs/modules/agent-runtime.md"
             ["src/autopoiesis/agent/truncation.py"]="specs/modules/context.md"

@@ -18,6 +18,7 @@ from autopoiesis.agent.runtime import (
     Runtime,
     build_agent,
     instrument_agent,
+    register_runtime,
     set_runtime,
 )
 from autopoiesis.agent.validation import validate_slug
@@ -203,21 +204,24 @@ def initialize_runtime(
 
     init_history_store(history_db_path)
     cleanup_stale_checkpoints(history_db_path)
-    set_runtime(
-        Runtime(
-            agent=agent,
-            agent_name=agent_name,
-            backend=backend,
-            history_db_path=history_db_path,
-            knowledge_db_path=knowledge_db_path,
-            subscription_registry=subscription_registry,
-            approval_store=approval_store,
-            key_manager=key_manager,
-            tool_policy=tool_policy,
-            approval_unlocked=require_approval_unlock,
-            shell_tier=shell_tier,
-        )
+    runtime = Runtime(
+        agent=agent,
+        agent_name=agent_name,
+        backend=backend,
+        history_db_path=history_db_path,
+        knowledge_db_path=knowledge_db_path,
+        subscription_registry=subscription_registry,
+        approval_store=approval_store,
+        key_manager=key_manager,
+        tool_policy=tool_policy,
+        approval_unlocked=require_approval_unlock,
+        shell_tier=shell_tier,
     )
+    # Register under the agent's explicit name so that get_runtime(agent_id)
+    # works in multi-agent scenarios.  Also call set_runtime() for backward
+    # compatibility with code that uses the no-arg get_runtime() path.
+    register_runtime(agent_name, runtime)
+    set_runtime(runtime)
     return system_database_url
 
 
@@ -293,7 +297,4 @@ def main() -> None:
     from autopoiesis.agent.cli import cli_chat_loop
 
     cli_chat_loop()
-
-
-if __name__ == "__main__":
     main()
