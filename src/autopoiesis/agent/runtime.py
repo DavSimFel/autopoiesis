@@ -14,6 +14,7 @@ from dataclasses import dataclass
 
 from pydantic_ai import AbstractToolset, Agent
 from pydantic_ai._agent_graph import HistoryProcessor
+from pydantic_ai.models import Model
 from pydantic_ai.settings import ModelSettings
 from pydantic_ai.tools import ToolsPrepareFunc
 
@@ -40,6 +41,8 @@ class Runtime:
     key_manager: ApprovalKeyManager
     tool_policy: ToolPolicyRegistry
     approval_unlocked: bool = False
+    shell_tier: str = "review"
+    """Shell approval tier inherited from ``AgentConfig`` (``"free"`` | ``"review"`` | ``"approve"``)."""
 
 
 @dataclass
@@ -123,10 +126,17 @@ def build_agent(
     toolsets: list[AbstractToolset[AgentDeps]],
     system_prompt: str,
     options: AgentOptions | None = None,
+    *,
+    model_override: "Model | str | None" = None,
 ) -> Agent[AgentDeps, str]:
-    """Create a configured agent from provider/name/toolset settings."""
+    """Create a configured agent from provider/name/toolset settings.
+
+    When *model_override* is supplied (e.g. resolved from ``AgentConfig.model``)
+    it takes precedence over the provider-based model resolution so that per-agent
+    config is honoured as the source of truth.
+    """
     opts = options or AgentOptions()
-    model = resolve_model(provider)
+    model: Model | str = model_override if model_override is not None else resolve_model(provider)
     effective_settings = opts.model_settings or build_model_settings()
     prepare_tools = prepare_tools_for_provider(provider)
 
