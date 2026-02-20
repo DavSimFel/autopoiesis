@@ -10,3 +10,4 @@ data/
 benchmarks/results/
 .pytest_cache/
 .ruff_cache/
+src/autopoiesis.egg-info/

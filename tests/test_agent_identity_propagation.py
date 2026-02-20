@@ -224,9 +224,7 @@ class TestWorkerUsesRuntimeAgentName:
 
         original_build_scope = worker.build_approval_scope
 
-        def _capturing_build_scope(
-            approval_context_id: str, backend: Any, agent_name: str
-        ) -> Any:
+        def _capturing_build_scope(approval_context_id: str, backend: Any, agent_name: str) -> Any:
             captured_scope_names.append(agent_name)
             return original_build_scope(approval_context_id, backend, agent_name)
 
@@ -360,6 +358,5 @@ class TestAgentNameResolutionFlow:
 
         result = resolve_agent_name(None)
         assert result == "default", (
-            "DBOS_AGENT_NAME should not be consulted; "
-            f"expected 'default', got '{result}'"
+            f"DBOS_AGENT_NAME should not be consulted; expected 'default', got '{result}'"
         )
