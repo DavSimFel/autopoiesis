@@ -297,4 +297,3 @@ def main() -> None:
     from autopoiesis.agent.cli import cli_chat_loop
 
     cli_chat_loop()
-    main()

@@ -21,6 +21,9 @@ dependencies = [
   "websockets>=14.0",
 ]
 
+[project.optional-dependencies]
+tiktoken = ["tiktoken>=0.6"]
+
 [project.scripts]
 autopoiesis = "autopoiesis.cli:main"
 
