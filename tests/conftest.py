@@ -12,6 +12,17 @@ from autopoiesis.infra.approval.store import ApprovalStore
 from autopoiesis.models import AgentDeps
 from autopoiesis.store.history import init_history_store
 
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Register custom markers so pytest doesn't warn about unknown marks."""
+    config.addinivalue_line(
+        "markers",
+        "verifies(*criterion_ids): marks a test as verifying one or more RTM criterion IDs. "
+        "IDs must match entries in specs/modules/*.md Verification Criteria tables. "
+        "Enforced by scripts/rtm_check.py in CI.",
+    )
+
+
 _TEST_PASSPHRASE = "test-passphrase-long-enough"
 _TTL_SECONDS = 3600
 _RETENTION_SECONDS = 7 * 24 * 3600

@@ -42,6 +42,7 @@ class TestRequiredEnv:
         with patch.dict(os.environ, {"TEST_VAR_XYZ": "hello"}):
             assert required_env("TEST_VAR_XYZ") == "hello"
 
+    @pytest.mark.verifies("CHAT-V3")
     def test_raises_system_exit_when_missing(self) -> None:
         from autopoiesis.agent.model_resolution import required_env
 
@@ -183,6 +184,7 @@ class TestBuildAgent:
             with pytest.raises(SystemExit, match="Missing required"):
                 build_agent("openrouter", "test", [], "prompt")
 
+    @pytest.mark.verifies("CHAT-V2")
     def test_unsupported_provider_exits(self) -> None:
         from autopoiesis.agent.runtime import build_agent
 

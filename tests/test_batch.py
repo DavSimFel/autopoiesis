@@ -60,6 +60,7 @@ class TestRunBatchStdinRead:
 class TestRunBatchIntegration:
     """Integration test with mocked runtime."""
 
+    @pytest.mark.verifies("CHAT-V4")
     def test_success_writes_output_file(self, tmp_path: Path) -> None:
         from unittest.mock import MagicMock
 
@@ -84,6 +85,7 @@ class TestRunBatchIntegration:
         assert parsed["result"] == "done"
         assert parsed["approval_rounds"] == 1
 
+    @pytest.mark.verifies("CHAT-V4")
     def test_failure_exit_code_1(self) -> None:
         from unittest.mock import MagicMock
 

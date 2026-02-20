@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from _pytest.monkeypatch import MonkeyPatch
 from pydantic_ai.models.anthropic import AnthropicModel
 from pydantic_ai.models.fallback import FallbackModel
@@ -32,6 +33,7 @@ def test_openrouter_only_no_fallback(monkeypatch: MonkeyPatch) -> None:
     assert not isinstance(model, FallbackModel)
 
 
+@pytest.mark.verifies("CHAT-V5")
 def test_both_keys_anthropic_primary(monkeypatch: MonkeyPatch) -> None:
     """Both keys with AI_PROVIDER=anthropic wraps in FallbackModel."""
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")

@@ -397,3 +397,18 @@ Runtime is no longer a process-global singleton:
 - Multiple runtimes coexist without interference
 - Backward compatible: no-arg get_runtime() still works
 
+## Verification Criteria
+
+Bidirectional traceability enforced by `scripts/rtm_check.py` in CI.
+Tests annotated with `@pytest.mark.verifies("<ID>")` are checked against this table.
+
+| ID | Criterion | Priority | Type |
+|----|-----------|----------|------|
+| CHAT-V1 | Agent identity propagates to WorkItem.agent_id from runtime agent_name | must | integration |
+| CHAT-V2 | Unknown/unsupported provider fails fast with actionable SystemExit error | must | unit |
+| CHAT-V3 | Required env var (e.g. ANTHROPIC_API_KEY) fails with SystemExit, not KeyError | must | unit |
+| CHAT-V4 | Batch mode exits 0 on success and 1 on failure/error | must | unit |
+| CHAT-V5 | FallbackModel wraps both providers when both API keys are present | should | unit |
+| CHAT-V6 | Agent name resolution ignores DBOS_AGENT_NAME — uses AUTOPOIESIS_AGENT or CLI flag | must | unit |
+| CHAT-V7 | Config-less startup defaults agent name to 'default' (backward compatible) | must | unit |
+| CHAT-V8 | OTEL instrumentation is enabled only when OTEL_EXPORTER_OTLP_ENDPOINT is set | may | unit |
