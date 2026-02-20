@@ -58,3 +58,4 @@ Tool result truncation and proactive context overflow prevention:
 - Proactive warning at 80% context capacity
 - Automatic compaction before overflow
 
+- 2026-02-20: Token counting logic extracted into `context_tokens.py` for single-responsibility; `context.py` delegates to it (#193)
