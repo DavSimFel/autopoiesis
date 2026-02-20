@@ -11,6 +11,7 @@ import os
 import threading
 from collections.abc import Sequence
 from dataclasses import dataclass
+from pathlib import Path
 
 from pydantic_ai import AbstractToolset, Agent
 from pydantic_ai._agent_graph import HistoryProcessor
@@ -43,6 +44,12 @@ class Runtime:
     approval_unlocked: bool = False
     shell_tier: str = "review"
     """Shell approval tier from AgentConfig (free|review|approve)."""
+    knowledge_root: Path | None = None
+    """Absolute path to the knowledge directory; used for conversation logging."""
+    log_conversations: bool = True
+    """When ``True``, conversation turns are appended to daily markdown logs."""
+    conversation_log_retention_days: int = 30
+    """Retain conversation log files for this many days; 0 disables rotation."""
 
 
 @dataclass

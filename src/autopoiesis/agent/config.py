@@ -47,6 +47,15 @@ class AgentConfig:
     parent: str | None = None
     """Name of the parent agent that spawned this one (if any)."""
 
+    log_conversations: bool = True
+    """When ``True``, conversation turns are appended to daily markdown log
+    files under ``knowledge/logs/{agent_id}/YYYY-MM-DD.md`` and indexed
+    into the FTS5 knowledge system so that T2 agents can search them."""
+
+    conversation_log_retention_days: int = 30
+    """Number of days to retain conversation log files before rotation
+    removes them.  Set to ``0`` to disable automatic cleanup."""
+
 
 _DEFAULT_AGENT_CONFIG = AgentConfig(
     name="default",
@@ -97,6 +106,8 @@ def _parse_agent_entry(
     model = str(_get("model", "anthropic/claude-sonnet-4"))
     system_prompt = Path(str(_get("system_prompt", f"knowledge/identity/{name}.md")))
     ephemeral = bool(_get("ephemeral", False))
+    log_conversations = bool(_get("log_conversations", True))
+    conversation_log_retention_days = int(str(_get("conversation_log_retention_days", 30)))
 
     return AgentConfig(
         name=name,
@@ -106,6 +117,8 @@ def _parse_agent_entry(
         shell_tier=shell_tier,
         system_prompt=system_prompt,
         ephemeral=ephemeral,
+        log_conversations=log_conversations,
+        conversation_log_retention_days=conversation_log_retention_days,
     )
 
 
