@@ -355,3 +355,11 @@ describe actual enforcement honestly — cwd/path validation, not hard sandbox.
   structured JSON output, timeout, and exit codes (#138)
 - 2026-02-16: Knowledge system integration — startup indexing, knowledge tools wiring, memory store deprecated (#130)
 
+
+## Agent Identity Propagation (#200)
+
+Runtime now propagates the selected agent identity through the full stack:
+- `cli.py`: resolves agent name from config, passes to runtime
+- `runtime.py`: stores agent_id, uses it for WorkItem routing
+- `worker.py`: tags outbound messages with agent identity
+

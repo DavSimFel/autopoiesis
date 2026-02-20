@@ -111,24 +111,24 @@ def parse_cli_args(repo_root: Path, argv: list[str] | None = None) -> argparse.N
     return parser.parse_args(argv if argv is not None else sys.argv[1:])
 
 
-def _resolve_startup_config() -> tuple[str, str, str]:
-    """Resolve provider/agent names and DBOS system database URL."""
+def _resolve_startup_config() -> tuple[str, str]:
+    """Resolve provider name and DBOS system database URL."""
     provider = resolve_provider(os.getenv("AI_PROVIDER"))
-    agent_name = os.getenv("DBOS_AGENT_NAME", "chat")
     system_database_url = os.getenv(
         "DBOS_SYSTEM_DATABASE_URL",
         "sqlite:///dbostest.sqlite",
     )
-    return provider, agent_name, system_database_url
+    return provider, system_database_url
 
 
 def _initialize_runtime(
     agent_paths: AgentPaths,
+    agent_name: str,
     *,
     require_approval_unlock: bool,
 ) -> str:
     """Build runtime dependencies and register the process-wide runtime."""
-    provider, agent_name, system_database_url = _resolve_startup_config()
+    provider, system_database_url = _resolve_startup_config()
 
     backend: LocalBackend = build_backend()
     approval_store = ApprovalStore.from_env(base_dir=agent_paths.root)
@@ -166,6 +166,7 @@ def _initialize_runtime(
     set_runtime(
         Runtime(
             agent=agent,
+            agent_name=agent_name,
             backend=backend,
             history_db_path=history_db_path,
             knowledge_db_path=knowledge_db_path,
@@ -212,6 +213,7 @@ def main() -> None:
     try:
         system_database_url = _initialize_runtime(
             agent_paths,
+            agent_name,
             require_approval_unlock=not args.no_approval and not is_batch and not is_serve,
         )
     except (OSError, RuntimeError, ValueError) as exc:

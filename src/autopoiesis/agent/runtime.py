@@ -31,6 +31,7 @@ class Runtime:
     """Initialized runtime dependencies shared by workers and CLI."""
 
     agent: Agent[AgentDeps, str]
+    agent_name: str
     backend: LocalBackend
     history_db_path: str
     knowledge_db_path: str

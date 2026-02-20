@@ -44,6 +44,7 @@ class _FakeRuntime:
     agent: Any
     backend: Any
     history_db_path: str
+    agent_name: str = "default"
     approval_store: Any = None
     key_manager: Any = None
     approval_unlocked: bool = False
