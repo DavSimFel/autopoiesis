@@ -42,7 +42,7 @@ class Runtime:
     tool_policy: ToolPolicyRegistry
     approval_unlocked: bool = False
     shell_tier: str = "review"
-    """Shell approval tier inherited from ``AgentConfig`` (``"free"`` | ``"review"`` | ``"approve"``)."""
+    """Shell approval tier from AgentConfig (free|review|approve)."""
 
 
 @dataclass
@@ -127,7 +127,7 @@ def build_agent(
     system_prompt: str,
     options: AgentOptions | None = None,
     *,
-    model_override: "Model | str | None" = None,
+    model_override: Model | str | None = None,
 ) -> Agent[AgentDeps, str]:
     """Create a configured agent from provider/name/toolset settings.
 

@@ -12,7 +12,6 @@ Covers:
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -25,7 +24,6 @@ from autopoiesis.tools.toolset_builder import (
     _resolve_enabled_categories,
 )
 
-
 # ---------------------------------------------------------------------------
 # resolve_model_from_config
 # ---------------------------------------------------------------------------
@@ -34,7 +32,9 @@ from autopoiesis.tools.toolset_builder import (
 class TestResolveModelFromConfig:
     """resolve_model_from_config converts AgentConfig model IDs to pydantic_ai models."""
 
-    def test_anthropic_slash_format_returns_colon_string(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_anthropic_slash_format_returns_colon_string(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """'anthropic/claude-sonnet-4' → 'anthropic:claude-sonnet-4' (with key set)."""
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
         result = resolve_model_from_config("anthropic/claude-sonnet-4")
@@ -157,8 +157,8 @@ class TestBuildToolsetsFiltering:
 
     def test_none_includes_all_by_default(self, tmp_path: Path) -> None:
         """tool_names=None → all available toolsets are assembled."""
-        from autopoiesis.tools.toolset_builder import build_toolsets
         from autopoiesis.store.subscriptions import SubscriptionRegistry
+        from autopoiesis.tools.toolset_builder import build_toolsets
         from autopoiesis.topics.topic_manager import TopicRegistry
 
         sub_db = str(tmp_path / "sub.sqlite")
@@ -167,6 +167,7 @@ class TestBuildToolsetsFiltering:
         knowledge_db = str(tmp_path / "knowledge.sqlite")
 
         from autopoiesis.store.knowledge import init_knowledge_index
+
         init_knowledge_index(knowledge_db)
 
         toolsets_all, _ = build_toolsets(
@@ -219,8 +220,8 @@ class TestBuildToolsetsFiltering:
 
     def test_knowledge_excluded_when_not_in_tool_names(self, tmp_path: Path) -> None:
         """Knowledge toolset is not assembled when 'search'/'knowledge' absent."""
-        from autopoiesis.tools.toolset_builder import build_toolsets
         from autopoiesis.store.knowledge import init_knowledge_index
+        from autopoiesis.tools.toolset_builder import build_toolsets
 
         knowledge_db = str(tmp_path / "knowledge.sqlite")
         init_knowledge_index(knowledge_db)
@@ -283,9 +284,7 @@ system_prompt = "knowledge/identity/executor.md"
     def test_unknown_agent_name_raises_in_main(self, tmp_path: Path) -> None:
         """main() raises SystemExit when agent name is not in the loaded config."""
         toml = tmp_path / "agents.toml"
-        toml.write_text(
-            '[agents.planner]\nrole = "planner"\ntools = []\nsystem_prompt = "x.md"\n'
-        )
+        toml.write_text('[agents.planner]\nrole = "planner"\ntools = []\nsystem_prompt = "x.md"\n')
 
         with (
             patch("autopoiesis.cli.resolve_agent_name", return_value="ghost"),
@@ -301,6 +300,7 @@ system_prompt = "knowledge/identity/executor.md"
             cli_mod.get_agent_configs().clear()
 
             import sys
+
             old_argv = sys.argv
             sys.argv = ["chat", "--config", str(toml), "--no-approval"]
             try:
@@ -315,6 +315,7 @@ system_prompt = "knowledge/identity/executor.md"
     def test_no_config_no_failure(self, tmp_path: Path) -> None:
         """When no --config is supplied, _agent_configs stays empty, no error."""
         from autopoiesis.cli import get_agent_configs
+
         assert isinstance(get_agent_configs(), dict)
 
 
@@ -345,8 +346,8 @@ class TestInitializeRuntimeWiring:
 
     def test_shell_tier_stored_in_runtime(self, tmp_path: Path) -> None:
         """AgentConfig.shell_tier is propagated to Runtime.shell_tier."""
-        from autopoiesis.agent.runtime import Runtime, set_runtime, reset_runtime, get_runtime
-        from pydantic_ai.models.test import TestModel
+
+        from autopoiesis.agent.runtime import Runtime, get_runtime, reset_runtime, set_runtime
 
         cfg = self._make_config(shell_tier="approve")
         fake_agent = MagicMock()
@@ -396,27 +397,34 @@ class TestInitializeRuntimeWiring:
             patch("autopoiesis.cli.ApprovalStore.from_env", return_value=MagicMock()),
             patch("autopoiesis.cli.ApprovalKeyManager.from_env", return_value=MagicMock()),
             patch("autopoiesis.cli.ToolPolicyRegistry.default", return_value=MagicMock()),
-            patch("autopoiesis.cli.resolve_history_db_path", return_value=str(tmp_path / "h.sqlite")),
-            patch("autopoiesis.cli.prepare_toolset_context", return_value=(
-                tmp_path,
-                str(tmp_path / "k.sqlite"),
-                MagicMock(),
-                MagicMock(),
-                [],
-                "composed-prompt",
-            )),
+            patch(
+                "autopoiesis.cli.resolve_history_db_path", return_value=str(tmp_path / "h.sqlite")
+            ),
+            patch(
+                "autopoiesis.cli.prepare_toolset_context",
+                return_value=(
+                    tmp_path,
+                    str(tmp_path / "k.sqlite"),
+                    MagicMock(),
+                    MagicMock(),
+                    [],
+                    "composed-prompt",
+                ),
+            ),
             patch("autopoiesis.cli.build_history_processors", return_value=[]),
             patch("autopoiesis.cli.instrument_agent"),
             patch("autopoiesis.cli.init_history_store"),
             patch("autopoiesis.cli.cleanup_stale_checkpoints"),
             patch("autopoiesis.cli.set_runtime"),
         ):
-            from autopoiesis.cli import _initialize_runtime
             from autopoiesis.agent.workspace import resolve_agent_workspace
+            from autopoiesis.cli import _initialize_runtime
 
-            agent_paths = resolve_agent_workspace.__wrapped__("test-agent") if hasattr(
-                resolve_agent_workspace, "__wrapped__"
-            ) else MagicMock(root=tmp_path)
+            agent_paths = (
+                resolve_agent_workspace.__wrapped__("test-agent")
+                if hasattr(resolve_agent_workspace, "__wrapped__")
+                else MagicMock(root=tmp_path)
+            )
             agent_paths = MagicMock(root=tmp_path)
 
             _initialize_runtime(agent_paths, require_approval_unlock=False, agent_config=cfg)
@@ -453,7 +461,9 @@ class TestInitializeRuntimeWiring:
             patch("autopoiesis.cli.ApprovalStore.from_env", return_value=MagicMock()),
             patch("autopoiesis.cli.ApprovalKeyManager.from_env", return_value=MagicMock()),
             patch("autopoiesis.cli.ToolPolicyRegistry.default", return_value=MagicMock()),
-            patch("autopoiesis.cli.resolve_history_db_path", return_value=str(tmp_path / "h.sqlite")),
+            patch(
+                "autopoiesis.cli.resolve_history_db_path", return_value=str(tmp_path / "h.sqlite")
+            ),
             patch("autopoiesis.cli.prepare_toolset_context", side_effect=_fake_prepare),
             patch("autopoiesis.cli.build_history_processors", return_value=[]),
             patch("autopoiesis.cli.instrument_agent"),
@@ -495,7 +505,9 @@ class TestInitializeRuntimeWiring:
             patch("autopoiesis.cli.ApprovalStore.from_env", return_value=MagicMock()),
             patch("autopoiesis.cli.ApprovalKeyManager.from_env", return_value=MagicMock()),
             patch("autopoiesis.cli.ToolPolicyRegistry.default", return_value=MagicMock()),
-            patch("autopoiesis.cli.resolve_history_db_path", return_value=str(tmp_path / "h.sqlite")),
+            patch(
+                "autopoiesis.cli.resolve_history_db_path", return_value=str(tmp_path / "h.sqlite")
+            ),
             patch("autopoiesis.cli.prepare_toolset_context", side_effect=_fake_prepare),
             patch("autopoiesis.cli.build_history_processors", return_value=[]),
             patch("autopoiesis.cli.instrument_agent"),
@@ -555,15 +567,20 @@ class TestInitializeRuntimeWiring:
             patch("autopoiesis.cli.ApprovalStore.from_env", return_value=MagicMock()),
             patch("autopoiesis.cli.ApprovalKeyManager.from_env", return_value=MagicMock()),
             patch("autopoiesis.cli.ToolPolicyRegistry.default", return_value=MagicMock()),
-            patch("autopoiesis.cli.resolve_history_db_path", return_value=str(tmp_path / "h.sqlite")),
-            patch("autopoiesis.cli.prepare_toolset_context", return_value=(
-                tmp_path,
-                str(tmp_path / "k.sqlite"),
-                MagicMock(),
-                MagicMock(),
-                [],
-                "auto-composed-prompt",
-            )),
+            patch(
+                "autopoiesis.cli.resolve_history_db_path", return_value=str(tmp_path / "h.sqlite")
+            ),
+            patch(
+                "autopoiesis.cli.prepare_toolset_context",
+                return_value=(
+                    tmp_path,
+                    str(tmp_path / "k.sqlite"),
+                    MagicMock(),
+                    MagicMock(),
+                    [],
+                    "auto-composed-prompt",
+                ),
+            ),
             patch("autopoiesis.cli.build_history_processors", return_value=[]),
             patch("autopoiesis.cli.instrument_agent"),
             patch("autopoiesis.cli.init_history_store"),
@@ -618,15 +635,20 @@ class TestInitializeRuntimeWiring:
             patch("autopoiesis.cli.ApprovalStore.from_env", return_value=MagicMock()),
             patch("autopoiesis.cli.ApprovalKeyManager.from_env", return_value=MagicMock()),
             patch("autopoiesis.cli.ToolPolicyRegistry.default", return_value=MagicMock()),
-            patch("autopoiesis.cli.resolve_history_db_path", return_value=str(tmp_path / "h.sqlite")),
-            patch("autopoiesis.cli.prepare_toolset_context", return_value=(
-                tmp_path,
-                str(tmp_path / "k.sqlite"),
-                MagicMock(),
-                MagicMock(),
-                [],
-                "auto-composed-prompt",
-            )),
+            patch(
+                "autopoiesis.cli.resolve_history_db_path", return_value=str(tmp_path / "h.sqlite")
+            ),
+            patch(
+                "autopoiesis.cli.prepare_toolset_context",
+                return_value=(
+                    tmp_path,
+                    str(tmp_path / "k.sqlite"),
+                    MagicMock(),
+                    MagicMock(),
+                    [],
+                    "auto-composed-prompt",
+                ),
+            ),
             patch("autopoiesis.cli.build_history_processors", return_value=[]),
             patch("autopoiesis.cli.instrument_agent"),
             patch("autopoiesis.cli.init_history_store"),
@@ -654,7 +676,7 @@ class TestBuildAgentModelOverride:
 
     def test_model_override_takes_precedence(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """When model_override is set, resolve_model is never called."""
-        from autopoiesis.agent.runtime import build_agent, AgentOptions
+        from autopoiesis.agent.runtime import build_agent
 
         with patch("autopoiesis.agent.runtime.resolve_model") as mock_resolve:
             # Should NOT be called — model_override is supplied.
