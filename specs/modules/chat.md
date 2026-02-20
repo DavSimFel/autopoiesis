@@ -380,4 +380,20 @@ Toolset initialization is now agent-aware:
 - `prepare_toolset_context_for_agent(agent_id)` derives isolated workspace per agent
 - `build_backend_for_agent(agent_workspace)` scoped to agent's workspace subtree
 - Per-agent exec-log cleanup
+## Agent-Keyed Registry (#203)
+
+Runtime is no longer a process-global singleton:
+- `AgentRegistry` maps agent_id → Runtime instance
+- `register_runtime(agent_id, runtime)` + `get_runtime(agent_id)`
+- Multiple runtimes coexist without interference
+- Backward compatible: no-arg `get_runtime()` still works
+
+
+## Agent-Keyed Registry (#203)
+
+Runtime is no longer a process-global singleton:
+- AgentRegistry maps agent_id to Runtime instance
+- register_runtime(agent_id, runtime) + get_runtime(agent_id)
+- Multiple runtimes coexist without interference
+- Backward compatible: no-arg get_runtime() still works
 
