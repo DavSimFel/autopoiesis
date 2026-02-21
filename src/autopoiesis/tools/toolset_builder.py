@@ -53,9 +53,29 @@ def _repo_root() -> Path:
     return Path(__file__).resolve().parents[3]
 
 
-def resolve_workspace_root(workspace_root: Path | None = None) -> Path:
-    """Resolve and create the agent workspace root directory."""
-    path = workspace_root
+def _extract_workspace_path(workspace_root: Path | Any | None) -> Path | None:
+    """Extract a plain ``Path`` from *workspace_root*.
+
+    If the caller passed an ``AgentPaths`` (or any object with a ``.workspace``
+    attribute) the workspace ``Path`` is unwrapped automatically.
+    """
+    if workspace_root is None:
+        return None
+    if isinstance(workspace_root, Path):
+        return workspace_root
+    # Duck-typed AgentPaths
+    ws = getattr(workspace_root, "workspace", None)
+    if isinstance(ws, Path):
+        return ws
+    return None
+
+
+def resolve_workspace_root(workspace_root: Path | Any | None = None) -> Path:
+    """Resolve and create the agent workspace root directory.
+
+    Accepts ``Path``, ``AgentPaths`` (uses ``.workspace``), or ``None``.
+    """
+    path = _extract_workspace_path(workspace_root)
     if path is None:
         raw_root = os.getenv("AGENT_WORKSPACE_ROOT", "data/agent-workspace")
         path = Path(raw_root)
@@ -65,7 +85,13 @@ def resolve_workspace_root(workspace_root: Path | None = None) -> Path:
     return path
 
 
-def build_backend(workspace_root: Path | None = None) -> LocalBackend:
+def _extract_data_path(agent_paths: Any) -> Path | None:
+    """Return the ``data`` directory from an ``AgentPaths``-like object."""
+    data = getattr(agent_paths, "data", None)
+    return data if isinstance(data, Path) else None
+
+
+def build_backend(workspace_root: Path | Any | None = None) -> LocalBackend:
     """Create the local filesystem backend with shell execution disabled."""
     return LocalBackend(root_dir=resolve_workspace_root(workspace_root), enable_execute=False)
 
@@ -248,9 +274,9 @@ def build_toolsets(
 
 
 def prepare_toolset_context(
-    history_db_path: str,
+    history_db_path_or_agent: str | Any = "",
     tool_names: list[str] | None = None,
-    workspace_root: Path | None = None,
+    workspace_root: Path | Any | None = None,
 ) -> tuple[
     Path,
     str,
@@ -261,11 +287,24 @@ def prepare_toolset_context(
 ]:
     """Initialize runtime stores needed for toolset construction.
 
+    The first positional argument may be a plain ``str`` (history DB path) or
+    an ``AgentPaths`` object.  When ``AgentPaths`` is passed, workspace and DB
+    paths are derived automatically.
+
     *tool_names* is forwarded to :func:`build_toolsets` to filter which toolsets
     are included.  Pass ``None`` (default) to include all toolsets.
     *workspace_root* overrides the env-var workspace source for per-agent isolation.
     """
-    resolved_workspace_root = resolve_workspace_root(workspace_root)
+    # Detect AgentPaths as first positional argument
+    data_dir = _extract_data_path(history_db_path_or_agent)
+    if data_dir is not None:
+        # AgentPaths mode
+        resolved_workspace_root = resolve_workspace_root(history_db_path_or_agent)
+        data_dir.mkdir(parents=True, exist_ok=True)
+        history_db_path = str(data_dir / "history.sqlite")
+    else:
+        resolved_workspace_root = resolve_workspace_root(workspace_root)
+        history_db_path = str(history_db_path_or_agent) if history_db_path_or_agent else ""
     sub_db_path = str(Path(history_db_path).with_name("subscriptions.sqlite"))
     subscription_registry = SubscriptionRegistry(sub_db_path)
     knowledge_root = resolved_workspace_root / "knowledge"
@@ -274,7 +313,9 @@ def prepare_toolset_context(
     reindex_knowledge(knowledge_db_path, knowledge_root)
     ensure_journal_entry(knowledge_root)
     knowledge_context = load_knowledge_context(knowledge_root)
-    topic_registry = TopicRegistry(resolved_workspace_root / "topics")
+    topics_dir = resolved_workspace_root / "topics"
+    topics_dir.mkdir(parents=True, exist_ok=True)
+    topic_registry = TopicRegistry(topics_dir)
     toolsets, system_prompt = build_toolsets(
         subscription_registry=subscription_registry,
         knowledge_db_path=knowledge_db_path,

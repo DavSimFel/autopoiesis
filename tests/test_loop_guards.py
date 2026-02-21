@@ -45,6 +45,7 @@ def _noop_sleep(_seconds: float) -> None:
 def _noop_approval(_summary: str, _status: str) -> None:
     """Typed replacement for show_approval in tests."""
 
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -517,23 +518,24 @@ class TestRunTurnWarnings:
             tool_loop_max_iterations=40,
         )
         rt = _fake_runtime(
-            agent=_SlowAgent(sleep_seconds=0.13, text="ok"), loop_guards=tight_guards,
+            agent=_SlowAgent(sleep_seconds=0.13, text="ok"),
+            loop_guards=tight_guards,
         )
         with (
             caplog.at_level(logging.WARNING, logger="autopoiesis.agent.turn_execution"),
             contextlib.suppress(WorkItemLimitExceededError),
         ):
-                run_turn(
-                    rt,
-                    TurnExecutionParams(
-                        work_item_id="wi-warn",
-                        prompt="x",
-                        deps=AgentDeps(backend=LocalBackend()),
-                        history=[],
-                        deferred_results=None,
-                        stream_handle=None,
-                    ),
-                )  # may or may not complete; we just want the warning
+            run_turn(
+                rt,
+                TurnExecutionParams(
+                    work_item_id="wi-warn",
+                    prompt="x",
+                    deps=AgentDeps(backend=LocalBackend()),
+                    history=[],
+                    deferred_results=None,
+                    stream_handle=None,
+                ),
+            )  # may or may not complete; we just want the warning
         # Either a warning about timeout or about usage — anything with "80%" or "reached"
         # Check that at least one warning was logged (lenient test)
         # At minimum the agent ran; if the timeout fired we should see something
@@ -789,6 +791,7 @@ class TestDeferralLoopGuard:
         monkeypatch.setattr(agent_cli, "get_runtime", lambda: fake_rt)
         monkeypatch.setattr(agent_cli, "enqueue_and_wait", enqueue_side_effect)
         monkeypatch.setattr(agent_cli, "RichStreamHandle", _make_fake_handle)
+
         def _noop_register(item_id: str, handle: object) -> None:
             pass
 
