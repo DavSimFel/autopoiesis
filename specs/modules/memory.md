@@ -59,5 +59,26 @@ migrated files. Existing frontmatter is preserved.
 - `knowledge/memory/MEMORY.md` - long-term memory
 - `knowledge/journal/YYYY-MM-DD.md` - today's journal
 
+## Conversation Logging (store.conversation_log)
+
+`store/conversation_log.py` appends per-turn conversation summaries to daily
+markdown log files under `knowledge/logs/{agent_id}/YYYY-MM-DD.md`, then
+re-indexes each file into the FTS5 knowledge store so T2 agents can search
+conversation history.
+
+### Public API
+
+- `append_turn(knowledge_root, knowledge_db_path, agent_id, messages, *, timestamp)` —
+  parse messages, format a markdown block, append to the daily file, and re-index.
+- `rotate_logs(knowledge_root, agent_id, retention_days)` — delete log files
+  older than `retention_days`; returns list of deleted paths.
+
+### Config Integration
+
+`AgentConfig.log_conversations: bool` (default `True`) gates logging.
+`AgentConfig.conversation_log_retention_days: int` (default `30`) controls rotation.
+Both fields are wired into `Runtime` and checked in `worker.run_agent_step()`.
+
 - 2026-02-17: Paths updated for `src/autopoiesis/` layout (#152)
 - 2026-02-17: Added typed frontmatter, filtered search, backlink index (#147)
+- 2026-02-20: Added conversation logging for T2 reflection (#189)

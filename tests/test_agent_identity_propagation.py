@@ -39,6 +39,9 @@ class _MinimalRuntime:
     key_manager: Any = None
     tool_policy: Any = None
     approval_unlocked: bool = False
+    log_conversations: bool = False
+    knowledge_root: Path | None = None
+    conversation_log_retention_days: int = 0
 
 
 # ---------------------------------------------------------------------------

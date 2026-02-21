@@ -151,6 +151,7 @@ jobs:
             ["src/autopoiesis/store/knowledge_migration.py"]="specs/modules/memory.md"
             ["src/autopoiesis/tools/knowledge_tools.py"]="specs/modules/memory.md"
             ["src/autopoiesis/tools/memory_tools.py"]="specs/modules/memory.md"
+            ["src/autopoiesis/store/conversation_log.py"]="specs/modules/memory.md"
             ["src/autopoiesis/tools/process_tool.py"]="specs/modules/exec.md"
             ["src/autopoiesis/infra/pty_spawn.py"]="specs/modules/exec.md"
             ["src/autopoiesis/display/rich_display.py"]="specs/modules/rich-display.md"

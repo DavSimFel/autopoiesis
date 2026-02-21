@@ -130,23 +130,9 @@ def initialize_runtime(
 ) -> str:
     """Build runtime dependencies and register the process-wide runtime.
 
-    When *agent_config* is provided it acts as the source of truth for:
-
-    * **model** — ``AgentConfig.model`` is resolved via
-      :func:`~autopoiesis.agent.model_resolution.resolve_model_from_config` and
-      passed to :func:`~autopoiesis.agent.runtime.build_agent` as
-      *model_override*, bypassing the provider-based default.
-    * **tools** — ``AgentConfig.tools`` is forwarded to
-      :func:`~autopoiesis.tools.toolset_builder.prepare_toolset_context` to
-      filter which toolsets are assembled.
-    * **system prompt** — when ``AgentConfig.system_prompt`` resolves to an
-      existing file under *agent_paths.root* its contents replace the
-      auto-composed prompt.
-    * **shell tier** — ``AgentConfig.shell_tier`` is stored on
-      :class:`~autopoiesis.agent.runtime.Runtime` for downstream enforcement.
-
-    When *agent_config* is ``None`` all defaults are used (backward-compatible
-    behaviour).
+    When *agent_config* is provided it drives model selection, tool filtering,
+    system prompt, shell tier, and conversation logging settings.
+    When ``None`` all defaults apply (backward-compatible behaviour).
     """
     provider, system_database_url = _resolve_startup_config()
 
@@ -154,11 +140,15 @@ def initialize_runtime(
     model_override = None
     tool_names: list[str] | None = None
     shell_tier = "review"
+    log_conversations = True
+    conversation_log_retention_days = 30
 
     if agent_config is not None:
         model_override = resolve_model_from_config(agent_config.model)
         tool_names = list(agent_config.tools)
         shell_tier = agent_config.shell_tier
+        log_conversations = agent_config.log_conversations
+        conversation_log_retention_days = agent_config.conversation_log_retention_days
         # Use config name for the DBOS agent queue instead of env default.
         agent_name = agent_config.name
 
@@ -204,6 +194,7 @@ def initialize_runtime(
 
     init_history_store(history_db_path)
     cleanup_stale_checkpoints(history_db_path)
+    knowledge_root = workspace_root / "knowledge"
     runtime = Runtime(
         agent=agent,
         agent_name=agent_name,
@@ -216,6 +207,9 @@ def initialize_runtime(
         tool_policy=tool_policy,
         approval_unlocked=require_approval_unlock,
         shell_tier=shell_tier,
+        knowledge_root=knowledge_root,
+        log_conversations=log_conversations,
+        conversation_log_retention_days=conversation_log_retention_days,
     )
     # Register under the agent's explicit name so that get_runtime(agent_id)
     # works in multi-agent scenarios.  Also call set_runtime() for backward

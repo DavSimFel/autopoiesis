@@ -418,3 +418,15 @@ Tests annotated with `@pytest.mark.verifies("<ID>")` are checked against this ta
 | CHAT-V6 | Agent name resolution ignores DBOS_AGENT_NAME — uses AUTOPOIESIS_AGENT or CLI flag | must | unit |
 | CHAT-V7 | Config-less startup defaults agent name to 'default' (backward compatible) | must | unit |
 | CHAT-V8 | OTEL instrumentation is enabled only when OTEL_EXPORTER_OTLP_ENDPOINT is set | may | unit |
+
+## Conversation Logging Integration (#189)
+
+`Runtime` gains three fields wired to `AgentConfig`:
+- `log_conversations: bool` — enable/disable per-agent turn logging
+- `knowledge_root: Path | None` — path to knowledge dir for log placement
+- `conversation_log_retention_days: int` — days before log rotation
+
+`worker.run_agent_step()` calls `store.conversation_log.append_turn()` and
+`rotate_logs()` after each successful turn when `rt.log_conversations` is True.
+`cli.initialize_runtime()` reads all three fields from `AgentConfig` and stores
+them on `Runtime`.

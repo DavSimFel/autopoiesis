@@ -38,6 +38,7 @@ from autopoiesis.infra.approval.chat_approval import (
 from autopoiesis.infra.approval.types import ApprovalScope
 from autopoiesis.infra.work_queue import dispatch_workitem
 from autopoiesis.models import AgentDeps, WorkItem, WorkItemOutput
+from autopoiesis.store.conversation_log import append_turn, rotate_logs
 from autopoiesis.store.history import clear_checkpoint, load_checkpoint, save_checkpoint
 
 try:
@@ -262,6 +263,16 @@ def run_agent_step(work_item_dict: dict[str, Any]) -> dict[str, Any]:
         result_attrs["autopoiesis.completed"] = True
 
     clear_checkpoint(rt.history_db_path, item.id)
+
+    # --- Conversation logging (T2 reflection) ---
+    if rt.log_conversations and rt.knowledge_root is not None and output.message_history_json:
+        try:
+            messages = _deserialize_history(output.message_history_json)
+            append_turn(rt.knowledge_root, rt.knowledge_db_path, rt.agent_name, messages)
+            rotate_logs(rt.knowledge_root, rt.agent_name, rt.conversation_log_retention_days)
+        except Exception:
+            _log.warning("Conversation logging failed for agent %s", rt.agent_name, exc_info=True)
+
     return output.model_dump()
 
 
@@ -272,10 +283,7 @@ def execute_work_item(work_item_dict: dict[str, Any]) -> dict[str, Any]:
 
 
 def enqueue(item: WorkItem) -> str:
-    """Enqueue a work item and return its id.
-
-    Routes to the correct per-agent queue via :func:`dispatch_workitem`.
-    """
+    """Enqueue a work item and return its id via :func:`dispatch_workitem`."""
     queue = dispatch_workitem(item)
     with SetEnqueueOptions(priority=int(item.priority)):
         queue.enqueue(execute_work_item, item.model_dump())
@@ -283,10 +291,7 @@ def enqueue(item: WorkItem) -> str:
 
 
 def enqueue_and_wait(item: WorkItem) -> WorkItemOutput:
-    """Enqueue a work item and block until complete.
-
-    Routes to the correct per-agent queue via :func:`dispatch_workitem`.
-    """
+    """Enqueue a work item, block until complete, via :func:`dispatch_workitem`."""
     queue = dispatch_workitem(item)
     with SetEnqueueOptions(priority=int(item.priority)):
         handle = queue.enqueue(execute_work_item, item.model_dump())
