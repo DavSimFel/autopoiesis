@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import cast
 from unittest.mock import patch
 
 import pytest
@@ -244,6 +245,7 @@ class TestRuntimeRegistry:
         from typing import Any
 
         from autopoiesis.agent.runtime import (
+            Runtime,
             RuntimeRegistry,
             get_runtime,
             reset_runtime,
@@ -263,12 +265,18 @@ class TestRuntimeRegistry:
             key_manager: Any = None
             tool_policy: Any = None
             approval_unlocked: bool = False
+            shell_tier: str = "review"
+            log_conversations: bool = False
+            knowledge_root: Any = None
+            conversation_log_retention_days: int = 0
+            tmp_retention_days: int = 14
+            tmp_max_size_mb: int = 500
 
         runtime = _FakeRuntime()
         injected = RuntimeRegistry()
         previous = set_runtime_registry(injected)
         try:
-            set_runtime(runtime)
+            set_runtime(cast(Runtime, runtime))
             assert get_runtime() is runtime
             reset_runtime()
             with pytest.raises(RuntimeError, match="Runtime not initialised"):

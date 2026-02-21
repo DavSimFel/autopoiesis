@@ -27,13 +27,15 @@ def _make_config(
     name: str = "default",
     model: str = "anthropic/claude-sonnet-4",
     tools: list[str] | None = None,
-    shell_tier: str = "full",
+    shell_tier: str = "review",
 ) -> AgentConfig:
     return AgentConfig(
         name=name,
+        role="planner",
         model=model,
         tools=tools or ["shell", "search", "topics"],
         shell_tier=shell_tier,
+        system_prompt=Path(f"knowledge/identity/{name}.md"),
     )
 
 
@@ -93,19 +95,19 @@ class TestResolveModelFromConfig:
         assert result == "anthropic:claude-3-5-sonnet-latest"
 
     def test_no_prefix_defaults_to_openrouter(self) -> None:
-        from autopoiesis.agent.model_resolution import _infer_provider_from_model_name
+        from autopoiesis.agent.model_resolution import infer_provider_from_model_name
 
-        assert _infer_provider_from_model_name("gpt-4o") == "openrouter"
+        assert infer_provider_from_model_name("gpt-4o") == "openrouter"
 
     def test_anthropic_prefix_inferred(self) -> None:
-        from autopoiesis.agent.model_resolution import _infer_provider_from_model_name
+        from autopoiesis.agent.model_resolution import infer_provider_from_model_name
 
-        assert _infer_provider_from_model_name("anthropic/claude-3-opus") == "anthropic"
+        assert infer_provider_from_model_name("anthropic/claude-3-opus") == "anthropic"
 
     def test_openai_prefix_inferred_as_openrouter(self) -> None:
-        from autopoiesis.agent.model_resolution import _infer_provider_from_model_name
+        from autopoiesis.agent.model_resolution import infer_provider_from_model_name
 
-        assert _infer_provider_from_model_name("openai/gpt-4o") == "openrouter"
+        assert infer_provider_from_model_name("openai/gpt-4o") == "openrouter"
 
 
 # ---------------------------------------------------------------------------
