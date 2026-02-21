@@ -15,7 +15,7 @@ from __future__ import annotations
 import inspect
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -39,6 +39,7 @@ class _MinimalRuntime:
     key_manager: Any = None
     tool_policy: Any = None
     approval_unlocked: bool = False
+    shell_tier: str = "review"
     log_conversations: bool = False
     knowledge_root: Path | None = None
     conversation_log_retention_days: int = 0
@@ -249,8 +250,12 @@ class TestWorkerUsesRuntimeAgentName:
             agent_id="runtime-agent",
         )
 
+        from autopoiesis.agent.runtime import Runtime, RuntimeRegistry
+
+        fake_registry = RuntimeRegistry()
+        fake_registry.register("default", cast(Runtime, fake_rt))
         with (
-            patch.object(worker, "get_runtime", return_value=fake_rt),
+            patch.object(worker, "get_runtime_registry", return_value=fake_registry),
             patch.object(worker, "build_approval_scope", side_effect=_capturing_build_scope),
         ):
             worker.run_agent_step(item.model_dump(mode="json"))

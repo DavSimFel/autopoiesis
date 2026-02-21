@@ -10,6 +10,7 @@ from typing import Any, get_type_hints
 from pydantic_ai import AbstractToolset, RunContext
 from pydantic_ai.tools import ToolDefinition
 
+from autopoiesis.agent.workspace import AgentPaths
 from autopoiesis.models import AgentDeps
 from autopoiesis.prompts import (
     BASE_SYSTEM_PROMPT,
@@ -63,9 +64,16 @@ def resolve_workspace_root() -> Path:
     return path
 
 
-def build_backend() -> LocalBackend:
-    """Create the local filesystem backend with shell execution disabled."""
-    return LocalBackend(root_dir=resolve_workspace_root(), enable_execute=False)
+def build_backend(agent_paths: AgentPaths | None = None) -> LocalBackend:
+    """Create the local filesystem backend with shell execution disabled.
+
+    When *agent_paths* is provided the backend is rooted at
+    ``agent_paths.workspace`` for per-agent filesystem isolation.
+    Otherwise the global ``AGENT_WORKSPACE_ROOT`` env var is used.
+    """
+    root = agent_paths.workspace if agent_paths is not None else resolve_workspace_root()
+    root.mkdir(parents=True, exist_ok=True)
+    return LocalBackend(root_dir=root, enable_execute=False)
 
 
 def validate_console_deps_contract() -> None:
@@ -243,7 +251,7 @@ def build_toolsets(
 
 
 def prepare_toolset_context(
-    history_db_path: str,
+    agent_paths_or_db: AgentPaths | str,
     tool_names: list[str] | None = None,
 ) -> tuple[
     Path,
@@ -255,19 +263,39 @@ def prepare_toolset_context(
 ]:
     """Initialize runtime stores needed for toolset construction.
 
+    Accepts either an :class:`~autopoiesis.agent.workspace.AgentPaths` instance
+    (agent-aware, per-agent isolated paths) or a legacy *history_db_path* string
+    (global workspace root).
+
     *tool_names* is forwarded to :func:`build_toolsets` to filter which toolsets
     are included.  Pass ``None`` (default) to include all toolsets.
     """
-    workspace_root = resolve_workspace_root()
-    sub_db_path = str(Path(history_db_path).with_name("subscriptions.sqlite"))
+    if isinstance(agent_paths_or_db, AgentPaths):
+        agent_paths = agent_paths_or_db
+        workspace_root = agent_paths.workspace
+        workspace_root.mkdir(parents=True, exist_ok=True)
+        data_dir = agent_paths.data
+        data_dir.mkdir(parents=True, exist_ok=True)
+        knowledge_root = agent_paths.knowledge
+        knowledge_root.mkdir(parents=True, exist_ok=True)
+        knowledge_db_path = str(data_dir / "knowledge.sqlite")
+        sub_db_path = str(data_dir / "subscriptions.sqlite")
+        topics_dir = knowledge_root / "topics"
+        topics_dir.mkdir(parents=True, exist_ok=True)
+    else:
+        history_db_path = agent_paths_or_db
+        workspace_root = resolve_workspace_root()
+        sub_db_path = str(Path(history_db_path).with_name("subscriptions.sqlite"))
+        knowledge_root = workspace_root / "knowledge"
+        knowledge_db_path = str(Path(history_db_path).with_name("knowledge.sqlite"))
+        topics_dir = workspace_root / "topics"
+
     subscription_registry = SubscriptionRegistry(sub_db_path)
-    knowledge_root = workspace_root / "knowledge"
-    knowledge_db_path = str(Path(history_db_path).with_name("knowledge.sqlite"))
     init_knowledge_index(knowledge_db_path)
     reindex_knowledge(knowledge_db_path, knowledge_root)
     ensure_journal_entry(knowledge_root)
     knowledge_context = load_knowledge_context(knowledge_root)
-    topic_registry = TopicRegistry(workspace_root / "topics")
+    topic_registry = TopicRegistry(topics_dir)
     toolsets, system_prompt = build_toolsets(
         subscription_registry=subscription_registry,
         knowledge_db_path=knowledge_db_path,

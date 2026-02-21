@@ -26,7 +26,7 @@ from pydantic_ai.messages import (
 )
 from pydantic_ai.tools import DeferredToolResults, RunContext
 
-from autopoiesis.agent.runtime import Runtime, get_runtime
+from autopoiesis.agent.runtime import Runtime, get_runtime_registry
 from autopoiesis.agent.topic_activation import activate_topic_ref
 from autopoiesis.display.stream_formatting import forward_stream_events
 from autopoiesis.display.streaming import StreamHandle, ToolAwareStreamHandle, take_stream
@@ -206,8 +206,8 @@ def _run_sync(
 @DBOS.step()
 def run_agent_step(work_item_dict: dict[str, Any]) -> dict[str, Any]:
     """Execute one work item and return a serialized WorkItemOutput."""
-    rt = get_runtime()
     item = WorkItem.model_validate(work_item_dict)
+    rt = get_runtime_registry().get(item.agent_id)
 
     # Auto-activate topic when topic_ref is set (before agent executes)
     if item.topic_ref:

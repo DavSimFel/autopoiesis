@@ -5,7 +5,7 @@ from __future__ import annotations
 import pickle
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from pydantic_ai.exceptions import ModelHTTPError
@@ -43,10 +43,18 @@ class _FakeRuntime:
     backend: LocalBackend
     history_db_path: str
     agent_name: str = "default"
+    knowledge_db_path: str = ""
+    subscription_registry: Any = None
     approval_store: Any = None
     key_manager: Any = None
     approval_unlocked: bool = False
+    shell_tier: str = "review"
     tool_policy: Any = None
+    log_conversations: bool = False
+    knowledge_root: Path | None = None
+    conversation_log_retention_days: int = 0
+    tmp_retention_days: int = 14
+    tmp_max_size_mb: int = 500
 
 
 def test_run_agent_step_wraps_model_http_errors(
@@ -61,7 +69,11 @@ def test_run_agent_step_wraps_model_http_errors(
         backend=LocalBackend(root_dir=str(tmp_path), enable_execute=False),
         history_db_path=str(history_db),
     )
-    monkeypatch.setattr(chat_worker, "get_runtime", lambda: runtime)
+    from autopoiesis.agent.runtime import Runtime, RuntimeRegistry
+
+    fake_registry = RuntimeRegistry()
+    fake_registry.register("default", cast(Runtime, runtime))
+    monkeypatch.setattr(chat_worker, "get_runtime_registry", lambda: fake_registry)
 
     item = WorkItem(
         id="work-item-error",

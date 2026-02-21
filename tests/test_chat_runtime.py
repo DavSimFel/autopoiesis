@@ -241,6 +241,9 @@ class TestRuntimeRegistry:
             registry.get()
 
     def test_wrappers_use_injected_registry(self) -> None:
+        from dataclasses import dataclass
+        from typing import Any
+
         from autopoiesis.agent.runtime import (
             Runtime,
             RuntimeRegistry,
@@ -250,11 +253,30 @@ class TestRuntimeRegistry:
             set_runtime_registry,
         )
 
-        runtime = cast(Runtime, object())
+        @dataclass
+        class _FakeRuntime:
+            agent_name: str = "default"
+            agent: Any = None
+            backend: Any = None
+            history_db_path: str = ""
+            knowledge_db_path: str = ""
+            subscription_registry: Any = None
+            approval_store: Any = None
+            key_manager: Any = None
+            tool_policy: Any = None
+            approval_unlocked: bool = False
+            shell_tier: str = "review"
+            log_conversations: bool = False
+            knowledge_root: Any = None
+            conversation_log_retention_days: int = 0
+            tmp_retention_days: int = 14
+            tmp_max_size_mb: int = 500
+
+        runtime = _FakeRuntime()
         injected = RuntimeRegistry()
         previous = set_runtime_registry(injected)
         try:
-            set_runtime(runtime)
+            set_runtime(cast(Runtime, runtime))
             assert get_runtime() is runtime
             reset_runtime()
             with pytest.raises(RuntimeError, match="Runtime not initialised"):

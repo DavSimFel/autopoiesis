@@ -142,5 +142,37 @@ def resolve_model_from_config(model_id: str) -> Model | str:
             ),
         )
 
+    # "openai/" prefix routes through OpenRouter (it's an OpenAI-compatible proxy).
+    if provider == "openai":
+        api_key = required_env("OPENROUTER_API_KEY")
+        return OpenAIChatModel(
+            model_id,  # pass the full "openai/model" string as model name
+            provider=OpenAIProvider(
+                base_url="https://openrouter.ai/api/v1",
+                api_key=api_key,
+            ),
+        )
+
     # Unknown provider — pass through as-is and let pydantic_ai handle it.
     return model_id
+
+
+def infer_provider_from_model_name(model_id: str) -> str:
+    """Infer the provider from a model identifier string.
+
+    Rules:
+    * ``"anthropic/<model>"`` → ``"anthropic"``
+    * ``"openai/<model>"`` → ``"openrouter"`` (routed via OpenRouter proxy)
+    * No prefix / unknown prefix → ``"openrouter"`` (default)
+
+    This is a heuristic helper for agent config tooling; it does not validate
+    API keys or make network requests.
+    """
+    if "/" not in model_id:
+        return "openrouter"
+
+    prefix = model_id.split("/", 1)[0].strip().lower()
+    if prefix == "anthropic":
+        return "anthropic"
+    # openai/ and all other slash-prefixed identifiers default to openrouter.
+    return "openrouter"

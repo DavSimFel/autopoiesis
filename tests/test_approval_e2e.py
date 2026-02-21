@@ -6,7 +6,7 @@ import json
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any, ClassVar, cast
 
 import pytest
 from pydantic_ai import DeferredToolRequests
@@ -84,7 +84,10 @@ class _FakeRuntime:
     key_manager: ApprovalKeyManager
     tool_policy: ToolPolicyRegistry
     agent_name: str = "default"
+    knowledge_db_path: str = ""
+    subscription_registry: Any = None
     approval_unlocked: bool = False
+    shell_tier: str = "review"
     log_conversations: bool = False
     knowledge_root: Path | None = None
     conversation_log_retention_days: int = 0
@@ -151,8 +154,12 @@ def test_cli_approval_flow_enqueue_reenqueue_and_consume(
         return WorkItemOutput.model_validate(raw)
 
     _FakeHandle.approvals.clear()
+    from autopoiesis.agent.runtime import Runtime, RuntimeRegistry
+
+    fake_registry = RuntimeRegistry()
+    fake_registry.register("default", cast(Runtime, runtime))
     monkeypatch.setattr(chat_cli, "get_runtime", lambda: runtime)
-    monkeypatch.setattr(chat_worker, "get_runtime", lambda: runtime)
+    monkeypatch.setattr(chat_worker, "get_runtime_registry", lambda: fake_registry)
     monkeypatch.setattr(chat_cli, "RichStreamHandle", _FakeHandle)
     monkeypatch.setattr(chat_cli, "register_stream", _register_noop)
     monkeypatch.setattr(chat_cli, "enqueue_and_wait", _enqueue_and_wait)
