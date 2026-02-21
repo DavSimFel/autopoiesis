@@ -1,0 +1,83 @@
+/// <reference types="@sveltejs/kit" />
+/// <reference no-default-lib="true"/>
+/// <reference lib="esnext" />
+/// <reference lib="webworker" />
+
+import { build, files, version } from '$service-worker';
+
+declare const self: ServiceWorkerGlobalScope;
+
+// Cache name — bump version to force refresh
+const CACHE_NAME = `autopoiesis-shell-${version}`;
+
+// Assets to cache for offline shell
+const ASSETS = [
+	...build, // SvelteKit build output
+	...files, // static/ files
+];
+
+// Install: pre-cache all assets
+self.addEventListener('install', (event) => {
+	event.waitUntil(
+		caches.open(CACHE_NAME).then((cache) => {
+			return cache.addAll(ASSETS);
+		}),
+	);
+	// Take control immediately
+	self.skipWaiting();
+});
+
+// Activate: delete old caches
+self.addEventListener('activate', (event) => {
+	event.waitUntil(
+		caches.keys().then(async (keys) => {
+			for (const key of keys) {
+				if (key !== CACHE_NAME) {
+					await caches.delete(key);
+				}
+			}
+		}),
+	);
+	self.clients.claim();
+});
+
+// Fetch strategy:
+//  - MCP/SSE endpoints: network-only (never cache live data)
+//  - Shell assets: cache-first, fall back to network
+//  - Navigation: serve shell (app.html) from cache → SvelteKit handles routing
+self.addEventListener('fetch', (event) => {
+	const url = new URL(event.request.url);
+
+	// Never intercept MCP calls or SSE — these must always go to network
+	if (url.pathname.startsWith('/mcp') || url.pathname.includes('/sse')) {
+		return;
+	}
+
+	// Never intercept non-GET requests
+	if (event.request.method !== 'GET') {
+		return;
+	}
+
+	event.respondWith(
+		caches.open(CACHE_NAME).then(async (cache) => {
+			const cached = await cache.match(event.request);
+			if (cached) return cached;
+
+			try {
+				const response = await fetch(event.request);
+				// Cache successful responses for static assets
+				if (response.ok && !url.pathname.startsWith('/api')) {
+					cache.put(event.request, response.clone());
+				}
+				return response;
+			} catch {
+				// Offline — serve cached shell for navigation
+				if (event.request.mode === 'navigate') {
+					const shellCache = await cache.match('/');
+					if (shellCache) return shellCache;
+				}
+				return new Response('Offline', { status: 503 });
+			}
+		}),
+	);
+});
