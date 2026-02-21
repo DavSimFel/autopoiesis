@@ -50,7 +50,67 @@ def test_preexec_fn_applies_expected_rlimits(
 
     assert get_calls == [1, 2, 3]
     assert len(set_calls) == 3
-    assert set_calls[0] == (1, (64, 1024))
+    assert set_calls[0] == (1, (512, 1024))
+    assert set_calls[1] == (2, (1024, 1024))
+    assert set_calls[2] == (3, (30, 1024))
+
+
+def test_preexec_fn_does_not_lower_inherited_soft_limit(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    sandbox = SubprocessSandboxManager(workspace_root=workspace)
+    set_calls: list[tuple[int, tuple[int, int]]] = []
+
+    monkeypatch.setattr(sandbox_module.resource, "RLIMIT_NPROC", 1, raising=False)
+    monkeypatch.setattr(sandbox_module.resource, "RLIMIT_FSIZE", 2, raising=False)
+    monkeypatch.setattr(sandbox_module.resource, "RLIMIT_CPU", 3, raising=False)
+
+    def fake_getrlimit(limit: int) -> tuple[int, int]:
+        if limit == 1:
+            return (2048, 4096)
+        return (0, 1024)
+
+    def fake_setrlimit(limit: int, values: tuple[int, int]) -> None:
+        set_calls.append((limit, values))
+
+    monkeypatch.setattr(sandbox_module.resource, "getrlimit", fake_getrlimit)
+    monkeypatch.setattr(sandbox_module.resource, "setrlimit", fake_setrlimit)
+
+    sandbox.preexec_fn()()
+
+    assert set_calls[0] == (1, (2048, 4096))
+
+
+def test_preexec_fn_caps_fsize_and_cpu_even_when_soft_is_infinite(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    sandbox = SubprocessSandboxManager(workspace_root=workspace)
+    set_calls: list[tuple[int, tuple[int, int]]] = []
+
+    monkeypatch.setattr(sandbox_module.resource, "RLIMIT_NPROC", 1, raising=False)
+    monkeypatch.setattr(sandbox_module.resource, "RLIMIT_FSIZE", 2, raising=False)
+    monkeypatch.setattr(sandbox_module.resource, "RLIMIT_CPU", 3, raising=False)
+
+    def fake_getrlimit(limit: int) -> tuple[int, int]:
+        if limit == 1:
+            return (2048, 4096)
+        return (sandbox_module.resource.RLIM_INFINITY, 1024)
+
+    def fake_setrlimit(limit: int, values: tuple[int, int]) -> None:
+        set_calls.append((limit, values))
+
+    monkeypatch.setattr(sandbox_module.resource, "getrlimit", fake_getrlimit)
+    monkeypatch.setattr(sandbox_module.resource, "setrlimit", fake_setrlimit)
+
+    sandbox.preexec_fn()()
+
+    assert set_calls[0] == (1, (2048, 4096))
     assert set_calls[1] == (2, (1024, 1024))
     assert set_calls[2] == (3, (30, 1024))
 

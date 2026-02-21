@@ -45,6 +45,7 @@ Uses stdlib `pty.openpty()` — zero external dependencies. Enables interactive 
 - **Approval flow**: mutating tools require approval via `ApprovalRequiredToolset` predicate
 - **Feature gate**: `ENABLE_EXECUTE` env var (default `false`) — tools hidden dynamically via `PreparedToolset`
 - **Timeout**: default 30s with kill
+- **Process cap**: sandbox default `RLIMIT_NPROC` target is `512`; pre-exec limit application never lowers below the inherited soft limit.
 - **Env blocklist**: `_DANGEROUS_ENV_VARS` blocks `ANTHROPIC_API_KEY`, `AWS_SECRET_ACCESS_KEY`, `DATABASE_URL`, `DB_PASSWORD`, `GITHUB_TOKEN`, `LD_PRELOAD`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `PASSWORD`, `PRIVATE_KEY`, `PYTHONPATH`, and `SECRET_KEY`. Explicit `env` values containing these keys are rejected; omitted `env` inherits parent vars with these keys removed.
 - **Log cleanup**: `cleanup_exec_logs(max_age_hours)` runs at startup
 
@@ -56,6 +57,9 @@ Uses stdlib `pty.openpty()` — zero external dependencies. Enables interactive 
 
 ## Change Log
 
+- 2026-02-21: Raised sandbox default process limit from 64 to 512 and updated
+  RLIMIT application to preserve inherited soft limits (never lower on pre-exec).
+  (Issue #221)
 - 2026-02-18: Removed legacy `shell_tool` path from documentation; exec/process
   tools are now the only supported command-execution interfaces. (Issue #170)
 - 2026-02-16: Replaced module-level mutable session dict in

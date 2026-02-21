@@ -97,14 +97,15 @@ split into focused companion modules.
 - `toolset_builder.prepare_toolset_context(history_db_path)` — initializes stores (subscriptions, knowledge, topics) and builds toolsets (moved from chat.py)
 - **Config loading (Phase B):** When `--config` flag or `AUTOPOIESIS_AGENTS_CONFIG` env var is set, `main()` calls `load_agent_configs(config_path)` and stores results in a module-level `_agent_configs` registry accessible via `get_agent_configs()`. No config → backward-compatible single-agent behavior.
 - `agent.history.build_history_processors(...)` — builds ordered message history processors (truncation, compaction, subscriptions, topics, checkpointing) (moved from chat.py)
-- `_initialize_runtime(base_dir, *, require_approval_unlock)` — full runtime init for all modes (chat/batch/serve); assembles provider, backend, toolsets, agent, initializes history storage, registers runtime. Serve mode defaults to `require_approval_unlock=False`.
+- `initialize_runtime(agent_paths, agent_name, *, require_approval_unlock, agent_config=None)` — full runtime init for all modes (chat/batch/serve); assembles provider, backend, toolsets, agent, initializes history storage, registers runtime. Serve mode defaults to `require_approval_unlock=False`.
 ### Runtime State
 
 - `Runtime` dataclass holds agent + backend + approval store + unlocked key manager + tool policy for the process lifetime
 - `RuntimeRegistry` provides lock-protected runtime storage with
   `set_runtime()` / `get_runtime()` wrappers for application code
-- `set_runtime_registry()` / `get_runtime_registry()` allow test injection
-  and `reset_runtime()` clears process runtime in tests
+- `set_agent_registry()` / `get_agent_registry()` (and compatibility aliases
+  `set_runtime_registry()` / `get_runtime_registry()`) allow test injection;
+  `reset_runtime()` clears process runtime in tests
 - `_CheckpointContext` + `ContextVar` store active checkpoint metadata per
   execution context for history processor writes
 
@@ -460,4 +461,5 @@ them on `Runtime`.
 ## Agent-Aware Toolset Bug Fixes
 - toolset_builder: resolve_workspace_root/prepare_toolset_context accept AgentPaths
 - TopicRegistry dir auto-created
-- Worker test patches fixed (get_runtime not get_runtime_registry)
+- Worker paths should patch `get_runtime()` directly; worker module does not
+  export `get_runtime_registry()`.

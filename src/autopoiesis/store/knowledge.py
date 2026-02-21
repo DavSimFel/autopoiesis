@@ -7,6 +7,7 @@ provides a search index that is rebuilt from files — never the other way aroun
 from __future__ import annotations
 
 import logging
+import os
 import re
 from contextlib import closing
 from dataclasses import dataclass, field
@@ -132,16 +133,32 @@ def build_backlink_index(knowledge_root: Path) -> dict[str, set[str]]:
     if not knowledge_root.is_dir():
         return index
 
-    for md in knowledge_root.rglob("*.md"):
-        rel = str(md.relative_to(knowledge_root))
-        try:
-            text = md.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            continue
-        for match in _WIKILINK_RE.finditer(text):
-            target = match.group(1).strip().lower()
-            if target:
-                index.setdefault(target, set()).add(rel)
+    root_str = str(knowledge_root)
+    finditer = _WIKILINK_RE.finditer
+
+    for dirpath, _dirnames, filenames in os.walk(root_str):
+        for filename in filenames:
+            if not filename.endswith(".md"):
+                continue
+            md = os.path.join(dirpath, filename)
+            rel = os.path.relpath(md, root_str)
+            try:
+                with open(md, encoding="utf-8") as handle:
+                    text = handle.read()
+            except (OSError, UnicodeDecodeError):
+                continue
+            if "[[" not in text:
+                continue
+
+            for match in finditer(text):
+                target = match.group(1).strip().lower()
+                if not target:
+                    continue
+                sources = index.get(target)
+                if sources is None:
+                    index[target] = {rel}
+                else:
+                    sources.add(rel)
 
     return index
 

@@ -69,11 +69,7 @@ def test_run_agent_step_wraps_model_http_errors(
         backend=LocalBackend(root_dir=str(tmp_path), enable_execute=False),
         history_db_path=str(history_db),
     )
-    from autopoiesis.agent.runtime import Runtime, RuntimeRegistry
-
-    fake_registry = RuntimeRegistry()
-    fake_registry.register("default", cast(Runtime, runtime))
-    monkeypatch.setattr(chat_worker, "get_runtime_registry", lambda: fake_registry)
+    monkeypatch.setattr(chat_worker, "get_runtime", lambda: cast(Any, runtime))
 
     item = WorkItem(
         id="work-item-error",

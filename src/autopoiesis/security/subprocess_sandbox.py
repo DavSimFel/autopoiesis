@@ -10,7 +10,7 @@ from pathlib import Path
 
 from autopoiesis.security.path_validator import PathValidator
 
-_DEFAULT_MAX_PROCESSES = 64
+_DEFAULT_MAX_PROCESSES = 512
 _DEFAULT_MAX_FILE_SIZE_BYTES = 16 * 1024 * 1024
 _DEFAULT_MAX_CPU_SECONDS = 30
 
@@ -38,12 +38,17 @@ def _bounded_soft_limit(target: int, hard: int) -> int:
     return min(target, hard)
 
 
-def _set_limit(limit_name: str, target: int) -> None:
+def _set_limit(limit_name: str, target: int, *, preserve_inherited_soft: bool = False) -> None:
     limit = getattr(resource, limit_name, None)
     if limit is None:
         return
-    _, hard = resource.getrlimit(limit)
-    resource.setrlimit(limit, (_bounded_soft_limit(target, hard), hard))
+    soft, hard = resource.getrlimit(limit)
+    bounded_target = _bounded_soft_limit(target, hard)
+    if preserve_inherited_soft:
+        next_soft = soft if soft == resource.RLIM_INFINITY else max(soft, bounded_target)
+    else:
+        next_soft = bounded_target
+    resource.setrlimit(limit, (next_soft, hard))
 
 
 class SubprocessSandboxManager:
@@ -76,7 +81,7 @@ class SubprocessSandboxManager:
         limits = self._limits
 
         def _apply_limits() -> None:
-            _set_limit("RLIMIT_NPROC", limits.max_processes)
+            _set_limit("RLIMIT_NPROC", limits.max_processes, preserve_inherited_soft=True)
             _set_limit("RLIMIT_FSIZE", limits.max_file_size_bytes)
             _set_limit("RLIMIT_CPU", limits.max_cpu_seconds)
 
