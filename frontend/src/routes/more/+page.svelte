@@ -5,10 +5,10 @@
 	 * you can always find and invoke it here.
 	 */
 	import { onMount } from 'svelte';
-	import { listTools, callTool } from '$lib/mcp-client';
-	import type { MCPTool } from '$lib/mcp-client';
+	import { listTools, callTool } from '$lib/api-client';
+	import type { Tool } from '$lib/api-client';
 
-	let tools = $state<MCPTool[]>([]);
+	let tools = $state<Tool[]>([]);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 	let search = $state('');
@@ -17,14 +17,16 @@
 	let invokeError = $state<string | null>(null);
 
 	// Selected tool for invocation
-	let selectedTool = $state<MCPTool | null>(null);
+	let selectedTool = $state<Tool | null>(null);
 	let argValues = $state<Record<string, string>>({});
 
 	onMount(async () => {
 		try {
-			const fetched = await listTools();
+			const data = await listTools();
+			// API may return [] directly or { tools: [] }
+			const fetched: Tool[] = Array.isArray(data) ? data : (data.tools ?? []);
 			// Sort alphabetically — deterministic listing per spec
-			tools = fetched.sort((a, b) => a.name.localeCompare(b.name));
+			tools = fetched.sort((a: Tool, b: Tool) => a.name.localeCompare(b.name));
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to load tools';
 		} finally {
@@ -42,7 +44,7 @@
 
 	// Group by category prefix (e.g., "email_*", "calendar_*")
 	const grouped = $derived(() => {
-		const groups: Record<string, MCPTool[]> = {};
+		const groups: Record<string, Tool[]> = {};
 		for (const tool of filtered) {
 			const parts = tool.name.split('_');
 			const category = parts.length > 1 ? parts[0] : 'general';
@@ -52,7 +54,7 @@
 		return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
 	});
 
-	function selectTool(tool: MCPTool) {
+	function selectTool(tool: Tool) {
 		selectedTool = tool;
 		argValues = {};
 		invokeResult = null;
@@ -78,7 +80,9 @@
 
 		try {
 			const result = await callTool(selectedTool.name, args);
-			invokeResult = result.content.map((c) => c.text).join('\n');
+			invokeResult = typeof result === 'string'
+				? result
+				: JSON.stringify(result, null, 2);
 		} catch (e) {
 			invokeError = e instanceof Error ? e.message : 'Invocation failed';
 		} finally {

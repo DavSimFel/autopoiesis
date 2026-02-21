@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { UIEvent, ActionCardData } from '$lib/types';
-	import { callTool } from '$lib/mcp-client';
+	import { callTool } from '$lib/api-client';
 	import { resolveEvent } from '$lib/stores/active-state';
 	import { formatRelativeTime } from '$lib/utils';
 

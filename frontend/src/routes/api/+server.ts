@@ -1,17 +1,15 @@
 /**
- * MCP Proxy — root /mcp endpoint
+ * REST API Proxy — root /api endpoint
  *
- * Handles POST /mcp (JSON-RPC tool calls) and GET /mcp (health / initialize).
- * The [...path] catch-all handles /mcp/sse, /mcp/tools/*, etc.
- *
- * Re-exports the same proxy logic for consistency.
+ * Handles requests to /api (e.g., POST /api for actions).
+ * The [...path] catch-all handles /api/status, /api/tools/*, /api/stream, etc.
  */
 
 import type { RequestHandler } from './$types';
 import { env } from '$env/dynamic/private';
 
 const API_BASE = (env.MCP_API_URL ?? 'https://autopoiesis-api.feldhofer.cc').replace(/\/$/, '');
-const UPSTREAM = `${API_BASE}/mcp`;
+const UPSTREAM = `${API_BASE}/api`;
 
 const HOP_BY_HOP = new Set([
 	'connection', 'keep-alive', 'proxy-authenticate', 'proxy-authorization',
@@ -50,11 +48,7 @@ async function proxy(event: Parameters<RequestHandler>[0]): Promise<Response> {
 	} catch (err) {
 		const message = err instanceof Error ? err.message : 'Upstream unreachable';
 		return new Response(
-			JSON.stringify({
-				jsonrpc: '2.0',
-				error: { code: -32603, message: `Proxy error: ${message}` },
-				id: null,
-			}),
+			JSON.stringify({ error: `Proxy error: ${message}` }),
 			{ status: 502, headers: { 'Content-Type': 'application/json' } },
 		);
 	}

@@ -124,7 +124,7 @@ export interface MorningBriefingData {
 }
 
 // ============================================================
-// SSE push notification from /mcp/sse
+// SSE push notification from /api/stream
 // ============================================================
 
 export interface UINotification {

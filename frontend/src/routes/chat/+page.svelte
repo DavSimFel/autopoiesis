@@ -2,7 +2,7 @@
 	/**
 	 * Chat — direct chat with the agent via MCP tool calls.
 	 */
-	import { callTool } from '$lib/mcp-client';
+	import { callTool } from '$lib/api-client';
 	import { streamEvents } from '$lib/stores/active-state';
 	import EventRenderer from '$lib/components/EventRenderer.svelte';
 	import type { UIEvent, ChatMessageData } from '$lib/types';

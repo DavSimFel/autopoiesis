@@ -4,8 +4,9 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 
-	import { subscribeSSE } from '$lib/mcp-client';
-	import type { SSEStatus } from '$lib/mcp-client';
+	import { subscribeStream } from '$lib/api-client';
+	import type { SSEStatus } from '$lib/api-client';
+	import { pushEvent } from '$lib/stores/active-state';
 	import { activeCount, activeState } from '$lib/stores/active-state';
 	import { activeTab, activeDrawerOpen, focusedEvent, isFocusModeActive, closeFocus } from '$lib/stores/nav';
 	import { shouldShowIosInstallPrompt } from '$lib/stores/notifications';
@@ -30,9 +31,19 @@
 	] as const;
 
 	onMount(() => {
-		// SSE subscription
-		const sub = subscribeSSE((status) => {
-			sseStatus = status;
+		// SSE subscription — EventSource handles reconnection natively
+		sseStatus = 'connecting';
+		const es = subscribeStream((event) => {
+			pushEvent(event);
+		});
+
+		es.addEventListener('open', () => {
+			sseStatus = 'connected';
+		});
+
+		es.addEventListener('error', () => {
+			// EventSource will reconnect automatically; reflect that in status
+			sseStatus = es.readyState === EventSource.CLOSED ? 'closed' : 'reconnecting';
 		});
 
 		// iOS install prompt
@@ -40,7 +51,10 @@
 			showIosBanner = true;
 		}
 
-		return () => sub.close();
+		return () => {
+			es.close();
+			sseStatus = 'closed';
+		};
 	});
 
 	function handleNavClick(path: string, id: string) {

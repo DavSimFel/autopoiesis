@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { SSEStatus } from '$lib/mcp-client';
+	import type { SSEStatus } from '$lib/api-client';
 
 	let {
 		status,
