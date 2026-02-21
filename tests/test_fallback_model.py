@@ -11,10 +11,18 @@ from pydantic_ai.models.openai import OpenAIChatModel
 from autopoiesis.agent.model_resolution import resolve_model
 
 
+def _isolate_provider_env(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_MODEL", raising=False)
+    monkeypatch.delenv("AI_PROVIDER", raising=False)
+
+
 def test_anthropic_only_no_fallback(monkeypatch: MonkeyPatch) -> None:
     """Single Anthropic key produces a plain model string, not FallbackModel."""
+    _isolate_provider_env(monkeypatch)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
-    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
 
     model = resolve_model("anthropic")
 
@@ -24,8 +32,8 @@ def test_anthropic_only_no_fallback(monkeypatch: MonkeyPatch) -> None:
 
 def test_openrouter_only_no_fallback(monkeypatch: MonkeyPatch) -> None:
     """Single OpenRouter key produces an OpenAIChatModel, not FallbackModel."""
+    _isolate_provider_env(monkeypatch)
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
 
     model = resolve_model("openrouter")
 
@@ -36,6 +44,7 @@ def test_openrouter_only_no_fallback(monkeypatch: MonkeyPatch) -> None:
 @pytest.mark.verifies("CHAT-V5")
 def test_both_keys_anthropic_primary(monkeypatch: MonkeyPatch) -> None:
     """Both keys with AI_PROVIDER=anthropic wraps in FallbackModel."""
+    _isolate_provider_env(monkeypatch)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
 
@@ -49,6 +58,7 @@ def test_both_keys_anthropic_primary(monkeypatch: MonkeyPatch) -> None:
 
 def test_both_keys_openrouter_primary(monkeypatch: MonkeyPatch) -> None:
     """Both keys with AI_PROVIDER=openrouter puts OpenRouter first."""
+    _isolate_provider_env(monkeypatch)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
 

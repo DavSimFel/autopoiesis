@@ -84,9 +84,11 @@ class TestResolveStartupConfigSignature:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
         monkeypatch.delenv("DBOS_SYSTEM_DATABASE_URL", raising=False)
 
-        from autopoiesis.cli import _resolve_startup_config
+        import autopoiesis.cli as cli_mod
 
-        result = _resolve_startup_config()
+        attr_name = "_resolve_startup_config"
+        resolve_startup_config = getattr(cli_mod, attr_name)
+        result = resolve_startup_config()
         assert len(result) == 2, (
             "_resolve_startup_config should return (provider, system_database_url) -- "
             "agent_name must come from the CLI/env resolution path, not DBOS_AGENT_NAME"
@@ -99,9 +101,11 @@ class TestResolveStartupConfigSignature:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
         monkeypatch.setenv("DBOS_AGENT_NAME", "should-not-appear")
 
-        from autopoiesis.cli import _resolve_startup_config
+        import autopoiesis.cli as cli_mod
 
-        result = _resolve_startup_config()
+        attr_name = "_resolve_startup_config"
+        resolve_startup_config = getattr(cli_mod, attr_name)
+        result = resolve_startup_config()
         assert "should-not-appear" not in result
 
 

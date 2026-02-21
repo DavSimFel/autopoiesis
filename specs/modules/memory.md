@@ -47,6 +47,9 @@ The `search` tool in `knowledge_tools.py` exposes both filters.
 `build_backlink_index(knowledge_root)` scans all markdown files for `[[target]]`
 patterns and returns `dict[str, set[str]]` mapping targets to source files.
 Designed to complete in <200ms for 1K files.
+Implementation keeps output contract unchanged while reducing traversal and
+allocation overhead by scanning markdown files with `os.walk`, short-circuiting
+files without wikilink markers, and reusing compiled regex iteration locals.
 
 ### Migration
 
@@ -82,3 +85,5 @@ Both fields are wired into `Runtime` and checked in `worker.run_agent_step()`.
 - 2026-02-17: Paths updated for `src/autopoiesis/` layout (#152)
 - 2026-02-17: Added typed frontmatter, filtered search, backlink index (#147)
 - 2026-02-20: Added conversation logging for T2 reflection (#189)
+- 2026-02-21: Optimized backlink index traversal/read hot path while preserving
+  wikilink semantics and existing `<200ms` performance target. (#221)
