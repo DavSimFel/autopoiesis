@@ -1,11 +1,20 @@
-"""FastMCP server exposing runtime controls over streamable HTTP."""
+"""FastMCP server exposing runtime controls over streamable HTTP.
+
+Phase 1 — core runtime tools (dashboard, approval, system info).
+Phase 2 — skill servers auto-discovered from ``skills/`` directory.
+
+Skill tools are registered with lazy-loading: they start hidden and are
+enabled when the associated topic is activated (via :class:`SkillActivator`).
+"""
 
 from __future__ import annotations
 
 import inspect
 import logging
+import os
 import time
 from importlib import import_module
+from pathlib import Path
 from typing import Any, cast
 
 from autopoiesis.agent.runtime import Runtime, get_runtime
@@ -23,6 +32,10 @@ from autopoiesis.server.mcp_tools import (
 _LOG = logging.getLogger(__name__)
 
 _SERVER_STARTED_AT = time.monotonic()
+
+#: Global SkillActivator for the singleton MCP server instance.
+#: Set during ``create_mcp_server()`` and used by topic-activation wiring.
+skill_activator: Any | None = None
 
 
 def _runtime_for_tool(tool: str) -> tuple[Runtime | None, str | None]:
@@ -144,13 +157,78 @@ def _register_tools(server: Any) -> None:
     server.tool(name="system.info")(system_info)
 
 
-def create_mcp_server(fastmcp_class: type[Any] | None = None) -> Any | None:
-    """Create and register the MCP server instance."""
+def _resolve_skills_root() -> Path:
+    """Resolve the shipped skills/ directory relative to the repo root."""
+    raw = os.getenv("SKILLS_DIR", "skills")
+    path = Path(raw)
+    if not path.is_absolute():
+        # mcp_server.py lives in src/autopoiesis/server/ → four parents up = repo root
+        path = Path(__file__).resolve().parents[3] / raw
+    return path
+
+
+def _register_skill_providers(server: Any, skills_root: Path) -> list[str]:
+    """Register skill providers and apply default-disable transforms.
+
+    Each skill's tools start hidden (lazy loading) and become visible
+    when the associated topic is activated.
+
+    Returns the list of skill names that were registered.
+    """
+    try:
+        from autopoiesis.skills.filesystem_skill_provider import (
+            register_skill_providers,
+        )
+        from autopoiesis.skills.skill_transforms import (
+            make_skill_disable_transform,
+        )
+    except ImportError:
+        _LOG.warning("Skill provider modules not available; skill tools will not be registered.")
+        return []
+
+    registered = register_skill_providers(server, skills_root)
+
+    # Lazy loading: disable each skill's tools until explicitly activated.
+    for skill_name in registered:
+        for transform in make_skill_disable_transform(skill_name):
+            server.add_transform(transform)
+        _LOG.info("Skill '%s' registered (tools hidden until activated)", skill_name)
+
+    return registered
+
+
+def create_mcp_server(
+    fastmcp_class: type[Any] | None = None,
+    skills_root: Path | None = None,
+) -> Any | None:
+    """Create and register the MCP server instance.
+
+    Args:
+        fastmcp_class: Optional FastMCP class override (for testing).
+        skills_root: Optional override for the ``skills/`` root directory.
+            Defaults to the repo's ``skills/`` directory.
+    """
+    global skill_activator
+
     server_class = fastmcp_class if fastmcp_class is not None else _load_fastmcp_class()
     if server_class is None:
         return None
+
     server = server_class("autopoiesis")
     _register_tools(server)
+
+    # Phase 2: register skill server providers with lazy loading.
+    resolved_skills_root = skills_root if skills_root is not None else _resolve_skills_root()
+    registered_skills = _register_skill_providers(server, resolved_skills_root)
+
+    if registered_skills:
+        try:
+            from autopoiesis.skills.skill_activator import SkillActivator
+
+            skill_activator = SkillActivator(server, resolved_skills_root)
+        except ImportError:
+            _LOG.warning("SkillActivator not available; topic-based skill activation disabled.")
+
     return server
 
 

@@ -157,8 +157,28 @@ These invariants are enforced by `tests/test_shipped_skills.py` (Issue #163).
 CI also maps shipped skill files to this spec via the `source_to_spec` check,
 so any change to a shipped skill file requires this spec to be up-to-date.
 
+## Phase 2: MCP Skill Provider (Issue #221)
+
+New modules added for lazy-loading skills as MCP tool sets:
+
+| File | Responsibility |
+|------|---------------|
+| `skills/filesystem_skill_provider.py` | `FilesystemSkillProvider` — discovers skill directories and exposes MCP tools per skill |
+| `skills/skill_activator.py` | `SkillActivator` — on-demand activator that mounts/unmounts `FilesystemSkillProvider` tools to the live MCP server |
+| `skills/skill_transforms.py` | Pure transformation helpers: skill-name→tool-name mapping, schema normalisation, result envelope construction |
+
+### Key Concepts (Phase 2)
+
+- **Lazy MCP tool mounting** — skill tool sets are only registered with the MCP
+  server when the corresponding skill topic is activated (`skill_activator.activate_skill_for_topic`).
+- **Tool-name namespacing** — tools are prefixed with the skill name (e.g. `skillmaker.run`) to
+  avoid collisions across simultaneously active skills.
+- **Pure transforms** — `skill_transforms.py` has no I/O, enabling unit testing without a running MCP server.
+
 ## Change Log
 
+- 2026-02-21: Added Phase 2 MCP skill provider modules (`filesystem_skill_provider.py`,
+  `skill_activator.py`, `skill_transforms.py`) for lazy skill-to-MCP-tool mounting. (Issue #221)
 - 2026-02-17: Documented shipped skill contract, added CI spec-check
   mappings for shipped skill files, added `tests/test_shipped_skills.py`.
   (Issue #163)

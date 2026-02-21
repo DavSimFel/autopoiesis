@@ -34,6 +34,7 @@ Model Context Protocol tool access.
 | `server/routes.py` | REST/WebSocket route handlers and runtime error mapping |
 | `server/mcp_server.py` | FastMCP server factory, MCP tool handlers, approval notification dispatch |
 | `server/mcp_tools.py` | Private data-layer helpers for MCP tools: JSON envelope helpers, approval DB access, pending-approval queries |
+| `server/api_routes.py` | REST API router wrapping MCP tools as `/api/*` endpoints for PWA consumption |
 
 ## API Surface
 
@@ -112,3 +113,5 @@ fields. If the runtime is not initialized, tools return an
   `dashboard.status`, `approval.list`, `approval.decide`, and `system.info`
   tools. MCP helpers split into `mcp_server.py` (server factory + handlers)
   and `mcp_tools.py` (data-layer helpers). (Issue #221)
+- 2026-02-21: Added `api_routes.py` REST API router exposing MCP tool calls
+  as `/api/*` JSON endpoints for PWA front-end consumption. (Issue #221 Phase 2)
