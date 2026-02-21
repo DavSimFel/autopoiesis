@@ -10,6 +10,7 @@ import asyncio
 import logging
 import os
 import pty
+from collections.abc import Callable
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
@@ -29,6 +30,7 @@ async def spawn_pty(
     *,
     cwd: str | None = None,
     env: dict[str, str] | None = None,
+    preexec_fn: Callable[[], None] | None = None,
 ) -> PtyProcess:
     """Spawn *command* under a PTY via ``pty.openpty()``.
 
@@ -44,6 +46,7 @@ async def spawn_pty(
             stderr=slave_fd,
             cwd=cwd,
             env=env,
+            preexec_fn=preexec_fn,
         )
     except OSError as exc:
         logger.debug("PTY subprocess spawn failed with %s", type(exc).__name__, exc_info=exc)

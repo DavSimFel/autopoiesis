@@ -79,3 +79,6 @@ The processor chain order in `chat.py`:
 - 2026-02-16: Added Dependencies/Wired-in docstring headers as part of #121 documentation update
 
 - 2026-02-17: Paths updated for `src/autopoiesis/` layout (#152)
+
+## Subscription Processor Changes (#227)
+- subscription_processor.py updated for security-aware event routing

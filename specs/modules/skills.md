@@ -199,3 +199,6 @@ New modules added for lazy-loading skills as MCP tool sets:
 
 - 2026-02-16: Code smell cleanup — improved error messages, removed defensive checks,
   narrowed exception handling, cached regex. (Issue #89)
+
+## GitHub Skill (#227)
+- github_skill.py: built-in skill for GitHub operations with taint-safe I/O

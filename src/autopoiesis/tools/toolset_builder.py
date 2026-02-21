@@ -10,7 +10,6 @@ from typing import Any, get_type_hints
 from pydantic_ai import AbstractToolset, RunContext
 from pydantic_ai.tools import ToolDefinition
 
-from autopoiesis.agent.workspace import AgentPaths
 from autopoiesis.models import AgentDeps
 from autopoiesis.prompts import (
     BASE_SYSTEM_PROMPT,
@@ -54,26 +53,21 @@ def _repo_root() -> Path:
     return Path(__file__).resolve().parents[3]
 
 
-def resolve_workspace_root() -> Path:
+def resolve_workspace_root(workspace_root: Path | None = None) -> Path:
     """Resolve and create the agent workspace root directory."""
-    raw_root = os.getenv("AGENT_WORKSPACE_ROOT", "data/agent-workspace")
-    path = Path(raw_root)
-    if not path.is_absolute():
-        path = _repo_root() / path
+    path = workspace_root
+    if path is None:
+        raw_root = os.getenv("AGENT_WORKSPACE_ROOT", "data/agent-workspace")
+        path = Path(raw_root)
+        if not path.is_absolute():
+            path = _repo_root() / path
     path.mkdir(parents=True, exist_ok=True)
     return path
 
 
-def build_backend(agent_paths: AgentPaths | None = None) -> LocalBackend:
-    """Create the local filesystem backend with shell execution disabled.
-
-    When *agent_paths* is provided the backend is rooted at
-    ``agent_paths.workspace`` for per-agent filesystem isolation.
-    Otherwise the global ``AGENT_WORKSPACE_ROOT`` env var is used.
-    """
-    root = agent_paths.workspace if agent_paths is not None else resolve_workspace_root()
-    root.mkdir(parents=True, exist_ok=True)
-    return LocalBackend(root_dir=root, enable_execute=False)
+def build_backend(workspace_root: Path | None = None) -> LocalBackend:
+    """Create the local filesystem backend with shell execution disabled."""
+    return LocalBackend(root_dir=resolve_workspace_root(workspace_root), enable_execute=False)
 
 
 def validate_console_deps_contract() -> None:
@@ -108,18 +102,18 @@ def _resolve_shipped_skills_dir() -> Path:
     return path
 
 
-def _resolve_custom_skills_dir() -> Path:
+def _resolve_custom_skills_dir(workspace_root: Path) -> Path:
     raw = os.getenv("CUSTOM_SKILLS_DIR", "skills")
     path = Path(raw)
     if not path.is_absolute():
-        path = resolve_workspace_root() / path
+        path = workspace_root / path
     path.mkdir(parents=True, exist_ok=True)
     return path
 
 
-def _build_skill_directories() -> list[SkillDirectory]:
+def _build_skill_directories(workspace_root: Path) -> list[SkillDirectory]:
     shipped_dir = _resolve_shipped_skills_dir()
-    custom_dir = _resolve_custom_skills_dir()
+    custom_dir = _resolve_custom_skills_dir(workspace_root)
     if shipped_dir.resolve() == custom_dir.resolve():
         return [SkillDirectory(path=shipped_dir)]
     return [SkillDirectory(path=shipped_dir), SkillDirectory(path=custom_dir)]
@@ -217,15 +211,18 @@ def build_toolsets(
         return enabled is None or category in enabled
 
     validate_console_deps_contract()
+    resolved_workspace_root = resolve_workspace_root(workspace_root)
     console = create_console_toolset(include_execute=False, require_write_approval=True)
-    skills_toolset, skills_instr = create_skills_toolset(_build_skill_directories())
+    skills_toolset, skills_instr = create_skills_toolset(
+        _build_skill_directories(resolved_workspace_root)
+    )
 
     # Console and skills are always present (they are core primitives).
     toolsets: list[AbstractToolset[AgentDeps]] = [console, skills_toolset]
     prompt_fragments: list[str] = [BASE_SYSTEM_PROMPT, CONSOLE_INSTRUCTIONS, skills_instr]
 
     if _enabled("exec"):
-        toolsets.append(_build_exec_toolset(workspace_root=workspace_root))
+        toolsets.append(_build_exec_toolset(workspace_root=resolved_workspace_root))
         exec_enabled = os.getenv("ENABLE_EXECUTE", "").lower() in ("1", "true", "yes")
         if exec_enabled:
             prompt_fragments.append(EXEC_INSTRUCTIONS)
@@ -251,8 +248,9 @@ def build_toolsets(
 
 
 def prepare_toolset_context(
-    agent_paths_or_db: AgentPaths | str,
+    history_db_path: str,
     tool_names: list[str] | None = None,
+    workspace_root: Path | None = None,
 ) -> tuple[
     Path,
     str,
@@ -263,49 +261,30 @@ def prepare_toolset_context(
 ]:
     """Initialize runtime stores needed for toolset construction.
 
-    Accepts either an :class:`~autopoiesis.agent.workspace.AgentPaths` instance
-    (agent-aware, per-agent isolated paths) or a legacy *history_db_path* string
-    (global workspace root).
-
     *tool_names* is forwarded to :func:`build_toolsets` to filter which toolsets
     are included.  Pass ``None`` (default) to include all toolsets.
+    *workspace_root* overrides the env-var workspace source for per-agent isolation.
     """
-    if isinstance(agent_paths_or_db, AgentPaths):
-        agent_paths = agent_paths_or_db
-        workspace_root = agent_paths.workspace
-        workspace_root.mkdir(parents=True, exist_ok=True)
-        data_dir = agent_paths.data
-        data_dir.mkdir(parents=True, exist_ok=True)
-        knowledge_root = agent_paths.knowledge
-        knowledge_root.mkdir(parents=True, exist_ok=True)
-        knowledge_db_path = str(data_dir / "knowledge.sqlite")
-        sub_db_path = str(data_dir / "subscriptions.sqlite")
-        topics_dir = knowledge_root / "topics"
-        topics_dir.mkdir(parents=True, exist_ok=True)
-    else:
-        history_db_path = agent_paths_or_db
-        workspace_root = resolve_workspace_root()
-        sub_db_path = str(Path(history_db_path).with_name("subscriptions.sqlite"))
-        knowledge_root = workspace_root / "knowledge"
-        knowledge_db_path = str(Path(history_db_path).with_name("knowledge.sqlite"))
-        topics_dir = workspace_root / "topics"
-
+    resolved_workspace_root = resolve_workspace_root(workspace_root)
+    sub_db_path = str(Path(history_db_path).with_name("subscriptions.sqlite"))
     subscription_registry = SubscriptionRegistry(sub_db_path)
+    knowledge_root = resolved_workspace_root / "knowledge"
+    knowledge_db_path = str(Path(history_db_path).with_name("knowledge.sqlite"))
     init_knowledge_index(knowledge_db_path)
     reindex_knowledge(knowledge_db_path, knowledge_root)
     ensure_journal_entry(knowledge_root)
     knowledge_context = load_knowledge_context(knowledge_root)
-    topic_registry = TopicRegistry(topics_dir)
+    topic_registry = TopicRegistry(resolved_workspace_root / "topics")
     toolsets, system_prompt = build_toolsets(
         subscription_registry=subscription_registry,
         knowledge_db_path=knowledge_db_path,
         knowledge_context=knowledge_context,
         topic_registry=topic_registry,
         tool_names=tool_names,
-        workspace_root=workspace_root,
+        workspace_root=resolved_workspace_root,
     )
     return (
-        workspace_root,
+        resolved_workspace_root,
         knowledge_db_path,
         subscription_registry,
         topic_registry,

@@ -442,7 +442,9 @@ class TestInitializeRuntimeWiring:
 
         captured_tool_names: list[str] | None = None
 
-        def _fake_prepare(history_db_path: str, tool_names: list[str] | None = None) -> Any:
+        def _fake_prepare(
+            history_db_path: str, tool_names: list[str] | None = None, *, workspace_root: Any = None
+        ) -> Any:
             nonlocal captured_tool_names
             captured_tool_names = tool_names
             return (
@@ -489,7 +491,9 @@ class TestInitializeRuntimeWiring:
         """Without AgentConfig, tool_names=None is passed (backward-compatible all-tools)."""
         captured_tool_names: list[str] | None | str = "sentinel"
 
-        def _fake_prepare(history_db_path: str, tool_names: list[str] | None = None) -> Any:
+        def _fake_prepare(
+            history_db_path: str, tool_names: list[str] | None = None, *, workspace_root: Any = None
+        ) -> Any:
             nonlocal captured_tool_names
             captured_tool_names = tool_names
             return (

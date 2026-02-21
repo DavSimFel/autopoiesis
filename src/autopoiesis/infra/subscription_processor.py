@@ -22,6 +22,7 @@ from pydantic_ai.messages import (
     UserPromptPart,
 )
 
+from autopoiesis.security.path_validator import PathValidator
 from autopoiesis.store.knowledge import search_knowledge
 from autopoiesis.store.subscriptions import (
     MaterializedContent,
@@ -54,9 +55,13 @@ def is_materialization(msg: ModelMessage) -> bool:
 
 def _read_file(target: str, workspace_root: Path, sub: Subscription) -> str:
     """Read file content, optionally slicing by line range."""
-    resolved = (workspace_root / target).resolve()
-    if not resolved.is_relative_to(workspace_root.resolve()):
-        return "Error: path escapes workspace root."
+    validator = PathValidator(workspace_root=workspace_root)
+    try:
+        resolved = validator.resolve_path(target)
+    except ValueError as exc:
+        if "escapes allowed roots" in str(exc):
+            return "Error: path escapes workspace root."
+        return f"Error: file not found: {target}"
     if not resolved.is_file():
         return f"Error: file not found: {target}"
     try:

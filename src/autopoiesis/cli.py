@@ -152,7 +152,7 @@ def initialize_runtime(
         # Use config name for the DBOS agent queue instead of env default.
         agent_name = agent_config.name
 
-    backend: LocalBackend = build_backend()
+    backend: LocalBackend = build_backend(agent_paths.workspace)
     approval_store = ApprovalStore.from_env(base_dir=agent_paths.root)
     key_manager = ApprovalKeyManager.from_env(base_dir=agent_paths.root)
     if require_approval_unlock:
@@ -166,7 +166,11 @@ def initialize_runtime(
         topic_registry,
         toolsets,
         system_prompt,
-    ) = prepare_toolset_context(history_db_path, tool_names=tool_names)
+    ) = prepare_toolset_context(
+        history_db_path,
+        tool_names=tool_names,
+        workspace_root=agent_paths.workspace,
+    )
 
     # When a config-specified system prompt file exists, use it instead of the
     # auto-composed one produced by toolset assembly.
