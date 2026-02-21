@@ -13,6 +13,7 @@ import os
 from collections.abc import AsyncIterable
 from contextvars import ContextVar, Token
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from pydantic_ai import DeferredToolRequests
@@ -40,6 +41,7 @@ from autopoiesis.infra.work_queue import dispatch_workitem
 from autopoiesis.models import AgentDeps, WorkItem, WorkItemOutput
 from autopoiesis.store.conversation_log import append_turn, rotate_logs
 from autopoiesis.store.history import clear_checkpoint, load_checkpoint, save_checkpoint
+from autopoiesis.store.result_store import rotate_results
 
 try:
     from dbos import DBOS, SetEnqueueOptions
@@ -272,6 +274,9 @@ def run_agent_step(work_item_dict: dict[str, Any]) -> dict[str, Any]:
             rotate_logs(rt.knowledge_root, rt.agent_name, rt.conversation_log_retention_days)
         except Exception:
             _log.warning("Conversation logging failed for agent %s", rt.agent_name, exc_info=True)
+
+    # --- Persistent result rotation ---
+    rotate_results(Path(rt.backend.root_dir) / "tmp", rt.tmp_retention_days, rt.tmp_max_size_mb)
 
     return output.model_dump()
 

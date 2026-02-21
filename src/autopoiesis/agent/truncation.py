@@ -12,6 +12,8 @@ from pathlib import Path
 
 from pydantic_ai.messages import ModelMessage, ModelRequest, ToolReturnPart
 
+from autopoiesis.store.result_store import store_tool_result
+
 DEFAULT_MAX_BYTES = 10 * 1024
 """Default byte limit for tool result content (10 KB)."""
 
@@ -38,13 +40,6 @@ def _get_max_tool_result_bytes() -> int:
         msg = f"TOOL_RESULT_MAX_BYTES must be positive, got {value}"
         raise ValueError(msg)
     return value
-
-
-def _ensure_log_dir(workspace_root: Path) -> Path:
-    """Create and return the tool-results log directory."""
-    log_dir = workspace_root / ".tmp" / "tool-results"
-    log_dir.mkdir(parents=True, exist_ok=True)
-    return log_dir
 
 
 def cap_tool_result(
@@ -82,23 +77,33 @@ def cap_tool_result(
 
 def _truncate_part(
     part: ToolReturnPart,
-    log_dir: Path,
+    tmp_dir: Path,
+    workspace_root: Path,
     max_bytes: int,
 ) -> ToolReturnPart:
-    """Truncate a single tool return part if its content exceeds *max_bytes*."""
+    """Truncate a single tool return part if its content exceeds *max_bytes*.
+
+    Before truncating, the full output is persisted via store_tool_result
+    and a reference line is appended so the agent can locate the full output.
+    """
     content = part.content
     if not isinstance(content, str):
         return part
-
     encoded = content.encode("utf-8", errors="replace")
     if len(encoded) <= max_bytes:
         return part
-
-    # Persist full output for post-hoc inspection.
-    log_path = log_dir / f"{part.tool_call_id}.log"
-    log_path.write_text(content, encoding="utf-8")
-
-    new_content = cap_tool_result(content, max_bytes)
+    stored_path = store_tool_result(
+        tmp_dir=tmp_dir,
+        tool_name=part.tool_name,
+        content=content,
+        metadata={"tool_call_id": part.tool_call_id},
+    )
+    try:
+        rel_path = stored_path.relative_to(workspace_root)
+    except ValueError:
+        rel_path = stored_path
+    truncated = cap_tool_result(content, max_bytes)
+    new_content = truncated + "\n[full output: " + str(rel_path) + "]"
     return dataclasses.replace(part, content=new_content)
 
 
@@ -129,7 +134,7 @@ def truncate_tool_results(
         The (possibly modified) message list.
     """
     max_bytes: int = max_chars if max_chars is not None else _get_max_tool_result_bytes()
-    log_dir: Path | None = None
+    tmp_dir = workspace_root / "tmp"
     result: list[ModelMessage] = []
 
     for msg in messages:
@@ -147,11 +152,10 @@ def truncate_tool_results(
             result.append(msg)
             continue
 
-        if log_dir is None:
-            log_dir = _ensure_log_dir(workspace_root)
-
         new_parts = [
-            _truncate_part(p, log_dir, max_bytes) if isinstance(p, ToolReturnPart) else p
+            _truncate_part(p, tmp_dir, workspace_root, max_bytes)
+            if isinstance(p, ToolReturnPart)
+            else p
             for p in msg.parts
         ]
         result.append(dataclasses.replace(msg, parts=new_parts))

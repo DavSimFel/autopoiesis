@@ -123,9 +123,11 @@ class TestTruncateToolResults:
         msgs: list[ModelMessage] = [ModelRequest(parts=[part])]
         truncate_tool_results(msgs, tmp_path, max_chars=50)
 
-        log_file = tmp_path / ".tmp" / "tool-results" / "c3.log"
-        assert log_file.exists()
-        assert log_file.read_text() == big_content
+        # New implementation stores to tmp/tool-results/{date}/{tool_name}_{hash}.out
+        results_dir = tmp_path / "tmp" / "tool-results"
+        result_files = list(results_dir.rglob("*.out"))
+        assert len(result_files) == 1
+        assert big_content in result_files[0].read_text()
 
     def test_non_string_content_unchanged(self, tmp_path: Path) -> None:
         """Non-string tool content passes through without modification."""

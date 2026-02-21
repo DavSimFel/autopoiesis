@@ -181,6 +181,7 @@ jobs:
             ["src/autopoiesis/tools/subscription_tools.py"]="specs/modules/subscriptions.md"
             ["src/autopoiesis/store/subscriptions.py"]="specs/modules/subscriptions.md"
             ["src/autopoiesis/infra/work_queue.py"]="specs/modules/queue.md"
+            ["src/autopoiesis/store/result_store.py"]="specs/modules/exec.md"
             ["src/autopoiesis/agent/config.py"]="specs/modules/agent-runtime.md"
             ["src/autopoiesis/agent/spawner.py"]="specs/modules/agent-runtime.md"
             ["src/autopoiesis/topics/topic_manager.py"]="specs/modules/topics.md"

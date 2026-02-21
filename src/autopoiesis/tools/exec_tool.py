@@ -1,13 +1,11 @@
-"""Shell execution tool with PTY support, timeout, and background mode.
-
-Dependencies: infra.exec_registry, infra.pty_spawn, io_utils, models
-Wired in: toolset_builder.py → build_toolsets()
-"""
+"""Shell execution tool: PTY, timeout, background mode; persists output via result_store."""
 
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
+import time
 from pathlib import Path
 from typing import Any
 
@@ -18,8 +16,10 @@ from autopoiesis.infra import exec_registry
 from autopoiesis.infra.pty_spawn import PtyProcess, read_master, spawn_pty
 from autopoiesis.io_utils import tail_lines
 from autopoiesis.models import AgentDeps
+from autopoiesis.store.result_store import store_shell_output
 from autopoiesis.tools.tier_enforcement import enforce_tier
 
+_log = logging.getLogger(__name__)
 _background_tasks: set[asyncio.Task[None]] = set()
 
 _DANGEROUS_ENV_VARS: frozenset[str] = frozenset(
@@ -94,47 +94,33 @@ async def _spawn_pty_session(
 ) -> tuple[asyncio.subprocess.Process, int]:
     """Spawn a command under a PTY and return (process, master_fd)."""
     pty_proc = await spawn_pty(command, cwd=cwd, env=env)
-    # Start draining output in background
     task = asyncio.create_task(_read_pty_output(pty_proc, log_path))
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
     return pty_proc.process, pty_proc.master_fd
 
 
-async def _close_fh_on_exit(
-    proc: asyncio.subprocess.Process,
-    log_fh: Any,
-) -> None:
-    """Wait for *proc* to exit, then close the log file handle."""
-    await proc.wait()
-    log_fh.close()
-
-
-def _enqueue_exit_callback(session: exec_registry.ProcessSession) -> None:
-    """Enqueue a HIGH-priority work item with exit details."""
+async def _monitor_background(session: exec_registry.ProcessSession) -> None:
+    """Wait for background exit, record it, then enqueue callback work item."""
     from autopoiesis.agent.worker import enqueue
     from autopoiesis.models import WorkItem, WorkItemInput, WorkItemPriority, WorkItemType
 
-    tail = tail_lines(session.log_path, _MAX_SUMMARY_LINES)
-    item = WorkItem(
-        type=WorkItemType.EXEC_CALLBACK,
-        priority=WorkItemPriority.HIGH,
-        input=WorkItemInput(prompt=None),
-        payload={
-            "session_id": session.session_id,
-            "exit_code": session.exit_code,
-            "log_path": str(session.log_path),
-            "output_tail": tail,
-        },
-    )
-    enqueue(item)
-
-
-async def _monitor_background(session: exec_registry.ProcessSession) -> None:
-    """Wait for a background process to exit, then record and notify."""
     code = await session.process.wait()
     exec_registry.mark_exited(session.session_id, code)
-    _enqueue_exit_callback(session)
+    tail = tail_lines(session.log_path, _MAX_SUMMARY_LINES)
+    enqueue(
+        WorkItem(
+            type=WorkItemType.EXEC_CALLBACK,
+            priority=WorkItemPriority.HIGH,
+            input=WorkItemInput(prompt=None),
+            payload={
+                "session_id": session.session_id,
+                "exit_code": session.exit_code,
+                "log_path": str(session.log_path),
+                "output_tail": tail,
+            },
+        )
+    )
 
 
 async def _spawn_subprocess(
@@ -153,8 +139,12 @@ async def _spawn_subprocess(
         cwd=cwd,
         env=env,
     )
-    # Ensure the file handle is closed when the process exits.
-    task = asyncio.create_task(_close_fh_on_exit(proc, log_fh))
+
+    async def _close_fh() -> None:
+        await proc.wait()
+        log_fh.close()
+
+    task = asyncio.create_task(_close_fh())
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
     return proc, None
@@ -203,8 +193,10 @@ async def _wait_with_timeout(
 async def _finish_session(
     session: exec_registry.ProcessSession,
     timeout: float,
+    tmp_dir: Path | None = None,
+    start_time: float | None = None,
 ) -> ToolReturn:
-    """Register a session and wait or background-monitor it."""
+    """Register a session; persist foreground output to ``{tmp_dir}/shell/``."""
     exec_registry.add(session)
     if session.background:
         task = asyncio.create_task(_monitor_background(session))
@@ -213,7 +205,55 @@ async def _finish_session(
         summary = _build_summary(session)
     else:
         summary = await _wait_with_timeout(session, timeout)
+        if tmp_dir is not None and start_time is not None:
+            try:
+                combined = session.log_path.read_text(encoding="utf-8", errors="replace")
+                store_shell_output(
+                    tmp_dir=tmp_dir,
+                    command=session.command,
+                    stdout=combined,
+                    stderr="",
+                    exit_code=session.exit_code or 0,
+                    duration_ms=int((time.monotonic() - start_time) * 1000),
+                )
+            except OSError:
+                _log.debug("store_shell_output failed for %s", session.session_id)
     return _to_tool_return(summary)
+
+
+async def _run_exec(  # noqa: PLR0913
+    ctx: RunContext[AgentDeps],
+    command: str,
+    cwd: str | None,
+    env: dict[str, str] | None,
+    timeout: float,
+    background: bool,
+    *,
+    pty: bool = False,
+) -> ToolReturn:
+    """Shared body for execute and execute_pty."""
+    blocked = enforce_tier(command, ctx.deps.approval_unlocked)
+    if blocked is not None:
+        return blocked
+    workspace_root = Path(ctx.deps.backend.root_dir)
+    safe_cwd = sandbox_cwd(cwd, workspace_root)
+    safe_env = resolve_env(env)
+    session_id = exec_registry.new_session_id()
+    log_path = exec_registry.log_path_for(workspace_root, session_id)
+    start_time = time.monotonic()
+    spawner = _spawn_pty_session if pty else _spawn_subprocess
+    proc, master_fd = await spawner(command, safe_cwd, safe_env, log_path)
+    session = exec_registry.ProcessSession(
+        session_id=session_id,
+        command=command,
+        process=proc,
+        log_path=log_path,
+        master_fd=master_fd,
+        background=background,
+    )
+    return await _finish_session(
+        session, timeout, tmp_dir=workspace_root / "tmp", start_time=start_time
+    )
 
 
 async def execute(
@@ -234,24 +274,7 @@ async def execute(
         timeout: Seconds before kill (foreground only).
         background: Return immediately with a session id for monitoring.
     """
-    blocked = enforce_tier(command, ctx.deps.approval_unlocked)
-    if blocked is not None:
-        return blocked
-    workspace_root = Path(ctx.deps.backend.root_dir)
-    safe_cwd = sandbox_cwd(cwd, workspace_root)
-    safe_env = resolve_env(env)
-    session_id = exec_registry.new_session_id()
-    log_path = exec_registry.log_path_for(workspace_root, session_id)
-    proc, master_fd = await _spawn_subprocess(command, safe_cwd, safe_env, log_path)
-    session = exec_registry.ProcessSession(
-        session_id=session_id,
-        command=command,
-        process=proc,
-        log_path=log_path,
-        master_fd=master_fd,
-        background=background,
-    )
-    return await _finish_session(session, timeout)
+    return await _run_exec(ctx, command, cwd, env, timeout, background)
 
 
 async def execute_pty(
@@ -272,21 +295,4 @@ async def execute_pty(
         timeout: Seconds before kill (foreground only).
         background: Return immediately with a session id for monitoring.
     """
-    blocked = enforce_tier(command, ctx.deps.approval_unlocked)
-    if blocked is not None:
-        return blocked
-    workspace_root = Path(ctx.deps.backend.root_dir)
-    safe_cwd = sandbox_cwd(cwd, workspace_root)
-    safe_env = resolve_env(env)
-    session_id = exec_registry.new_session_id()
-    log_path = exec_registry.log_path_for(workspace_root, session_id)
-    proc, master_fd = await _spawn_pty_session(command, safe_cwd, safe_env, log_path)
-    session = exec_registry.ProcessSession(
-        session_id=session_id,
-        command=command,
-        process=proc,
-        log_path=log_path,
-        master_fd=master_fd,
-        background=background,
-    )
-    return await _finish_session(session, timeout)
+    return await _run_exec(ctx, command, cwd, env, timeout, background, pty=True)
