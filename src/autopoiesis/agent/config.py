@@ -56,11 +56,23 @@ class AgentConfig:
     """Number of days to retain conversation log files before rotation
     removes them.  Set to ``0`` to disable automatic cleanup."""
 
-    tmp_retention_days: int = 14
-    """Days to keep date-directories under ``tmp/`` before deletion."""
+    queue_poll_max_iterations: int = 900
+    """Max DBOS queue-poll iterations while waiting for work item completion."""
 
-    tmp_max_size_mb: int = 500
-    """Maximum total size of ``tmp/`` in MB; oldest dirs purged when exceeded."""
+    deferred_max_iterations: int = 10
+    """Max approval deferral loop iterations for a single chat turn."""
+
+    deferred_timeout_seconds: float = 300.0
+    """Max wall-clock duration for one approval deferral loop."""
+
+    tool_loop_max_iterations: int = 40
+    """Max successful tool calls within one PydanticAI run."""
+
+    work_item_token_budget: int = 120_000
+    """Max total tokens consumed by a single work item execution."""
+
+    work_item_timeout_seconds: float = 300.0
+    """Max wall-clock duration for one work item execution."""
 
 
 _DEFAULT_AGENT_CONFIG = AgentConfig(
@@ -74,6 +86,31 @@ _DEFAULT_AGENT_CONFIG = AgentConfig(
 
 _VALID_ROLES = frozenset({"proxy", "planner", "executor"})
 _VALID_SHELL_TIERS = frozenset({"free", "review", "approve"})
+
+
+def default_agent_config() -> AgentConfig:
+    """Return the built-in single-agent fallback configuration."""
+    return _DEFAULT_AGENT_CONFIG
+
+
+def _parse_positive_int(agent_name: str, field: str, value: object) -> int:
+    """Parse a positive integer field from TOML with clear context."""
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        msg = f"Agent '{agent_name}': '{field}' must be a positive integer."
+        raise TypeError(msg)
+    return value
+
+
+def _parse_positive_float(agent_name: str, field: str, value: object) -> float:
+    """Parse a positive float field from TOML with clear context."""
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        msg = f"Agent '{agent_name}': '{field}' must be a positive number."
+        raise TypeError(msg)
+    numeric = float(value)
+    if numeric <= 0:
+        msg = f"Agent '{agent_name}': '{field}' must be greater than zero."
+        raise ValueError(msg)
+    return numeric
 
 
 def _parse_agent_entry(
@@ -114,15 +151,36 @@ def _parse_agent_entry(
     ephemeral = bool(_get("ephemeral", False))
     log_conversations = bool(_get("log_conversations", True))
     conversation_log_retention_days = int(str(_get("conversation_log_retention_days", 30)))
-
-    def _get_int(key: str, default: int) -> int:
-        raw = _get(key, default)
-        if isinstance(raw, (int, float, str, bytes)):
-            return int(raw)
-        return default
-
-    tmp_retention_days = _get_int("tmp_retention_days", 14)
-    tmp_max_size_mb = _get_int("tmp_max_size_mb", 500)
+    queue_poll_max_iterations = _parse_positive_int(
+        name,
+        "queue_poll_max_iterations",
+        _get("queue_poll_max_iterations", 900),
+    )
+    deferred_max_iterations = _parse_positive_int(
+        name,
+        "deferred_max_iterations",
+        _get("deferred_max_iterations", 10),
+    )
+    deferred_timeout_seconds = _parse_positive_float(
+        name,
+        "deferred_timeout_seconds",
+        _get("deferred_timeout_seconds", 300.0),
+    )
+    tool_loop_max_iterations = _parse_positive_int(
+        name,
+        "tool_loop_max_iterations",
+        _get("tool_loop_max_iterations", 40),
+    )
+    work_item_token_budget = _parse_positive_int(
+        name,
+        "work_item_token_budget",
+        _get("work_item_token_budget", 120_000),
+    )
+    work_item_timeout_seconds = _parse_positive_float(
+        name,
+        "work_item_timeout_seconds",
+        _get("work_item_timeout_seconds", 300.0),
+    )
 
     return AgentConfig(
         name=name,
@@ -134,8 +192,12 @@ def _parse_agent_entry(
         ephemeral=ephemeral,
         log_conversations=log_conversations,
         conversation_log_retention_days=conversation_log_retention_days,
-        tmp_retention_days=tmp_retention_days,
-        tmp_max_size_mb=tmp_max_size_mb,
+        queue_poll_max_iterations=queue_poll_max_iterations,
+        deferred_max_iterations=deferred_max_iterations,
+        deferred_timeout_seconds=deferred_timeout_seconds,
+        tool_loop_max_iterations=tool_loop_max_iterations,
+        work_item_token_budget=work_item_token_budget,
+        work_item_timeout_seconds=work_item_timeout_seconds,
     )
 
 

@@ -101,3 +101,8 @@ the server import is optional and non-fatal if unavailable.
 
 - 2026-02-21: Added `topic_activation.py` MCP skill hook — topics now lazily
   activate corresponding MCP skill tool sets via `SkillActivator`. (Issue #221 Phase 2)
+
+## Loop Guards (#223)
+- LoopGuardConfig: max_iterations, token_budget, wall_clock_timeout
+- turn_execution: WorkItemLimitExceededError, run_turn()
+- 80% threshold warnings

@@ -7,16 +7,21 @@ Wired in: chat.py → main()
 
 from __future__ import annotations
 
+import logging
 import sys
+import time
 from typing import Any
 from uuid import uuid4
 
+from autopoiesis.agent.loop_guards import resolve_loop_guards, warning_threshold, warning_timeout
 from autopoiesis.agent.runtime import get_runtime
 from autopoiesis.agent.worker import enqueue_and_wait
 from autopoiesis.display.streaming import ChannelStatus, RichStreamHandle, register_stream
 from autopoiesis.infra.approval.chat_approval import display_approval_requests, gather_approvals
 from autopoiesis.infra.approval.types import ApprovalVerificationError
 from autopoiesis.models import WorkItem, WorkItemInput, WorkItemPriority, WorkItemType
+
+_log = logging.getLogger(__name__)
 
 
 def _collapse_approval(
@@ -34,20 +39,64 @@ def _collapse_approval(
     handle.show_approval(summary, status)
 
 
-def _run_turn(
+def run_turn_cli(
     user_input: str,
     history_json: str | None,
 ) -> str | None:
     """Execute one user turn, handling deferred approval loops.
 
+    The deferral loop is bounded by ``guards.deferred_max_iterations`` and
+    ``guards.deferred_timeout_seconds``.  If either limit is reached the loop
+    is stopped and whatever history was last returned is used.
+
     Returns updated history JSON after the turn completes.
     """
     rt = get_runtime()
+    guards = resolve_loop_guards(rt)
     prompt: str | None = user_input
     deferred_results_json: str | None = None
     approval_context_id = uuid4().hex
 
+    deferred_iteration = 0
+    started_at = time.monotonic()
+    warned_iter = False
+    warned_timeout = False
+    iter_threshold = warning_threshold(guards.deferred_max_iterations)
+    timeout_threshold = warning_timeout(guards.deferred_timeout_seconds)
+
     while True:
+        elapsed = time.monotonic() - started_at
+
+        # 80 % warnings
+        if not warned_iter and deferred_iteration >= iter_threshold:
+            _log.warning(
+                "Deferral loop at 80%% of max iterations (%d/%d).",
+                deferred_iteration,
+                guards.deferred_max_iterations,
+            )
+            warned_iter = True
+        if not warned_timeout and elapsed >= timeout_threshold:
+            _log.warning(
+                "Deferral loop at 80%% of timeout (%.1fs/%.1fs).",
+                elapsed,
+                guards.deferred_timeout_seconds,
+            )
+            warned_timeout = True
+
+        # Hard limits — stop gracefully rather than looping forever.
+        if deferred_iteration >= guards.deferred_max_iterations:
+            _log.error(
+                "Deferral loop exceeded max iterations (%d); stopping turn.",
+                guards.deferred_max_iterations,
+            )
+            break
+        if elapsed >= guards.deferred_timeout_seconds:
+            _log.error(
+                "Deferral loop exceeded timeout (%.1fs); stopping turn.",
+                guards.deferred_timeout_seconds,
+            )
+            break
+
         item = WorkItem(
             type=WorkItemType.CHAT,
             priority=WorkItemPriority.CRITICAL,
@@ -82,6 +131,7 @@ def _run_turn(
         finally:
             handle.resume_display()
         prompt = None
+        deferred_iteration += 1
 
     return history_json
 
@@ -106,7 +156,7 @@ def cli_chat_loop() -> None:
             break
 
         try:
-            history_json = _run_turn(user_input, history_json)
+            history_json = run_turn_cli(user_input, history_json)
         except ApprovalVerificationError as exc:
             print(f"Approval verification failed [{exc.code}]: {exc}", file=sys.stderr)
         except (OSError, RuntimeError, ValueError) as exc:

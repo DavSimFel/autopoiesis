@@ -452,3 +452,7 @@ them on `Runtime`.
 
 ## Security Cluster (#213-#217)
 - PathValidator, TaintTracker, SubprocessSandbox integrated into CLI
+
+## Loop Guards (#223)
+- run_turn_cli for multi-agent CLI routing
+- Deferred max iterations and timeout in CLI chat loop
