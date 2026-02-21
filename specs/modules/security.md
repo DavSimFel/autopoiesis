@@ -7,7 +7,7 @@ approval signing and tier-based command enforcement.
 
 ## Status
 
-- **Last updated:** 2026-02-18 (Issue #170)
+- **Last updated:** 2026-02-21 (Issue #221)
 - **Source:** `specs/security.md` (full approval model), `src/autopoiesis/infra/command_classifier.py`, `src/autopoiesis/tools/tier_enforcement.py`, `src/autopoiesis/tools/exec_tool.py`
 
 ## Ed25519 Approval Model
@@ -64,6 +64,9 @@ only. It enables development and read-only workflows without key material.
 
 ## Change Log
 
+- 2026-02-21: Increased default subprocess process cap to 512 and refined
+  RLIMIT behavior so only `RLIMIT_NPROC` preserves inherited soft limits.
+  `RLIMIT_FSIZE` and `RLIMIT_CPU` continue enforcing strict caps. (Issue #221)
 - 2026-02-18: Removed legacy `shell_tool` references, documented
   `python`/`python3`/`tmux` as REVIEW-tier commands, and aligned enforcement
   docs to `tier_enforcement.py` + `exec_tool.py`. (Issue #170)
@@ -72,3 +75,15 @@ only. It enables development and read-only workflows without key material.
 - PathValidator: validates file paths against sandbox boundaries
 - TaintTracker: marks external content as tainted for sanitization
 - SubprocessSandboxManager: enforces preexec_fn in PTY/exec calls
+
+## Subprocess Sandbox Limits
+
+`SubprocessSandboxManager` applies RLIMIT caps in its pre-exec hook:
+
+- `RLIMIT_NPROC`: default target is `512`; inherited soft limit is never
+  lowered below the existing value.
+- `RLIMIT_FSIZE`: capped to configured sandbox value.
+- `RLIMIT_CPU`: capped to configured sandbox value.
+
+The non-lowering behavior is specific to process-count limits, while CPU and
+file-size safeguards remain strict caps.

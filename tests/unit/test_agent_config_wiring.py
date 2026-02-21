@@ -132,10 +132,13 @@ class TestBuildAgentFromConfig:
         mock_toolsets = cast(list[AbstractToolset[AgentDeps]], [MagicMock()])
         mock_agent = MagicMock()
         resolved_model = "anthropic:claude-sonnet-4"
-        with patch(
-            "autopoiesis.agent.runtime.resolve_model_from_config",
-            return_value=resolved_model,
-        ), patch("autopoiesis.agent.runtime.Agent", return_value=mock_agent) as mock_ctor:
+        with (
+            patch(
+                "autopoiesis.agent.runtime.resolve_model_from_config",
+                return_value=resolved_model,
+            ),
+            patch("autopoiesis.agent.runtime.Agent", return_value=mock_agent) as mock_ctor,
+        ):
             result = build_agent_from_config(cfg, mock_toolsets, "system prompt")
         assert result is mock_agent
         call = mock_ctor.call_args
@@ -168,10 +171,13 @@ class TestBuildAgentFromConfig:
 
         cfg = _make_config(model="openai/gpt-4o-mini")
         mock_openrouter_model = MagicMock()
-        with patch(
-            "autopoiesis.agent.runtime.resolve_model_from_config",
-            return_value=mock_openrouter_model,
-        ), patch("autopoiesis.agent.runtime.Agent", return_value=MagicMock()) as mock_ctor:
+        with (
+            patch(
+                "autopoiesis.agent.runtime.resolve_model_from_config",
+                return_value=mock_openrouter_model,
+            ),
+            patch("autopoiesis.agent.runtime.Agent", return_value=MagicMock()) as mock_ctor,
+        ):
             build_agent_from_config(cfg, [], "prompt")
         call = mock_ctor.call_args
         assert call is not None
