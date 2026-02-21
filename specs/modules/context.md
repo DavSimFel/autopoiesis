@@ -59,3 +59,10 @@ Tool result truncation and proactive context overflow prevention:
 - Automatic compaction before overflow
 
 - 2026-02-20: Token counting logic extracted into `context_tokens.py` for single-responsibility; `context.py` delegates to it (#193)
+
+## Tool Result Storage (#220)
+
+Persistent tool result and shell output storage via `truncation.py`:
+- Results stored to `tmp/tool-results/{date}/` for post-hoc inspection
+- Configurable retention (`tmp_retention_days`) and size limits (`tmp_max_size_mb`)
+- Automatic rotation via `rotate_results()` in worker startup
