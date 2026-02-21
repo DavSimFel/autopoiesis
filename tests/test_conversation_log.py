@@ -17,9 +17,9 @@ from pydantic_ai.messages import (
 )
 
 from autopoiesis.store.conversation_log import (
-    _format_entry,
-    _parse_messages,
     append_turn,
+    format_entry,
+    parse_messages,
     rotate_logs,
 )
 from autopoiesis.store.knowledge import init_knowledge_index
@@ -217,14 +217,14 @@ class TestToolCallCapture:
             assert "LARGE_RESULT_DATA" not in content
 
     def test_parse_messages_extracts_tool_names_only(self) -> None:
-        """_parse_messages returns tool call names, not return values."""
+        """parse_messages returns tool call names, not return values."""
         tool_return = _make_tool_return_message("my_tool", "SECRET_RESULT_CONTENT")
         assistant_with_calls = _make_assistant_message(
             "Calling tools.", tool_names=["tool_a", "tool_b"]
         )
         messages = [tool_return, assistant_with_calls]
 
-        entries = _parse_messages(messages)
+        entries = parse_messages(messages)
 
         # ToolReturnPart on a request message should be skipped entirely
         roles = [role for role, _, _ in entries]
@@ -299,7 +299,7 @@ class TestLoggingDisabled:
 
         written: list[Path] = []
 
-        if log_conversations and knowledge_root is not None:
+        if log_conversations:
             path = append_turn(knowledge_root, knowledge_db, "worker-agent", messages)
             if path:
                 written.append(path)
@@ -390,15 +390,18 @@ class TestRotation:
 
 
 # ---------------------------------------------------------------------------
-# _format_entry unit tests
+# format_entry unit tests
 # ---------------------------------------------------------------------------
 
 
 class TestFormatEntry:
     def test_basic_format(self) -> None:
         ts = datetime(2026, 2, 20, 14, 0, 0, tzinfo=UTC)
-        entries = [("user", "hello", []), ("assistant", "hi there", [])]
-        block = _format_entry(ts, entries)
+        entries: list[tuple[str, str, list[str]]] = [
+            ("user", "hello", []),
+            ("assistant", "hi there", []),
+        ]
+        block = format_entry(ts, entries)
 
         assert "## 2026-02-20T14:00:00+00:00" in block
         assert "**user**: hello" in block
@@ -407,11 +410,11 @@ class TestFormatEntry:
     def test_tool_parenthetical_included(self) -> None:
         ts = datetime(2026, 2, 20, 14, 0, 0, tzinfo=UTC)
         entries = [("assistant", "working", ["tool_x"])]
-        block = _format_entry(ts, entries)
+        block = format_entry(ts, entries)
         assert "*(tools: tool_x)*" in block
 
     def test_no_tools_no_parenthetical(self) -> None:
         ts = datetime(2026, 2, 20, 14, 0, 0, tzinfo=UTC)
-        entries = [("user", "hi", [])]
-        block = _format_entry(ts, entries)
+        entries: list[tuple[str, str, list[str]]] = [("user", "hi", [])]
+        block = format_entry(ts, entries)
         assert "*(tools:" not in block

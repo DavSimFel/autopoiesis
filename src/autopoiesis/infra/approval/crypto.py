@@ -22,15 +22,15 @@ from autopoiesis.infra.approval.key_files import utc_now_iso
 
 _PRIVATE_FILE_VERSION = 1
 _KEY_AEAD_AD = b"autopoiesis:approval-key:v1"
-_KEY_LENGTH = 32
+KEY_LENGTH = 32
 
-_ARGON2_ITERATIONS = 3
-_ARGON2_MEMORY_KIB = 64 * 1024
-_ARGON2_LANES = 1
-_SCRYPT_N = 2**15
-_SCRYPT_R = 8
-_SCRYPT_P = 1
-_MIN_PASSPHRASE_LENGTH = 12
+ARGON2_ITERATIONS = 3
+ARGON2_MEMORY_KIB = 64 * 1024
+ARGON2_LANES = 1
+SCRYPT_N = 2**15
+SCRYPT_R = 8
+SCRYPT_P = 1
+MIN_PASSPHRASE_LENGTH = 12
 
 
 def encrypt_private_key(private_key: Ed25519PrivateKey, passphrase: str) -> dict[str, Any]:
@@ -90,25 +90,25 @@ def derive_encryption_key(passphrase: bytes, salt: bytes) -> tuple[bytes, dict[s
         return argon2_key, {
             "name": "argon2id",
             "salt_b64": b64_encode(salt),
-            "iterations": _ARGON2_ITERATIONS,
-            "lanes": _ARGON2_LANES,
-            "memory_kib": _ARGON2_MEMORY_KIB,
-            "length": _KEY_LENGTH,
+            "iterations": ARGON2_ITERATIONS,
+            "lanes": ARGON2_LANES,
+            "memory_kib": ARGON2_MEMORY_KIB,
+            "length": KEY_LENGTH,
         }
     key = Scrypt(
         salt=salt,
-        length=_KEY_LENGTH,
-        n=_SCRYPT_N,
-        r=_SCRYPT_R,
-        p=_SCRYPT_P,
+        length=KEY_LENGTH,
+        n=SCRYPT_N,
+        r=SCRYPT_R,
+        p=SCRYPT_P,
     ).derive(passphrase)
     return key, {
         "name": "scrypt",
         "salt_b64": b64_encode(salt),
-        "n": _SCRYPT_N,
-        "r": _SCRYPT_R,
-        "p": _SCRYPT_P,
-        "length": _KEY_LENGTH,
+        "n": SCRYPT_N,
+        "r": SCRYPT_R,
+        "p": SCRYPT_P,
+        "length": KEY_LENGTH,
     }
 
 
@@ -140,10 +140,10 @@ def derive_argon2_key(passphrase: bytes, salt: bytes) -> bytes | None:
         return None
     return Argon2id(
         salt=salt,
-        length=_KEY_LENGTH,
-        iterations=_ARGON2_ITERATIONS,
-        lanes=_ARGON2_LANES,
-        memory_cost=_ARGON2_MEMORY_KIB,
+        length=KEY_LENGTH,
+        iterations=ARGON2_ITERATIONS,
+        lanes=ARGON2_LANES,
+        memory_cost=ARGON2_MEMORY_KIB,
     ).derive(passphrase)
 
 
@@ -171,17 +171,17 @@ def kdf_requires_upgrade(kdf_data: dict[str, Any]) -> bool:
     name = kdf_data.get("name")
     if name == "argon2id":
         return (
-            int(kdf_data.get("iterations", 0)) < _ARGON2_ITERATIONS
-            or int(kdf_data.get("memory_kib", 0)) < _ARGON2_MEMORY_KIB
-            or int(kdf_data.get("lanes", 0)) < _ARGON2_LANES
-            or int(kdf_data.get("length", 0)) != _KEY_LENGTH
+            int(kdf_data.get("iterations", 0)) < ARGON2_ITERATIONS
+            or int(kdf_data.get("memory_kib", 0)) < ARGON2_MEMORY_KIB
+            or int(kdf_data.get("lanes", 0)) < ARGON2_LANES
+            or int(kdf_data.get("length", 0)) != KEY_LENGTH
         )
     if name == "scrypt":
         return (
-            int(kdf_data.get("n", 0)) < _SCRYPT_N
-            or int(kdf_data.get("r", 0)) < _SCRYPT_R
-            or int(kdf_data.get("p", 0)) < _SCRYPT_P
-            or int(kdf_data.get("length", 0)) != _KEY_LENGTH
+            int(kdf_data.get("n", 0)) < SCRYPT_N
+            or int(kdf_data.get("r", 0)) < SCRYPT_R
+            or int(kdf_data.get("p", 0)) < SCRYPT_P
+            or int(kdf_data.get("length", 0)) != KEY_LENGTH
         )
     return True
 
@@ -207,8 +207,8 @@ def validate_new_passphrase(passphrase: str, field_name: str) -> None:
     """Enforce minimum passphrase requirements for key encryption."""
     if not passphrase:
         raise SystemExit(f"{field_name} cannot be empty.")
-    if len(passphrase) < _MIN_PASSPHRASE_LENGTH:
-        raise SystemExit(f"{field_name} must be at least {_MIN_PASSPHRASE_LENGTH} characters.")
+    if len(passphrase) < MIN_PASSPHRASE_LENGTH:
+        raise SystemExit(f"{field_name} must be at least {MIN_PASSPHRASE_LENGTH} characters.")
 
 
 def b64_encode(value: bytes) -> str:

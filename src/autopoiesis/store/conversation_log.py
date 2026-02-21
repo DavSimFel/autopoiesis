@@ -22,6 +22,7 @@ Wired in: agent/worker.py → run_agent_step()
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -73,8 +74,8 @@ def _extract_content(part: object) -> str:
     return ""
 
 
-def _parse_messages(
-    messages: list[ModelMessage],
+def parse_messages(
+    messages: Sequence[ModelMessage],
 ) -> list[tuple[str, str, list[str]]]:
     """Convert *messages* into (role, summary, tool_names) triples.
 
@@ -107,7 +108,7 @@ def _parse_messages(
     return entries
 
 
-def _format_entry(
+def format_entry(
     timestamp: datetime,
     entries: list[tuple[str, str, list[str]]],
 ) -> str:
@@ -144,7 +145,7 @@ def append_turn(
     knowledge_root: Path,
     knowledge_db_path: str,
     agent_id: str,
-    messages: list[ModelMessage],
+    messages: Sequence[ModelMessage],
     *,
     timestamp: datetime | None = None,
 ) -> Path | None:
@@ -181,11 +182,11 @@ def append_turn(
     log_path = _log_file(knowledge_root, agent_id, date_str)
     log_path.parent.mkdir(parents=True, exist_ok=True)
 
-    entries = _parse_messages(messages)
+    entries = parse_messages(messages)
     if not entries:
         return None
 
-    block = _format_entry(ts, entries)
+    block = format_entry(ts, entries)
 
     # Append to daily file (create with header if new)
     if not log_path.exists():

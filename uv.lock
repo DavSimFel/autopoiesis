@@ -254,6 +254,11 @@ dependencies = [
     { name = "websockets" },
 ]
 
+[package.optional-dependencies]
+tiktoken = [
+    { name = "tiktoken" },
+]
+
 [package.dev-dependencies]
 dev = [
     { name = "bandit" },
@@ -278,9 +283,11 @@ requires-dist = [
     { name = "python-dotenv", specifier = ">=1.2,<2" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "rich", specifier = ">=13.0" },
+    { name = "tiktoken", marker = "extra == 'tiktoken'", specifier = ">=0.6" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.34" },
     { name = "websockets", specifier = ">=14.0" },
 ]
+provides-extras = ["tiktoken"]
 
 [package.metadata.requires-dev]
 dev = [
