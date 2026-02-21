@@ -41,6 +41,16 @@ uv run pytest                 # tests
 
 All four must pass before pushing.
 
+## Evals
+
+Baseline Inspect AI evals live in `evals/`:
+
+```bash
+cd evals
+pip install -e .
+inspect eval tasks/core_capabilities.py
+```
+
 ## Configuration
 
 Edit `.env`:
