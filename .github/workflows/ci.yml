@@ -169,6 +169,8 @@ jobs:
             ["src/autopoiesis/server/models.py"]="specs/modules/server.md"
             ["src/autopoiesis/server/cli.py"]="specs/modules/server.md"
             ["src/autopoiesis/server/routes.py"]="specs/modules/server.md"
+            ["src/autopoiesis/server/mcp_server.py"]="specs/modules/server.md"
+            ["src/autopoiesis/server/mcp_tools.py"]="specs/modules/server.md"
             ["src/autopoiesis/infra/subscription_processor.py"]="specs/modules/subscriptions.md"
             ["src/autopoiesis/tools/subscription_tools.py"]="specs/modules/subscriptions.md"
             ["src/autopoiesis/store/subscriptions.py"]="specs/modules/subscriptions.md"
