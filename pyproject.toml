@@ -17,6 +17,7 @@ dependencies = [
   "opentelemetry-sdk>=1.20",
   "opentelemetry-exporter-otlp-proto-grpc>=1.20",
   "fastapi>=0.115",
+  "fastmcp>=3.0",
   "uvicorn[standard]>=0.34",
   "websockets>=14.0",
 ]

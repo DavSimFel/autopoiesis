@@ -8,10 +8,15 @@ split into focused companion modules.
 
 ## Status
 
-- **Last updated:** 2026-02-20 (Issue #218)
-- **Source:** `src/autopoiesis/cli.py`, `agent/runtime.py`, `src/autopoiesis/agent/model_resolution.py`, `src/autopoiesis/tools/toolset_builder.py`, `agent/worker.py`, `infra/approval/chat_approval.py`, `agent/cli.py`
+- **Last updated:** 2026-02-21 (Issue #221)
+- **Source:** `src/autopoiesis/cli.py`, `agent/runtime.py`, `src/autopoiesis/agent/model_resolution.py`, `src/autopoiesis/tools/toolset_builder.py`, `agent/worker.py`, `infra/approval/chat_approval.py`, `agent/cli.py`, `src/autopoiesis/server/app.py`, `src/autopoiesis/server/mcp_server.py`
 
 ## Changelog
+
+### 2026-02-21 — Issue #221
+- Added FastMCP 3.0 Streamable HTTP endpoint mounted at `/mcp`.
+- Added MCP tools for runtime status, pending approvals, approval decisions, and system info.
+- Added MCP notifications after approval state transitions so subscribed clients can re-sync.
 
 ### 2026-02-20 — Issue #218
 - `src/autopoiesis/cli.py`: Removed recursive `main()` self-call that caused
@@ -34,6 +39,8 @@ split into focused companion modules.
 | `src/autopoiesis/skills/skills.py` | Skill discovery, progressive loading, skills toolset |
 | `src/autopoiesis/infra/work_queue.py` | Queue instance only (no functions importing from `src/autopoiesis/cli.py`) |
 | `src/autopoiesis/display/streaming.py` | `StreamHandle` protocol, `RichStreamHandle`, registry |
+| `src/autopoiesis/server/mcp_server.py` | FastMCP server exposing JSON runtime tools over Streamable HTTP; emits notifications on approval decisions |
+| `src/autopoiesis/server/app.py` | FastAPI app + `/api/*` routes + mounted MCP Streamable HTTP app at `/mcp` |
 
 ## Environment Variables
 
@@ -164,6 +171,14 @@ split into focused companion modules.
   otherwise: unlock approval key → DBOS launch → chat loop
 - `_rotate_key(base_dir)` — interactive key rotation; invalidates pending envelopes
 
+### MCP Control Endpoint
+
+- `mcp_server.create_mcp_server()` — constructs FastMCP server and registers control tools.
+- `mcp_server.dashboard_status()` — runtime health + pending approval count.
+- `mcp_server.approval_list()` — pending approval envelopes + request payloads.
+- `mcp_server.approval_decide(approval_id, approved, reason)` — marks a pending envelope consumed/expired and emits MCP notification.
+- `mcp_server.system_info()` — runtime version, uptime, active agent, and loaded agent config summaries.
+
 ## Deferred Tool Approval Flow
 
 1. Agent calls a tool with `require_write_approval=True`
@@ -222,10 +237,14 @@ exception, and `--no-approval` behavior.
 
 - `pydantic-ai-slim[openai,anthropic,cli,dbos,mcp]>=1.59,<2`
 - `pydantic-ai-backend==0.1.6`
+- `fastmcp>=3.0`
 - `python-dotenv>=1.2,<2`
 
 ## Change Log
 
+- 2026-02-21: Added FastMCP 3.0 Streamable HTTP endpoint at `/mcp` in server mode,
+  including MCP tools (`dashboard.status`, `approval.list`, `approval.decide`, `system.info`)
+  and notification emission on approval state changes. (Issue #221)
 - 2026-02-18: Added explicit deferred-approval behavior for non-interactive
   execution. `run_simple()` gained `auto_approve_deferred`, batch mode now
   disables auto-approval, and docs now reflect deterministic batch failure on

@@ -10,6 +10,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from autopoiesis.server.connections import ConnectionManager
+from autopoiesis.server.mcp_server import mcp
 from autopoiesis.server.routes import configure_routes, router
 from autopoiesis.server.sessions import SessionStore
 
@@ -82,3 +83,5 @@ app = FastAPI(
 
 configure_routes(_sessions, _manager)
 app.include_router(router)
+if mcp is not None:
+    app.mount("/mcp", mcp.http_app())
