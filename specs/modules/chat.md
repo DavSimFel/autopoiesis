@@ -450,12 +450,5 @@ Tests annotated with `@pytest.mark.verifies("<ID>")` are checked against this ta
 `cli.initialize_runtime()` reads all three fields from `AgentConfig` and stores
 them on `Runtime`.
 
-## Persistent Storage Wiring (PR #220)
-
-`Runtime` dataclass gained two fields propagated from `AgentConfig`:
-- `tmp_retention_days: int = 14` — passed to `rotate_results()`
-- `tmp_max_size_mb: int = 500` — passed to `rotate_results()`
-
-`worker.py`: after each agent turn, calls
-`rotate_results(Path(rt.backend.root_dir) / "tmp", rt.tmp_retention_days, rt.tmp_max_size_mb)`
-to age-evict and size-evict stored tool/shell output under `tmp/`.
+## Security Cluster (#213-#217)
+- PathValidator, TaintTracker, SubprocessSandbox integrated into CLI
