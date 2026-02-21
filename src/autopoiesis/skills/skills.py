@@ -12,6 +12,7 @@ from pydantic_ai import RunContext
 from pydantic_ai.toolsets import FunctionToolset
 
 from autopoiesis.models import AgentDeps
+from autopoiesis.security.path_validator import PathValidator
 from autopoiesis.skills.skillmaker_tools import (
     extract_skill_metadata,
     lint_skill_definition,
@@ -170,7 +171,8 @@ def _read_resource(cache: dict[str, Skill], skill_name: str, resource_name: str)
     error = _validate_resource_path(skill, resource_name, avail)
     if error is not None:
         return error
-    resolved = (skill.path / resource_name).resolve()
+    validator = PathValidator(workspace_root=skill.path)
+    resolved = validator.resolve_path(resource_name)
     try:
         return resolved.read_text()
     except (OSError, UnicodeDecodeError):
@@ -182,8 +184,10 @@ def _validate_resource_path(skill: Skill, resource_name: str, avail: str) -> str
     """Return an error message if the resource path is invalid, else None."""
     if resource_name not in skill.resources:
         return f"Resource '{resource_name}' not listed. Available: {avail}"
-    resolved = (skill.path / resource_name).resolve()
-    if not resolved.is_relative_to(skill.path.resolve()):
+    validator = PathValidator(workspace_root=skill.path)
+    try:
+        resolved = validator.resolve_path(resource_name)
+    except ValueError:
         return "Error: resource path escapes skill directory."
     if not resolved.exists():
         return f"Resource '{resource_name}' not found. Available: {avail}"
