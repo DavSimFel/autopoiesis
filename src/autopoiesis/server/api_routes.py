@@ -21,6 +21,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
 from typing import Any
 
@@ -29,7 +30,6 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
-from autopoiesis.server import mcp_server
 from autopoiesis.server.mcp_server import (
     approval_decide,
     approval_list,
@@ -88,9 +88,9 @@ def _tool_result_to_dict(result: Any) -> dict[str, Any]:
     # Fall back to text content list
     content = getattr(result, "content", None)
     if content is not None:
-        texts = []
+        texts: list[str] = []
         for item in content:
-            text = getattr(item, "text", None)
+            text: str | None = getattr(item, "text", None)
             if text is not None:
                 texts.append(text)
         if len(texts) == 1:
@@ -100,7 +100,8 @@ def _tool_result_to_dict(result: Any) -> dict[str, Any]:
                 return json.loads(texts[0])  # type: ignore[return-value]
             except (json.JSONDecodeError, ValueError):
                 return {"result": texts[0]}
-        return {"result": texts}
+        if texts:
+            return {"result": texts}
 
     # Last resort: model_dump if pydantic model
     dump = getattr(result, "model_dump", None)
@@ -233,7 +234,7 @@ async def list_tools() -> JSONResponse:
         return JSONResponse(content=payload, status_code=code)
 
     tools = await mcp.list_tools()
-    tool_dicts = []
+    tool_dicts: list[dict[str, Any]] = []
     for tool in tools:
         mcp_tool = tool.to_mcp_tool()
         tool_dicts.append(mcp_tool.model_dump(exclude_none=True))
@@ -279,7 +280,7 @@ async def call_tool(name: str, body: dict[str, Any] | None = None) -> JSONRespon
     # If data is itself a UIEvent envelope (our own tool functions return JSON
     # envelope strings that _tool_result_to_dict already parsed), pass through
     # as-is.
-    if isinstance(data, dict) and "type" in data and "data" in data and "meta" in data:
+    if "type" in data and "data" in data and "meta" in data:
         return JSONResponse(content=data)
 
     envelope: dict[str, Any] = {
@@ -295,7 +296,7 @@ async def call_tool(name: str, body: dict[str, Any] | None = None) -> JSONRespon
 # ---------------------------------------------------------------------------
 
 
-async def _sse_event_generator() -> Any:
+async def _sse_event_generator() -> AsyncGenerator[dict[str, str], None]:
     """Async generator that yields UIEvents as SSE data frames.
 
     Sends a ``connected`` handshake immediately, then polls ``dashboard_status``

@@ -6,11 +6,9 @@ to isolate the API layer from the real runtime and MCP server.
 
 from __future__ import annotations
 
-import asyncio
 import json
-from datetime import UTC, datetime
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -203,7 +201,7 @@ def _make_fake_mcp(tools_list: list[dict[str, Any]] | None = None) -> MagicMock:
     tools_list = tools_list or []
 
     async def _list_tools() -> list[Any]:
-        result = []
+        result: list[Any] = []
         for td in tools_list:
             tool = MagicMock()
             mcp_tool = MagicMock()
@@ -353,20 +351,26 @@ def test_sse_stream_handshake(monkeypatch: Any, client: TestClient) -> None:
 
     monkeypatch.setattr(api_routes_module, "dashboard_status", lambda: status_raw)
     monkeypatch.setattr(api_routes_module, "approval_list", lambda: approvals_raw)
-    # Shorten poll interval so the test doesn't hang
-    monkeypatch.setattr(api_routes_module, "_SSE_POLL_INTERVAL_SECONDS", 9999.0)
+
+    # Replace the generator so it yields just the handshake and then stops,
+    # avoiding any asyncio.sleep() that would block the test indefinitely.
+    async def _finite_generator() -> Any:
+        handshake: dict[str, Any] = {
+            "type": "stream.connected",
+            "data": {},
+            "meta": {"timestamp": _FIXED_TS},
+        }
+        yield {"event": "message", "data": json.dumps(handshake)}
+
+    monkeypatch.setattr(api_routes_module, "_sse_event_generator", _finite_generator)
 
     with client.stream("GET", "/api/stream") as response:
         assert response.status_code == 200
         content_type = response.headers.get("content-type", "")
         assert "text/event-stream" in content_type
 
-        # Collect the first few lines
-        lines: list[str] = []
-        for line in response.iter_lines():
-            lines.append(line)
-            if len(lines) >= 6:
-                break
+        # Collect all lines (generator is finite)
+        lines = list(response.iter_lines())
 
     raw_text = "\n".join(lines)
     assert "stream.connected" in raw_text
@@ -378,7 +382,7 @@ def test_sse_stream_handshake(monkeypatch: Any, client: TestClient) -> None:
 
 
 def test_parse_envelope_invalid_json() -> None:
-    from autopoiesis.server.api_routes import _parse_envelope
+    from autopoiesis.server.api_routes import _parse_envelope  # pyright: ignore[reportPrivateUsage]
 
     result = _parse_envelope("not json at all {{{")
     assert result["type"] == "error.parse"
@@ -387,7 +391,7 @@ def test_parse_envelope_invalid_json() -> None:
 
 def test_tool_result_to_dict_fallback_to_model_dump() -> None:
     """When content is empty and there's no structured_content, fall back to model_dump."""
-    from autopoiesis.server.api_routes import _tool_result_to_dict
+    from autopoiesis.server.api_routes import _tool_result_to_dict  # pyright: ignore[reportPrivateUsage]
 
     fake = MagicMock()
     fake.structured_content = None
