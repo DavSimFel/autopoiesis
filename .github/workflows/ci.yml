@@ -187,6 +187,10 @@ jobs:
             ["src/autopoiesis/topics/topic_manager.py"]="specs/modules/topics.md"
             ["src/autopoiesis/tools/topic_tools.py"]="specs/modules/topics.md"
             ["src/autopoiesis/infra/topic_processor.py"]="specs/modules/topics.md"
+            ["src/autopoiesis/security/path_validator.py"]="specs/modules/security.md"
+            ["src/autopoiesis/security/taint_tracker.py"]="specs/modules/security.md"
+            ["src/autopoiesis/security/subprocess_sandbox.py"]="specs/modules/security.md"
+            ["src/autopoiesis/skills/github_skill.py"]="specs/modules/skills.md"
             ["scripts/arch_check.py"]="specs/architecture.yaml"
           )
 

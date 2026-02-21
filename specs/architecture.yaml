@@ -12,6 +12,8 @@ dependencies:
   approval: [models, db]
   display: [models, infra]
   topics: []
+  security: []  # security module has no internal dependencies
+  skills: [security]  # skills can import from security module
   # Root modules (chat, toolset_builder, etc.) are not constrained here
 
 # Explicitly forbidden imports (regardless of dependency rules)

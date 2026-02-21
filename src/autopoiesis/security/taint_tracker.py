@@ -18,7 +18,7 @@ def _normalize_label(label: str) -> str:
 class TaintTracker:
     """Track tainted labels with thread-safe, copy-only read access."""
 
-    _tainted: set[str] = field(default_factory=set, init=False, repr=False)
+    _tainted: set[str] = field(default_factory=lambda: set[str](), init=False, repr=False)
     _lock: Lock = field(default_factory=Lock, init=False, repr=False)
 
     def taint(self, label: str) -> None:

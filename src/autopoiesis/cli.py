@@ -179,7 +179,6 @@ def initialize_runtime(
         if prompt_path.is_file():
             system_prompt = prompt_path.read_text(encoding="utf-8")
 
-
     history_processors = build_history_processors(
         subscription_registry=subscription_registry,
         workspace_root=workspace_root,
