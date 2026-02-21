@@ -10,13 +10,13 @@ Acceptance criteria:
 
 from __future__ import annotations
 
+import contextlib
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from autopoiesis.agent.config import AgentConfig
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -69,16 +69,19 @@ class TestResolveModelFromConfig:
         from autopoiesis.agent.model_resolution import resolve_model_from_config
 
         env = {"ANTHROPIC_API_KEY": ""}
-        with patch.dict("os.environ", env, clear=False), pytest.raises(SystemExit):
-            # Patch os.getenv to return empty for ANTHROPIC_API_KEY
-            with patch("autopoiesis.agent.model_resolution.os.getenv", return_value=""):
-                resolve_model_from_config("anthropic/claude-3-5-sonnet-latest")
+        with (
+            patch.dict("os.environ", env, clear=False),
+            pytest.raises(SystemExit),
+            patch("autopoiesis.agent.model_resolution.os.getenv", return_value=""),
+        ):
+            resolve_model_from_config("anthropic/claude-3-5-sonnet-latest")
 
     def test_openrouter_requires_api_key(self) -> None:
         from autopoiesis.agent.model_resolution import resolve_model_from_config
 
-        with patch("autopoiesis.agent.model_resolution.os.getenv", return_value=""), pytest.raises(
-            SystemExit
+        with (
+            patch("autopoiesis.agent.model_resolution.os.getenv", return_value=""),
+            pytest.raises(SystemExit),
         ):
             resolve_model_from_config("openai/gpt-4o")
 
@@ -118,7 +121,10 @@ class TestBuildAgentFromConfig:
 
         cfg = _make_config(name="planner", model="anthropic/claude-sonnet-4")
         mock_toolsets: list = []
-        with patch("autopoiesis.agent.runtime.resolve_model_from_config", return_value="anthropic:claude-sonnet-4"):
+        with patch(
+            "autopoiesis.agent.runtime.resolve_model_from_config",
+            return_value="anthropic:claude-sonnet-4",
+        ):
             agent = build_agent_from_config(cfg, mock_toolsets, "system prompt")
         assert agent.name == "planner"
 
@@ -129,7 +135,10 @@ class TestBuildAgentFromConfig:
         cfg = _make_config(name="coder", model="openai/gpt-4o")
         mock_model = MagicMock()
         with (
-            patch("autopoiesis.agent.runtime.resolve_model_from_config", return_value=mock_model) as mock_resolve,
+            patch(
+                "autopoiesis.agent.runtime.resolve_model_from_config",
+                return_value=mock_model,
+            ) as mock_resolve,
             patch.dict("os.environ", {"AI_PROVIDER": "anthropic"}),
         ):
             build_agent_from_config(cfg, [], "prompt")
@@ -140,7 +149,10 @@ class TestBuildAgentFromConfig:
         from autopoiesis.agent.runtime import build_agent_from_config
 
         cfg = _make_config(model="anthropic/claude-3-5-sonnet-latest")
-        with patch("autopoiesis.agent.runtime.resolve_model_from_config", return_value="anthropic:claude-3-5-sonnet-latest"):
+        with patch(
+            "autopoiesis.agent.runtime.resolve_model_from_config",
+            return_value="anthropic:claude-3-5-sonnet-latest",
+        ):
             agent = build_agent_from_config(cfg, [], "prompt")
         # For anthropic, prepare_tools_for_provider returns None
         assert agent._prepare_tools is None  # type: ignore[attr-defined]
@@ -160,9 +172,18 @@ class TestBuildToolsetsForAgent:
 
         with (
             patch("autopoiesis.tools.toolset_builder.validate_console_deps_contract"),
-            patch("autopoiesis.tools.toolset_builder.create_console_toolset", return_value=MagicMock()),
-            patch("autopoiesis.tools.toolset_builder.create_skills_toolset", return_value=(MagicMock(), "skills")),
-            patch("autopoiesis.tools.toolset_builder._build_exec_toolset", return_value=MagicMock()),
+            patch(
+                "autopoiesis.tools.toolset_builder.create_console_toolset",
+                return_value=MagicMock(),
+            ),
+            patch(
+                "autopoiesis.tools.toolset_builder.create_skills_toolset",
+                return_value=(MagicMock(), "skills"),
+            ),
+            patch(
+                "autopoiesis.tools.toolset_builder._build_exec_toolset",
+                return_value=MagicMock(),
+            ),
             patch("autopoiesis.tools.toolset_builder.wrap_toolsets", side_effect=lambda x: x),
             patch("autopoiesis.tools.toolset_builder.compose_system_prompt", return_value="prompt"),
         ):
@@ -180,8 +201,14 @@ class TestBuildToolsetsForAgent:
 
         with (
             patch("autopoiesis.tools.toolset_builder.validate_console_deps_contract"),
-            patch("autopoiesis.tools.toolset_builder.create_console_toolset", return_value=mock_console),
-            patch("autopoiesis.tools.toolset_builder.create_skills_toolset", return_value=(mock_skills, "skills-instr")),
+            patch(
+                "autopoiesis.tools.toolset_builder.create_console_toolset",
+                return_value=mock_console,
+            ),
+            patch(
+                "autopoiesis.tools.toolset_builder.create_skills_toolset",
+                return_value=(mock_skills, "skills-instr"),
+            ),
             patch("autopoiesis.tools.toolset_builder._build_exec_toolset", return_value=mock_exec),
             patch("autopoiesis.tools.toolset_builder.wrap_toolsets", side_effect=lambda x: x),
             patch("autopoiesis.tools.toolset_builder.compose_system_prompt", return_value="prompt"),
@@ -207,9 +234,18 @@ class TestBuildToolsetsForAgent:
 
         with (
             patch("autopoiesis.tools.toolset_builder.validate_console_deps_contract"),
-            patch("autopoiesis.tools.toolset_builder.create_console_toolset", return_value=MagicMock()),
-            patch("autopoiesis.tools.toolset_builder.create_skills_toolset", return_value=(mock_skills, "skills-instr")),
-            patch("autopoiesis.tools.toolset_builder._build_exec_toolset", return_value=MagicMock()),
+            patch(
+                "autopoiesis.tools.toolset_builder.create_console_toolset",
+                return_value=MagicMock(),
+            ),
+            patch(
+                "autopoiesis.tools.toolset_builder.create_skills_toolset",
+                return_value=(mock_skills, "skills-instr"),
+            ),
+            patch(
+                "autopoiesis.tools.toolset_builder._build_exec_toolset",
+                return_value=MagicMock(),
+            ),
             patch(
                 "autopoiesis.tools.toolset_builder.create_knowledge_toolset",
                 return_value=(mock_kb_toolset, "kb-instr"),
@@ -229,9 +265,18 @@ class TestBuildToolsetsForAgent:
 
         with (
             patch("autopoiesis.tools.toolset_builder.validate_console_deps_contract"),
-            patch("autopoiesis.tools.toolset_builder.create_console_toolset", return_value=MagicMock()),
-            patch("autopoiesis.tools.toolset_builder.create_skills_toolset", return_value=(MagicMock(), "")),
-            patch("autopoiesis.tools.toolset_builder._build_exec_toolset", return_value=MagicMock()),
+            patch(
+                "autopoiesis.tools.toolset_builder.create_console_toolset",
+                return_value=MagicMock(),
+            ),
+            patch(
+                "autopoiesis.tools.toolset_builder.create_skills_toolset",
+                return_value=(MagicMock(), ""),
+            ),
+            patch(
+                "autopoiesis.tools.toolset_builder._build_exec_toolset",
+                return_value=MagicMock(),
+            ),
             patch("autopoiesis.tools.toolset_builder.create_knowledge_toolset") as mock_kb,
             patch("autopoiesis.tools.toolset_builder.wrap_toolsets", side_effect=lambda x: x),
             patch("autopoiesis.tools.toolset_builder.compose_system_prompt", return_value=""),
@@ -271,10 +316,8 @@ class TestConfigSelectionPrecedence:
                 no_approval=True,
                 config=None,
             )
-            try:
+            with contextlib.suppress(Exception):
                 cli_mod.main()
-            except Exception:
-                pass  # DBOS.launch() may fail in test env
         assert cli_mod.get_agent_configs() == {}
 
     def test_unknown_agent_exits_fast(self, tmp_path: Path) -> None:
@@ -315,7 +358,11 @@ class TestConfigSelectionPrecedence:
 
         captured_config: list[AgentConfig | None] = []
 
-        def fake_initialize_runtime(*args: object, agent_config: AgentConfig | None = None, **kwargs: object) -> str:
+        def fake_initialize_runtime(
+            *args: object,
+            agent_config: AgentConfig | None = None,
+            **kwargs: object,
+        ) -> str:
             captured_config.append(agent_config)
             return "sqlite:///test.sqlite"
 
@@ -335,10 +382,8 @@ class TestConfigSelectionPrecedence:
                 no_approval=True,
                 config=str(config_file),
             )
-            try:
+            with contextlib.suppress(Exception):
                 cli_mod.main()
-            except Exception:
-                pass
 
         assert len(captured_config) == 1
         cfg = captured_config[0]
@@ -353,7 +398,11 @@ class TestConfigSelectionPrecedence:
         cli_mod._agent_configs.clear()
         captured_config: list[AgentConfig | None] = []
 
-        def fake_initialize_runtime(*args: object, agent_config: AgentConfig | None = None, **kwargs: object) -> str:
+        def fake_initialize_runtime(
+            *args: object,
+            agent_config: AgentConfig | None = None,
+            **kwargs: object,
+        ) -> str:
             captured_config.append(agent_config)
             return "sqlite:///test.sqlite"
 
@@ -373,10 +422,8 @@ class TestConfigSelectionPrecedence:
                 no_approval=True,
                 config=None,
             )
-            try:
+            with contextlib.suppress(Exception):
                 cli_mod.main()
-            except Exception:
-                pass
 
         assert len(captured_config) == 1
         assert captured_config[0] is None
@@ -392,7 +439,7 @@ class TestInitializeRuntimePassesToolNames:
 
     def test_config_tools_forwarded_to_prepare_toolset_context(self, tmp_path: Path) -> None:
         from autopoiesis.agent.config import AgentConfig
-        from autopoiesis.agent.workspace import AgentPaths, resolve_agent_workspace
+        from autopoiesis.agent.workspace import resolve_agent_workspace
         from autopoiesis.cli import _initialize_runtime
 
         cfg = AgentConfig(
@@ -419,12 +466,18 @@ class TestInitializeRuntimePassesToolNames:
         agent_paths = resolve_agent_workspace("filtered-test")
 
         with (
-            patch("autopoiesis.cli._resolve_startup_config", return_value=("anthropic", "sqlite:///test.sqlite")),
+            patch(
+                "autopoiesis.cli._resolve_startup_config",
+                return_value=("anthropic", "sqlite:///test.sqlite"),
+            ),
             patch("autopoiesis.cli.build_backend", return_value=MagicMock()),
             patch("autopoiesis.cli.ApprovalStore") as mock_as,
             patch("autopoiesis.cli.ApprovalKeyManager") as mock_km,
             patch("autopoiesis.cli.ToolPolicyRegistry"),
-            patch("autopoiesis.cli.resolve_history_db_path", return_value=str(tmp_path / "history.sqlite")),
+            patch(
+                "autopoiesis.cli.resolve_history_db_path",
+                return_value=str(tmp_path / "history.sqlite"),
+            ),
             patch("autopoiesis.cli.prepare_toolset_context", side_effect=fake_prepare),
             patch("autopoiesis.cli.build_history_processors", return_value=[]),
             patch("autopoiesis.cli.build_agent_from_config", return_value=MagicMock()),
@@ -466,12 +519,18 @@ class TestInitializeRuntimePassesToolNames:
         agent_paths = resolve_agent_workspace("default-test")
 
         with (
-            patch("autopoiesis.cli._resolve_startup_config", return_value=("anthropic", "sqlite:///test.sqlite")),
+            patch(
+                "autopoiesis.cli._resolve_startup_config",
+                return_value=("anthropic", "sqlite:///test.sqlite"),
+            ),
             patch("autopoiesis.cli.build_backend", return_value=MagicMock()),
             patch("autopoiesis.cli.ApprovalStore") as mock_as,
             patch("autopoiesis.cli.ApprovalKeyManager") as mock_km,
             patch("autopoiesis.cli.ToolPolicyRegistry"),
-            patch("autopoiesis.cli.resolve_history_db_path", return_value=str(tmp_path / "history.sqlite")),
+            patch(
+                "autopoiesis.cli.resolve_history_db_path",
+                return_value=str(tmp_path / "history.sqlite"),
+            ),
             patch("autopoiesis.cli.prepare_toolset_context", side_effect=fake_prepare),
             patch("autopoiesis.cli.build_history_processors", return_value=[]),
             patch("autopoiesis.cli.build_agent", return_value=MagicMock()),

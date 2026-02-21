@@ -49,9 +49,9 @@ class _AutopoiesisHome:
             os.environ["AUTOPOIESIS_HOME"] = self._old
 
 
-def _run_prepare_toolset_context(agent_paths: AgentPaths) -> tuple[
-    Path, str, SubscriptionRegistry, TopicRegistry, list, str
-]:
+def _run_prepare_toolset_context(
+    agent_paths: AgentPaths,
+) -> tuple[Path, str, SubscriptionRegistry, TopicRegistry, list, str]:
     """Thin wrapper so callers don't have to import the builder directly."""
     from autopoiesis.tools.toolset_builder import prepare_toolset_context
 
