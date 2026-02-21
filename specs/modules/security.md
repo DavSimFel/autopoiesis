@@ -67,3 +67,8 @@ only. It enables development and read-only workflows without key material.
 - 2026-02-18: Removed legacy `shell_tool` references, documented
   `python`/`python3`/`tmux` as REVIEW-tier commands, and aligned enforcement
   docs to `tier_enforcement.py` + `exec_tool.py`. (Issue #170)
+
+## Security Hardening (#213-#217)
+- PathValidator: validates file paths against sandbox boundaries
+- TaintTracker: marks external content as tainted for sanitization
+- SubprocessSandboxManager: enforces preexec_fn in PTY/exec calls
