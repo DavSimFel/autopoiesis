@@ -10,26 +10,30 @@ from __future__ import annotations
 
 import logging
 import os
-from collections.abc import AsyncIterable
+import time
 from contextvars import ContextVar, Token
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from pydantic_ai import DeferredToolRequests
-from pydantic_ai.exceptions import AgentRunError, UserError
+from pydantic_ai.exceptions import AgentRunError
 from pydantic_ai.messages import (
-    AgentStreamEvent,
     ModelMessage,
     ModelMessagesTypeAdapter,
     ModelResponse,
 )
-from pydantic_ai.tools import DeferredToolResults, RunContext
+from pydantic_ai.tools import DeferredToolResults
 
-from autopoiesis.agent.runtime import Runtime, get_runtime_registry
+from autopoiesis.agent.loop_guards import resolve_loop_guards, warning_threshold
+from autopoiesis.agent.runtime import Runtime, get_runtime
 from autopoiesis.agent.topic_activation import activate_topic_ref
-from autopoiesis.display.stream_formatting import forward_stream_events
-from autopoiesis.display.streaming import StreamHandle, ToolAwareStreamHandle, take_stream
+from autopoiesis.agent.turn_execution import (
+    TurnExecutionParams,
+    WorkItemLimitExceededError,
+    run_turn,
+)
+from autopoiesis.display.streaming import take_stream
 from autopoiesis.infra import otel_tracing
 from autopoiesis.infra.approval.chat_approval import (
     build_approval_scope,
@@ -72,17 +76,6 @@ _active_checkpoint_context: ContextVar[_CheckpointContext | None] = ContextVar(
     "active_checkpoint_context",
     default=None,
 )
-
-
-@dataclass(frozen=True)
-class _TurnInput:
-    """Bundled arguments for a single agent turn."""
-
-    prompt: str | None
-    deps: AgentDeps
-    history: list[ModelMessage]
-    deferred_results: DeferredToolResults | None
-    scope: ApprovalScope
 
 
 def _deserialize_history(history_json: str | None) -> list[ModelMessage]:
@@ -142,6 +135,12 @@ def _build_output(
 
 
 _log = logging.getLogger(__name__)
+_QUEUE_POLL_INTERVAL_SECONDS = 1.0
+
+# Workflow statuses treated as terminal (no more polling needed).
+_TERMINAL_STATUSES: frozenset[str] = frozenset(
+    {"SUCCESS", "ERROR", "MAX_RECOVERY_ATTEMPTS_EXCEEDED", "CANCELLED"}
+)
 
 
 def _wrap_agent_run_error(error: AgentRunError) -> RuntimeError:
@@ -149,65 +148,16 @@ def _wrap_agent_run_error(error: AgentRunError) -> RuntimeError:
     return RuntimeError(f"{error.__class__.__name__}: {error}")
 
 
-def _run_streaming(
-    rt: Runtime,
-    turn: _TurnInput,
-    stream_handle: StreamHandle,
-) -> WorkItemOutput:
-    """Execute an agent turn with real-time streaming output."""
-    output_type: list[type[AgentOutput]] = [str, DeferredToolRequests]
-
-    async def _on_events(
-        ctx: RunContext[AgentDeps],
-        events: AsyncIterable[AgentStreamEvent],
-    ) -> None:
-        await forward_stream_events(stream_handle, ctx, events)
-
-    try:
-        stream = rt.agent.run_stream_sync(
-            turn.prompt,
-            deps=turn.deps,
-            message_history=turn.history,
-            output_type=output_type,
-            deferred_tool_results=turn.deferred_results,
-            event_stream_handler=_on_events,
-        )
-        try:
-            for chunk in stream.stream_text(delta=True):
-                stream_handle.write(chunk)
-        except UserError:
-            _log.debug("stream_text unavailable (non-text output); skipping")
-        if isinstance(stream_handle, ToolAwareStreamHandle):
-            stream_handle.finish_thinking()
-        result_output: AgentOutput = stream.get_output()
-        all_msgs = stream.all_messages()
-    finally:
-        stream_handle.close()
-
-    return _build_output(result_output, all_msgs, turn.scope, rt)
-
-
-def _run_sync(
-    rt: Runtime,
-    turn: _TurnInput,
-) -> WorkItemOutput:
-    """Execute an agent turn synchronously without streaming."""
-    output_type: list[type[AgentOutput]] = [str, DeferredToolRequests]
-    result = rt.agent.run_sync(
-        turn.prompt,
-        deps=turn.deps,
-        message_history=turn.history,
-        output_type=output_type,
-        deferred_tool_results=turn.deferred_results,
-    )
-    return _build_output(result.output, result.all_messages(), turn.scope, rt)
-
-
 @DBOS.step()
 def run_agent_step(work_item_dict: dict[str, Any]) -> dict[str, Any]:
-    """Execute one work item and return a serialized WorkItemOutput."""
+    """Execute one work item and return a serialized WorkItemOutput.
+
+    Uses :func:`run_turn` for bounded execution with loop guards.  If a guard
+    limit is reached, a partial-result ``WorkItemOutput`` is returned rather
+    than raising so the DBOS workflow completes cleanly.
+    """
+    rt = get_runtime()
     item = WorkItem.model_validate(work_item_dict)
-    rt = get_runtime_registry().get(item.agent_id)
 
     # Auto-activate topic when topic_ref is set (before agent executes)
     if item.topic_ref:
@@ -230,13 +180,6 @@ def run_agent_step(work_item_dict: dict[str, Any]) -> dict[str, Any]:
             key_manager=rt.key_manager,
         )
 
-    turn = _TurnInput(
-        prompt=item.input.prompt,
-        deps=deps,
-        history=history,
-        deferred_results=deferred_results,
-        scope=scope,
-    )
     stream_handle = take_stream(item.id)
     checkpoint_token: Token[_CheckpointContext | None] = _active_checkpoint_context.set(
         _CheckpointContext(db_path=rt.history_db_path, work_item_id=item.id)
@@ -253,10 +196,29 @@ def run_agent_step(work_item_dict: dict[str, Any]) -> dict[str, Any]:
     with otel_tracing.trace_span("agent.run", attributes=span_attrs) as result_attrs:
         try:
             try:
-                if stream_handle is not None:
-                    output = _run_streaming(rt, turn, stream_handle)
-                else:
-                    output = _run_sync(rt, turn)
+                turn_exec = run_turn(
+                    rt,
+                    TurnExecutionParams(
+                        work_item_id=item.id,
+                        prompt=item.input.prompt,
+                        deps=deps,
+                        history=history,
+                        deferred_results=deferred_results,
+                        stream_handle=stream_handle,
+                    ),
+                )
+                output = _build_output(turn_exec.output, turn_exec.messages, scope, rt)
+            except WorkItemLimitExceededError as exc:
+                # Graceful degradation: return partial result instead of crashing.
+                _log.warning(
+                    "Work item %s stopped by loop guard: %s",
+                    item.id,
+                    exc.user_message,
+                )
+                output = WorkItemOutput(
+                    text=exc.user_message,
+                    message_history_json=_serialize_history(history),
+                )
             except AgentRunError as exc:
                 raise _wrap_agent_run_error(exc) from exc
         finally:
@@ -287,6 +249,43 @@ def execute_work_item(work_item_dict: dict[str, Any]) -> dict[str, Any]:
     return run_agent_step(work_item_dict)
 
 
+def poll_workflow_result(handle: Any, guards: Any, work_item_id: str) -> Any:
+    """Poll a DBOS workflow handle bounded by ``guards.queue_poll_max_iterations``.
+
+    Sleeps ``_QUEUE_POLL_INTERVAL_SECONDS`` between polls and logs a warning
+    when 80 % of the iteration budget has been consumed.  Raises
+    ``RuntimeError`` if the budget is exhausted or the workflow ends with a
+    non-SUCCESS terminal status.
+    """
+    max_iter = guards.queue_poll_max_iterations
+    threshold = warning_threshold(max_iter)
+    warned = False
+
+    for poll_iter in range(max_iter):
+        if not warned and poll_iter >= threshold:
+            _log.warning(
+                "Queue poll for work item %s reached 80%% of max iterations (%d/%d).",
+                work_item_id,
+                poll_iter,
+                max_iter,
+            )
+            warned = True
+
+        status = handle.get_status()
+        if status.status in _TERMINAL_STATUSES:
+            if status.status == "SUCCESS":
+                return handle.get_result()
+            raise RuntimeError(
+                f"Work item {work_item_id} workflow ended with unexpected status: {status.status}."
+            )
+        time.sleep(_QUEUE_POLL_INTERVAL_SECONDS)
+
+    raise RuntimeError(
+        f"Queue poll for work item {work_item_id} exceeded {max_iter} iterations "
+        f"({max_iter * _QUEUE_POLL_INTERVAL_SECONDS:.0f}s max)."
+    )
+
+
 def enqueue(item: WorkItem) -> str:
     """Enqueue a work item and return its id via :func:`dispatch_workitem`."""
     queue = dispatch_workitem(item)
@@ -296,9 +295,16 @@ def enqueue(item: WorkItem) -> str:
 
 
 def enqueue_and_wait(item: WorkItem) -> WorkItemOutput:
-    """Enqueue a work item, block until complete, via :func:`dispatch_workitem`."""
+    """Enqueue a work item and block until complete.
+
+    Poll the DBOS workflow handle up to ``guards.queue_poll_max_iterations``
+    times (one second apart) before raising ``RuntimeError``.  Routes to the
+    correct per-agent queue via :func:`dispatch_workitem`.
+    """
+    rt = get_runtime()
+    guards = resolve_loop_guards(rt)
     queue = dispatch_workitem(item)
     with SetEnqueueOptions(priority=int(item.priority)):
         handle = queue.enqueue(execute_work_item, item.model_dump())
-    raw = handle.get_result()
+    raw = poll_workflow_result(handle, guards, item.id)
     return WorkItemOutput.model_validate(raw)

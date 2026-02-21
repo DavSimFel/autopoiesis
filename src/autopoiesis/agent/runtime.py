@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 import threading
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -18,6 +18,8 @@ if TYPE_CHECKING:
     from autopoiesis.agent.config import AgentConfig
 
 from pydantic_ai import AbstractToolset, Agent
+
+from autopoiesis.agent.loop_guards import LoopGuards
 from pydantic_ai._agent_graph import HistoryProcessor
 from pydantic_ai.models import Model
 from pydantic_ai.settings import ModelSettings
@@ -50,6 +52,7 @@ class Runtime:
     approval_store: ApprovalStore
     key_manager: ApprovalKeyManager
     tool_policy: ToolPolicyRegistry
+    loop_guards: LoopGuards = field(default_factory=LoopGuards)
     approval_unlocked: bool = False
     shell_tier: str = "review"
     """Shell approval tier from AgentConfig (free|review|approve)."""
