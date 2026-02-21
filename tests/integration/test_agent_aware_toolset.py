@@ -130,7 +130,7 @@ class TestPrepareToolsetContextPaths:
             paths = resolve_agent_workspace("topic-test")
             topic_reg: TopicRegistry
             _, _, _, topic_reg, *_ = _run_prepare_toolset_context(paths)
-            assert topic_reg.topics_dir.resolve().is_relative_to(paths.knowledge.resolve())
+            assert topic_reg.topics_dir.resolve().is_relative_to(paths.workspace.resolve())
 
     def test_two_agents_have_non_overlapping_paths(self, tmp_path: Path) -> None:
         with _AutopoiesisHome(tmp_path):

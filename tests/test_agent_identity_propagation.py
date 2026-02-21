@@ -84,7 +84,7 @@ class TestResolveStartupConfigSignature:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
         monkeypatch.delenv("DBOS_SYSTEM_DATABASE_URL", raising=False)
 
-        from autopoiesis.cli import _resolve_startup_config  
+        from autopoiesis.cli import _resolve_startup_config
 
         result = _resolve_startup_config()
         assert len(result) == 2, (
@@ -99,7 +99,7 @@ class TestResolveStartupConfigSignature:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
         monkeypatch.setenv("DBOS_AGENT_NAME", "should-not-appear")
 
-        from autopoiesis.cli import _resolve_startup_config  
+        from autopoiesis.cli import _resolve_startup_config
 
         result = _resolve_startup_config()
         assert "should-not-appear" not in result
@@ -163,7 +163,7 @@ class TestRunTurnSetsAgentId:
             patch.object(agent_cli, "RichStreamHandle", MagicMock),
             patch.object(agent_cli, "register_stream", MagicMock()),
         ):
-            agent_cli.run_turn_cli("hello", None)  
+            agent_cli.run_turn_cli("hello", None)
 
         assert captured, "enqueue_and_wait was never called"
         assert captured[0].agent_id == "staging", (
@@ -191,7 +191,7 @@ class TestRunTurnSetsAgentId:
             patch.object(agent_cli, "RichStreamHandle", MagicMock),
             patch.object(agent_cli, "register_stream", MagicMock()),
         ):
-            agent_cli.run_turn_cli("hello", None)  
+            agent_cli.run_turn_cli("hello", None)
 
         assert captured[0].agent_id == "default"
 
@@ -250,12 +250,10 @@ class TestWorkerUsesRuntimeAgentName:
             agent_id="runtime-agent",
         )
 
-        from autopoiesis.agent.runtime import Runtime, RuntimeRegistry
+        from autopoiesis.agent.runtime import Runtime
 
-        fake_registry = RuntimeRegistry()
-        fake_registry.register("default", cast(Runtime, fake_rt))
         with (
-            patch.object(worker, "get_runtime_registry", return_value=fake_registry),
+            patch.object(worker, "get_runtime", return_value=cast(Runtime, fake_rt)),
             patch.object(worker, "build_approval_scope", side_effect=_capturing_build_scope),
         ):
             worker.run_agent_step(item.model_dump(mode="json"))

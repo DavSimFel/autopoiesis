@@ -457,5 +457,7 @@ them on `Runtime`.
 - run_turn_cli for multi-agent CLI routing
 - Deferred max iterations and timeout in CLI chat loop
 
-## Server Lifecycle (#231)
-- Serve mode: lightweight init path, skips full AI runtime when ANTHROPIC_API_KEY absent
+## Agent-Aware Toolset Bug Fixes
+- toolset_builder: resolve_workspace_root/prepare_toolset_context accept AgentPaths
+- TopicRegistry dir auto-created
+- Worker test patches fixed (get_runtime not get_runtime_registry)

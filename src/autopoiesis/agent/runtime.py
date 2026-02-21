@@ -18,13 +18,12 @@ if TYPE_CHECKING:
     from autopoiesis.agent.config import AgentConfig
 
 from pydantic_ai import AbstractToolset, Agent
-
-from autopoiesis.agent.loop_guards import LoopGuards
 from pydantic_ai._agent_graph import HistoryProcessor
 from pydantic_ai.models import Model
 from pydantic_ai.settings import ModelSettings
 from pydantic_ai.tools import ToolsPrepareFunc
 
+from autopoiesis.agent.loop_guards import LoopGuards
 from autopoiesis.agent.model_resolution import (
     build_model_settings,
     infer_provider_from_model_name,
