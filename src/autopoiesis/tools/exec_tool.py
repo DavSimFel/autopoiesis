@@ -16,6 +16,7 @@ from autopoiesis.infra import exec_registry
 from autopoiesis.infra.pty_spawn import PtyProcess, read_master, spawn_pty
 from autopoiesis.io_utils import tail_lines
 from autopoiesis.models import AgentDeps
+from autopoiesis.security.subprocess_sandbox import SubprocessSandboxManager
 from autopoiesis.store.result_store import store_shell_output
 from autopoiesis.tools.tier_enforcement import enforce_tier
 
@@ -63,13 +64,11 @@ def resolve_env(env: dict[str, str] | None) -> dict[str, str]:
 
 def sandbox_cwd(cwd: str | None, workspace_root: Path) -> str:
     """Resolve and validate the working directory stays inside workspace."""
-    if cwd is None:
-        return str(workspace_root)
-    resolved = (workspace_root / cwd).resolve()
-    if not resolved.is_relative_to(workspace_root.resolve()):
-        msg = f"Working directory escapes workspace: {cwd}"
-        raise ValueError(msg)
-    return str(resolved)
+    sandbox = SubprocessSandboxManager(workspace_root=workspace_root)
+    try:
+        return str(sandbox.resolve_cwd(cwd))
+    except ValueError as exc:
+        raise ValueError(f"Working directory escapes workspace: {cwd}") from exc
 
 
 async def _read_pty_output(pty_proc: PtyProcess, log_path: Path) -> None:
@@ -91,9 +90,11 @@ async def _spawn_pty_session(
     cwd: str,
     env: dict[str, str] | None,
     log_path: Path,
+    sandbox: SubprocessSandboxManager,
 ) -> tuple[asyncio.subprocess.Process, int]:
     """Spawn a command under a PTY and return (process, master_fd)."""
-    pty_proc = await spawn_pty(command, cwd=cwd, env=env)
+    pty_proc = await spawn_pty(command, cwd=cwd, env=env, preexec_fn=sandbox.preexec_fn())
+    # Start draining output in background
     task = asyncio.create_task(_read_pty_output(pty_proc, log_path))
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
@@ -128,6 +129,7 @@ async def _spawn_subprocess(
     cwd: str,
     env: dict[str, str] | None,
     log_path: Path,
+    sandbox: SubprocessSandboxManager,
 ) -> tuple[asyncio.subprocess.Process, None]:
     """Spawn a command as a plain subprocess."""
     log_fh = log_path.open("wb")
@@ -138,6 +140,7 @@ async def _spawn_subprocess(
         stdin=asyncio.subprocess.PIPE,
         cwd=cwd,
         env=env,
+        preexec_fn=sandbox.preexec_fn(),
     )
 
     async def _close_fh() -> None:
@@ -236,13 +239,14 @@ async def _run_exec(  # noqa: PLR0913
     if blocked is not None:
         return blocked
     workspace_root = Path(ctx.deps.backend.root_dir)
-    safe_cwd = sandbox_cwd(cwd, workspace_root)
+    sandbox = SubprocessSandboxManager(workspace_root=workspace_root)
+    safe_cwd = str(sandbox.resolve_cwd(cwd))
     safe_env = resolve_env(env)
     session_id = exec_registry.new_session_id()
     log_path = exec_registry.log_path_for(workspace_root, session_id)
     start_time = time.monotonic()
     spawner = _spawn_pty_session if pty else _spawn_subprocess
-    proc, master_fd = await spawner(command, safe_cwd, safe_env, log_path)
+    proc, master_fd = await spawner(command, safe_cwd, safe_env, log_path, sandbox)
     session = exec_registry.ProcessSession(
         session_id=session_id,
         command=command,

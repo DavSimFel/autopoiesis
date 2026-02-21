@@ -99,6 +99,26 @@ class TestResolveWorkspaceRoot:
             result = resolve_workspace_root()
             assert result.is_dir()
 
+    def test_explicit_workspace_root_overrides_env(self, tmp_path: Path) -> None:
+        from autopoiesis.tools.toolset_builder import resolve_workspace_root
+
+        explicit = tmp_path / "agent" / "workspace"
+        with patch.dict(os.environ, {"AGENT_WORKSPACE_ROOT": str(tmp_path / "ignored")}):
+            result = resolve_workspace_root(explicit)
+        assert result == explicit
+        assert result.is_dir()
+
+
+class TestBuildBackend:
+    """Tests for backend creation with explicit workspace isolation."""
+
+    def test_build_backend_uses_explicit_workspace(self, tmp_path: Path) -> None:
+        from autopoiesis.tools.toolset_builder import build_backend
+
+        workspace = tmp_path / "alpha" / "workspace"
+        backend = build_backend(workspace)
+        assert Path(str(backend.root_dir)).resolve() == workspace.resolve()
+
 
 class TestBuildToolsets:
     """Tests for build_toolsets return type, toolset count, and system prompt."""
