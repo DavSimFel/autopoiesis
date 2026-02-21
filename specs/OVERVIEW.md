@@ -61,3 +61,4 @@ For workflow rationale, see `specs/decisions/001-trunk-based-workflow.md`.
 - `skillmaker_tools.py`: `specs/modules/skillmaker-tools.md`
 - Queue / WorkItem: `specs/modules/queue.md`
 - Subscriptions: `specs/modules/subscriptions.md`
+- Evals foundation: `specs/modules/evals.md`
