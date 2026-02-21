@@ -31,6 +31,7 @@ max_lines_exempt:
   - src/autopoiesis/topics/topic_manager.py  # 445 lines — new module, to be refactored
   - src/autopoiesis/agent/context.py       # 386 lines — tiktoken + compaction + logging added (#193, #210), tracked for split
   - src/autopoiesis/server/api_routes.py   # 340 lines — REST API layer, tracked for split (#221)
+  - src/autopoiesis/agent/worker.py        # 304 lines — persistent storage additions (#220), tracked for split
 
 # Pattern constraints — these strings must not appear in source
 no_globals: []
