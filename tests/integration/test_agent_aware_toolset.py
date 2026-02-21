@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Any
 
 from autopoiesis.agent.workspace import AgentPaths, resolve_agent_workspace
 from autopoiesis.store.knowledge import index_file, search_knowledge
@@ -51,7 +52,7 @@ class _AutopoiesisHome:
 
 def _run_prepare_toolset_context(
     agent_paths: AgentPaths,
-) -> tuple[Path, str, SubscriptionRegistry, TopicRegistry, list, str]:
+) -> tuple[Path, str, SubscriptionRegistry, TopicRegistry, list[Any], str]:
     """Thin wrapper so callers don't have to import the builder directly."""
     from autopoiesis.tools.toolset_builder import prepare_toolset_context
 
@@ -105,12 +106,14 @@ class TestPrepareToolsetContextPaths:
     def test_workspace_root_under_agent_paths(self, tmp_path: Path) -> None:
         with _AutopoiesisHome(tmp_path):
             paths = resolve_agent_workspace("path-test")
+            workspace_root: Path
             workspace_root, *_ = _run_prepare_toolset_context(paths)
             assert workspace_root == paths.workspace
 
     def test_knowledge_db_under_agent_data(self, tmp_path: Path) -> None:
         with _AutopoiesisHome(tmp_path):
             paths = resolve_agent_workspace("kb-test")
+            knowledge_db_path: str
             _, knowledge_db_path, *_ = _run_prepare_toolset_context(paths)
             assert Path(knowledge_db_path).parent.resolve() == paths.data.resolve()
 
@@ -125,6 +128,7 @@ class TestPrepareToolsetContextPaths:
     def test_topics_dir_under_agent_knowledge(self, tmp_path: Path) -> None:
         with _AutopoiesisHome(tmp_path):
             paths = resolve_agent_workspace("topic-test")
+            topic_reg: TopicRegistry
             _, _, _, topic_reg, *_ = _run_prepare_toolset_context(paths)
             assert topic_reg.topics_dir.resolve().is_relative_to(paths.knowledge.resolve())
 
