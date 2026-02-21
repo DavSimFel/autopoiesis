@@ -241,8 +241,10 @@ class TestRuntimeRegistry:
             registry.get()
 
     def test_wrappers_use_injected_registry(self) -> None:
+        from dataclasses import dataclass
+        from typing import Any
+
         from autopoiesis.agent.runtime import (
-            Runtime,
             RuntimeRegistry,
             get_runtime,
             reset_runtime,
@@ -250,7 +252,20 @@ class TestRuntimeRegistry:
             set_runtime_registry,
         )
 
-        runtime = cast(Runtime, object())
+        @dataclass
+        class _FakeRuntime:
+            agent_name: str = "default"
+            agent: Any = None
+            backend: Any = None
+            history_db_path: str = ""
+            knowledge_db_path: str = ""
+            subscription_registry: Any = None
+            approval_store: Any = None
+            key_manager: Any = None
+            tool_policy: Any = None
+            approval_unlocked: bool = False
+
+        runtime = _FakeRuntime()
         injected = RuntimeRegistry()
         previous = set_runtime_registry(injected)
         try:

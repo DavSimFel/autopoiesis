@@ -82,7 +82,11 @@ def test_run_agent_step_prefers_checkpoint_history_and_clears_checkpoint(
         backend=cast(Any, fake_backend),
         history_db_path=str(history_db),
     )
-    monkeypatch.setattr(chat_worker, "get_runtime", lambda: runtime)
+    from autopoiesis.agent.runtime import RuntimeRegistry
+
+    fake_registry = RuntimeRegistry()
+    fake_registry.register(runtime)
+    monkeypatch.setattr(chat_worker, "get_runtime_registry", lambda: fake_registry)
     monkeypatch.setattr(chat_worker, "_deserialize_history", _fake_deserialize_history)
     monkeypatch.setattr(chat_worker, "_serialize_history", _fake_serialize_history)
 

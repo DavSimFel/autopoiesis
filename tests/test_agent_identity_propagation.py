@@ -249,8 +249,12 @@ class TestWorkerUsesRuntimeAgentName:
             agent_id="runtime-agent",
         )
 
+        from autopoiesis.agent.runtime import RuntimeRegistry
+
+        fake_registry = RuntimeRegistry()
+        fake_registry.register(fake_rt)
         with (
-            patch.object(worker, "get_runtime", return_value=fake_rt),
+            patch.object(worker, "get_runtime_registry", return_value=fake_registry),
             patch.object(worker, "build_approval_scope", side_effect=_capturing_build_scope),
         ):
             worker.run_agent_step(item.model_dump(mode="json"))
