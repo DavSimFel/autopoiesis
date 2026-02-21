@@ -31,15 +31,17 @@ class TestSandboxedSkillConfig:
     def test_defaults(self, tmp_path: Path) -> None:
         sp = _write_skill_server(tmp_path / "skill")
         provider = SandboxedSkillProvider(skill_server_module=sp, workspace_root=sp.parent)
-        assert provider._sandbox is not None
+        assert provider.sandbox is not None
 
     def test_custom_limits(self, tmp_path: Path) -> None:
         sp = _write_skill_server(tmp_path / "skill")
         limits = SandboxLimits(max_processes=128, max_file_size_bytes=8192, max_cpu_seconds=10)
         provider = SandboxedSkillProvider(
-            skill_server_module=sp, limits=limits, workspace_root=sp.parent
+            skill_server_module=sp,
+            limits=limits,
+            workspace_root=sp.parent,
         )
-        assert provider._sandbox._limits.max_processes == 128
+        assert provider.limits.max_processes == 128
 
     def test_invalid_module_path(self, tmp_path: Path) -> None:
         with pytest.raises(ValueError, match="not a file"):
@@ -53,24 +55,25 @@ class TestSandboxedSkillProviderExec:
     def test_sandbox_runs_command(self, tmp_path: Path) -> None:
         sp = _write_skill_server(tmp_path / "skill")
         provider = SandboxedSkillProvider(skill_server_module=sp, workspace_root=sp.parent)
-        # The sandbox should be able to run echo
-        result = provider._sandbox.run(["echo", "hello"], cwd=sp.parent)
+        result = provider.sandbox.run(["echo", "hello"], cwd=sp.parent)
         assert result.returncode == 0
         assert "hello" in result.stdout
 
     def test_sandbox_enforces_cwd(self, tmp_path: Path) -> None:
         sp = _write_skill_server(tmp_path / "skill")
         provider = SandboxedSkillProvider(skill_server_module=sp, workspace_root=sp.parent)
-        result = provider._sandbox.run(["pwd"], cwd=sp.parent)
+        result = provider.sandbox.run(["pwd"], cwd=sp.parent)
         assert str(sp.parent.resolve()) in result.stdout
 
     def test_sandbox_reports_limits(self, tmp_path: Path) -> None:
         sp = _write_skill_server(tmp_path / "skill")
         limits = SandboxLimits(max_file_size_bytes=4096, max_cpu_seconds=5)
         provider = SandboxedSkillProvider(
-            skill_server_module=sp, limits=limits, workspace_root=sp.parent
+            skill_server_module=sp,
+            limits=limits,
+            workspace_root=sp.parent,
         )
-        result = provider._sandbox.run(
+        result = provider.sandbox.run(
             [
                 "python3",
                 "-c",
@@ -101,4 +104,4 @@ class TestSandboxedSkillProviderExec:
             workspace_root=sp.parent,
             allowed_roots=(extra,),
         )
-        assert provider._sandbox.path_validator.is_allowed(extra / "file.txt")
+        assert provider.sandbox.path_validator.is_allowed(extra / "file.txt")

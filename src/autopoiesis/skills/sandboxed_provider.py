@@ -46,6 +46,11 @@ class SandboxedSkillProvider:
         object.__setattr__(self, "_resolved_module", resolved_module)
         object.__setattr__(self, "_sandbox", sandbox)
 
+    @property
+    def sandbox(self) -> SubprocessSandboxManager:
+        """Public accessor for the sandbox manager."""
+        return self._sandbox
+
     def get_provider(self) -> Provider:
         """Return a proxy provider that talks to the sandboxed child over stdio."""
 

@@ -226,5 +226,7 @@ class PathValidationTransform(Transform):
         if not path_arguments:
             return tool
         return _PathValidatedTool.wrap(
-            tool, path_validator=self._path_validator, path_arguments=path_arguments,
+            tool,
+            path_validator=self._path_validator,
+            path_arguments=path_arguments,
         )

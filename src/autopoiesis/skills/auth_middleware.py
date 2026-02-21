@@ -109,7 +109,9 @@ class ApprovalGateTransform(Transform):
         if _TIER_ORDER[tier] < _APPROVAL_THRESHOLD:
             return tool
         return _ApprovalGateTool.wrap(
-            tool, required_tier=tier, unlock_check=self._unlock_check,
+            tool,
+            required_tier=tier,
+            unlock_check=self._unlock_check,
         )
 
 
@@ -173,7 +175,7 @@ def _resolve_required_tier(tool: Tool, tool_tiers: Mapping[str, str]) -> str | N
     for tag in tool.tags:
         for prefix in ("tier:", "approval:"):
             if tag.startswith(prefix):
-                raw = tag[len(prefix):]
+                raw = tag[len(prefix) :]
                 if raw:
                     return _normalize_tier(raw)
     return None
