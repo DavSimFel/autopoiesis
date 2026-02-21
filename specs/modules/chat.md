@@ -8,7 +8,7 @@ split into focused companion modules.
 
 ## Status
 
-- **Last updated:** 2026-02-21 (Issue #221)
+- **Last updated:** 2026-02-21 (Issue #202)
 - **Source:** `src/autopoiesis/cli.py`, `agent/runtime.py`, `src/autopoiesis/agent/model_resolution.py`, `src/autopoiesis/tools/toolset_builder.py`, `agent/worker.py`, `infra/approval/chat_approval.py`, `agent/cli.py`, `src/autopoiesis/server/app.py`, `src/autopoiesis/server/mcp_server.py`
 
 ## Changelog

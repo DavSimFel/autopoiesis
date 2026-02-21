@@ -12,6 +12,10 @@ import threading
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from autopoiesis.agent.config import AgentConfig
 
 from pydantic_ai import AbstractToolset, Agent
 from pydantic_ai._agent_graph import HistoryProcessor
@@ -20,8 +24,8 @@ from pydantic_ai.settings import ModelSettings
 from pydantic_ai.tools import ToolsPrepareFunc
 
 from autopoiesis.agent.model_resolution import (
-    _infer_provider_from_model_name,
     build_model_settings,
+    infer_provider_from_model_name,
     resolve_model,
     resolve_model_from_config,
 )
@@ -304,7 +308,7 @@ def instrument_agent(agent: Agent[AgentDeps, str]) -> bool:
 
 
 def build_agent_from_config(
-    agent_config: "AgentConfig",
+    agent_config: AgentConfig,
     toolsets: list[AbstractToolset[AgentDeps]],
     system_prompt: str,
     options: AgentOptions | None = None,
@@ -324,11 +328,9 @@ def build_agent_from_config(
     Returns:
         A fully configured :class:`~pydantic_ai.Agent` instance.
     """
-    # Deferred import to avoid circular dependency between runtime ↔ config.
-    from autopoiesis.agent.config import AgentConfig  # noqa: F401 (type-only stub)
 
     model = resolve_model_from_config(agent_config.model)
-    provider = _infer_provider_from_model_name(agent_config.model)
+    provider = infer_provider_from_model_name(agent_config.model)
     prepare_tools = prepare_tools_for_provider(provider)
     opts = options or AgentOptions()
     effective_settings = opts.model_settings or build_model_settings()

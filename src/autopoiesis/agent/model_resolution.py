@@ -157,7 +157,7 @@ def resolve_model_from_config(model_id: str) -> Model | str:
     return model_id
 
 
-def _infer_provider_from_model_name(model_id: str) -> str:
+def infer_provider_from_model_name(model_id: str) -> str:
     """Infer the provider from a model identifier string.
 
     Rules:
