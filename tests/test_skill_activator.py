@@ -153,26 +153,20 @@ class TestSkillActivatorTopicWiring:
         mock_mcp = MagicMock()
         return SkillActivator(mock_mcp, tmp_path)
 
-    def test_activate_skill_for_topic_uses_topic_name_by_default(
-        self, tmp_path: Path
-    ) -> None:
+    def test_activate_skill_for_topic_uses_topic_name_by_default(self, tmp_path: Path) -> None:
         activator = self._make_activator(tmp_path, ["github"])
         result = activator.activate_skill_for_topic("github")  # type: ignore[attr-defined]
         assert result is True
         assert activator.is_active("github") is True  # type: ignore[attr-defined]
 
-    def test_activate_skill_for_topic_uses_explicit_skill_name(
-        self, tmp_path: Path
-    ) -> None:
+    def test_activate_skill_for_topic_uses_explicit_skill_name(self, tmp_path: Path) -> None:
         activator = self._make_activator(tmp_path, ["custom_skill"])
         result = activator.activate_skill_for_topic(  # type: ignore[attr-defined]
             "my_topic", skill_name="custom_skill"
         )
         assert result is True
 
-    def test_activate_skill_for_topic_missing_returns_false(
-        self, tmp_path: Path
-    ) -> None:
+    def test_activate_skill_for_topic_missing_returns_false(self, tmp_path: Path) -> None:
         activator = self._make_activator(tmp_path, [])
         result = activator.activate_skill_for_topic("no_matching_skill")  # type: ignore[attr-defined]
         assert result is False

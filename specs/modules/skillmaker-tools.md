@@ -54,7 +54,19 @@
 - Python standard library only (`re`, `typing`).
 - Called by `src/autopoiesis/skills/skills.py`.
 
+## MCP Server (Phase 2 — `skills/skillmaker/server.py`)
+
+`skills/skillmaker/server.py` exposes the skillmaker lint/validation helpers
+as a FastMCP MCP server, enabling skill-quality tools to be mounted lazily
+via `SkillActivator` when the `skillmaker` topic is active.
+
+- Tools are tagged with `skillmaker` for visibility-based enable/disable.
+- Registered via `FilesystemSkillProvider` and mounted by `SkillActivator`.
+- Returns standard text/JSON tool responses compatible with the REST API layer.
+
 ## Change Log
 
+- 2026-02-21: Added `skills/skillmaker/server.py` — FastMCP MCP server exposing
+  skillmaker tools via the lazy skill-activation pipeline. (Issue #221 Phase 2)
 - 2026-02-15: Added shared lint/validation helpers for `skillmaker` workflow.
   (Issue #9)

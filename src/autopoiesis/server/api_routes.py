@@ -200,7 +200,7 @@ async def post_action(body: ActionRequest) -> JSONResponse:
                     "meta": {"timestamp": _utc_now_iso()},
                 }
                 return JSONResponse(content=envelope)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 _log.warning("send_message tool call failed: %s", exc)
         payload_501, code_501 = _error_envelope(
             "error.not_implemented",
@@ -265,9 +265,9 @@ async def call_tool(name: str, body: dict[str, Any] | None = None) -> JSONRespon
 
     try:
         result = await mcp.call_tool(name, body or {})
-    except KeyError:
-        raise HTTPException(status_code=404, detail=f"Tool {name!r} not found")
-    except Exception as exc:  # noqa: BLE001
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=f"Tool {name!r} not found") from exc
+    except Exception as exc:
         _log.error("Tool %r raised: %s", name, exc)
         payload_500, code_500 = _error_envelope(
             "error.tool_failed",

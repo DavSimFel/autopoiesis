@@ -75,3 +75,18 @@ When a WorkItem with `topic_ref` is dequeued, `run_agent_step()` calls
 exists and has status `"open"`, it is transitioned to `"in-progress"` via
 `update_topic_status()`. Non-open topics are skipped; missing topics are
 logged and ignored. Failures do not block execution.
+
+## MCP Skill Auto-Activation via Topic (Phase 2 — #221)
+
+`src/autopoiesis/agent/topic_activation.py` extends topic-activation with a
+soft MCP skill mounting step. When a topic is activated, `_try_activate_skill()`
+is called with the topic ref. It lazily imports `autopoiesis.server.mcp_server`
+and, if `skill_activator` is set, calls `activate_skill_for_topic()` to mount
+the skill's MCP tools into the live server. The import is deferred inside a
+`try` block to keep the `agent` module's hard-dependency footprint unchanged —
+the server import is optional and non-fatal if unavailable.
+
+## Change Log
+
+- 2026-02-21: Added `topic_activation.py` MCP skill hook — topics now lazily
+  activate corresponding MCP skill tool sets via `SkillActivator`. (Issue #221 Phase 2)

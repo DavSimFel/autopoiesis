@@ -11,11 +11,11 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 import autopoiesis.server.api_routes as api_routes_module
 from autopoiesis.server.api_routes import api_router
-from fastapi import FastAPI
 
 # ---------------------------------------------------------------------------
 # Fixtures & helpers
@@ -107,9 +107,7 @@ def test_action_approve_calls_approval_decide(monkeypatch: Any, client: TestClie
         {"id": "env-1", "state": "consumed", "approved": True},
     )
 
-    async def _fake_decide(
-        approval_id: str, approved: bool, reason: str | None = None
-    ) -> str:
+    async def _fake_decide(approval_id: str, approved: bool, reason: str | None = None) -> str:
         assert approval_id == "env-1"
         assert approved is True
         return decision_raw
@@ -132,9 +130,7 @@ def test_action_reject_calls_approval_decide(monkeypatch: Any, client: TestClien
         {"id": "env-2", "state": "expired", "approved": False},
     )
 
-    async def _fake_decide(
-        approval_id: str, approved: bool, reason: str | None = None
-    ) -> str:
+    async def _fake_decide(approval_id: str, approved: bool, reason: str | None = None) -> str:
         assert approved is False
         assert reason == "not safe"
         return decision_raw
@@ -159,9 +155,7 @@ def test_action_approve_missing_id_returns_400(monkeypatch: Any, client: TestCli
 def test_action_approve_not_found_returns_404(monkeypatch: Any, client: TestClient) -> None:
     not_found_raw = _raw("error.approval_not_found", {"approval_id": "nope"})
 
-    async def _fake_decide(
-        approval_id: str, approved: bool, reason: str | None = None
-    ) -> str:
+    async def _fake_decide(approval_id: str, approved: bool, reason: str | None = None) -> str:
         return not_found_raw
 
     monkeypatch.setattr(api_routes_module, "approval_decide", _fake_decide)
@@ -180,9 +174,7 @@ def test_action_unknown_returns_400(client: TestClient) -> None:
     assert resp.json()["type"] == "error.unknown_action"
 
 
-def test_action_send_message_without_mcp_returns_501(
-    monkeypatch: Any, client: TestClient
-) -> None:
+def test_action_send_message_without_mcp_returns_501(monkeypatch: Any, client: TestClient) -> None:
     monkeypatch.setattr(api_routes_module, "mcp", None)
     resp = client.post("/api/actions", json={"action": "send_message", "payload": {}})
     assert resp.status_code == 501
@@ -232,9 +224,7 @@ def test_get_tools_lists_tools(monkeypatch: Any, client: TestClient) -> None:
     assert "dashboard.status" in names
 
 
-def test_get_tools_mcp_unavailable_returns_503(
-    monkeypatch: Any, client: TestClient
-) -> None:
+def test_get_tools_mcp_unavailable_returns_503(monkeypatch: Any, client: TestClient) -> None:
     monkeypatch.setattr(api_routes_module, "mcp", None)
     resp = client.get("/api/tools")
     assert resp.status_code == 503
@@ -313,9 +303,7 @@ def test_call_tool_not_found_returns_404(monkeypatch: Any, client: TestClient) -
     assert resp.status_code == 404
 
 
-def test_call_tool_mcp_unavailable_returns_503(
-    monkeypatch: Any, client: TestClient
-) -> None:
+def test_call_tool_mcp_unavailable_returns_503(monkeypatch: Any, client: TestClient) -> None:
     monkeypatch.setattr(api_routes_module, "mcp", None)
     resp = client.post("/api/tools/any", json={})
     assert resp.status_code == 503
@@ -391,7 +379,9 @@ def test_parse_envelope_invalid_json() -> None:
 
 def test_tool_result_to_dict_fallback_to_model_dump() -> None:
     """When content is empty and there's no structured_content, fall back to model_dump."""
-    from autopoiesis.server.api_routes import _tool_result_to_dict  # pyright: ignore[reportPrivateUsage]
+    from autopoiesis.server.api_routes import (
+        _tool_result_to_dict,  # pyright: ignore[reportPrivateUsage]
+    )
 
     fake = MagicMock()
     fake.structured_content = None

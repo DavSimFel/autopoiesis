@@ -73,9 +73,7 @@ def make_allowlist_transform(allowed_tool_names: frozenset[str]) -> list[Visibil
         Visibility(False, match_all=True, components={"tool"}),
     ]
     if allowed_tool_names:
-        transforms.append(
-            Visibility(True, names=set(allowed_tool_names), components={"tool"})
-        )
+        transforms.append(Visibility(True, names=set(allowed_tool_names), components={"tool"}))
     return transforms
 
 
@@ -90,7 +88,5 @@ def make_tag_allowlist_transform(allowed_tags: frozenset[str]) -> list[Visibilit
         Visibility(False, match_all=True, components={"tool"}),
     ]
     if allowed_tags:
-        transforms.append(
-            Visibility(True, tags=set(allowed_tags), components={"tool"})
-        )
+        transforms.append(Visibility(True, tags=set(allowed_tags), components={"tool"}))
     return transforms
