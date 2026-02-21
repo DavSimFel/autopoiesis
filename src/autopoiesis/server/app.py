@@ -84,4 +84,4 @@ app = FastAPI(
 configure_routes(_sessions, _manager)
 app.include_router(router)
 if mcp is not None:
-    app.mount("/mcp", mcp.streamable_http_app())
+    app.mount("/mcp", mcp.http_app())
