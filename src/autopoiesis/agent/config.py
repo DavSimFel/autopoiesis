@@ -114,8 +114,15 @@ def _parse_agent_entry(
     ephemeral = bool(_get("ephemeral", False))
     log_conversations = bool(_get("log_conversations", True))
     conversation_log_retention_days = int(str(_get("conversation_log_retention_days", 30)))
-    tmp_retention_days = int(_get("tmp_retention_days", 14))
-    tmp_max_size_mb = int(_get("tmp_max_size_mb", 500))
+
+    def _get_int(key: str, default: int) -> int:
+        raw = _get(key, default)
+        if isinstance(raw, (int, float, str, bytes)):
+            return int(raw)
+        return default
+
+    tmp_retention_days = _get_int("tmp_retention_days", 14)
+    tmp_max_size_mb = _get_int("tmp_max_size_mb", 500)
 
     return AgentConfig(
         name=name,

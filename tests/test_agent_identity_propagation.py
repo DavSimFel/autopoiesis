@@ -42,6 +42,8 @@ class _MinimalRuntime:
     log_conversations: bool = False
     knowledge_root: Path | None = None
     conversation_log_retention_days: int = 0
+    tmp_retention_days: int = 14
+    tmp_max_size_mb: int = 500
 
 
 # ---------------------------------------------------------------------------

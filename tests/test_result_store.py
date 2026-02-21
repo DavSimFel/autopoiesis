@@ -182,8 +182,10 @@ def test_truncation_appends_relative_path(tmp_path: Path) -> None:
     assert len(result) == 1
     new_part = result[0].parts[0]
     assert isinstance(new_part, ToolReturnPart)
-    assert "[full output:" in new_part.content
+    content = new_part.content
+    assert isinstance(content, str)
+    assert "[full output:" in content
     # The path in the reference must NOT be absolute.
-    ref_line = next(line for line in new_part.content.splitlines() if "[full output:" in line)
+    ref_line = next(line for line in content.splitlines() if "[full output:" in line)
     ref_path_str = ref_line.split("[full output: ")[1].rstrip("]")
     assert not Path(ref_path_str).is_absolute(), f"Expected relative path, got: {ref_path_str}"

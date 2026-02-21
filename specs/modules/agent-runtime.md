@@ -22,6 +22,8 @@ Each agent is described by an `AgentConfig` frozen dataclass:
 | `system_prompt` | `Path` | Relative path to system prompt markdown |
 | `ephemeral` | `bool` | Whether agent is destroyed after task completion |
 | `parent` | `str \| None` | Parent agent name (for spawned agents) |
+| `tmp_retention_days` | `int` | Days to keep date-dirs under `tmp/` before age-based deletion (default 14) |
+| `tmp_max_size_mb` | `int` | Size ceiling for `tmp/` in MB; oldest dirs purged when exceeded (default 500) |
 
 ### TOML Configuration
 
@@ -67,6 +69,15 @@ agent entry. Missing config file → single `"default"` agent (backward compat).
 - `log_conversations: bool` (default `True`) — when False, `worker.run_agent_step()` skips `append_turn()`.
 - `conversation_log_retention_days: int` (default `30`) — files older than this are deleted by `rotate_logs()`.
 Both fields can be set per-agent in `agents.toml` and inherit from `[defaults]`.
+
+## Tmp Storage Config
+
+`AgentConfig` exposes two fields controlling per-agent tmp/ retention:
+- `tmp_retention_days` (default 14): age-based eviction of `YYYY-MM-DD` dirs
+- `tmp_max_size_mb` (default 500): size-based eviction (oldest dirs first)
+
+Both propagate to `Runtime` fields of the same name and are read by
+`rotate_results()` in `worker.py` after each agent turn.
 
 ## Topic Auto-Activation (Phase B — wired)
 

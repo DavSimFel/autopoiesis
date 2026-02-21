@@ -42,13 +42,6 @@ def _get_max_tool_result_bytes() -> int:
     return value
 
 
-def _ensure_log_dir(workspace_root: Path) -> Path:
-    """Create and return the tool-results log directory."""
-    log_dir = workspace_root / ".tmp" / "tool-results"
-    log_dir.mkdir(parents=True, exist_ok=True)
-    return log_dir
-
-
 def cap_tool_result(
     content: str,
     max_bytes: int,
