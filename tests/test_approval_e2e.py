@@ -154,7 +154,7 @@ def test_cli_approval_flow_enqueue_reenqueue_and_consume(
     from autopoiesis.agent.runtime import RuntimeRegistry
 
     fake_registry = RuntimeRegistry()
-    fake_registry.register(runtime)
+    fake_registry.register("default", runtime)
     monkeypatch.setattr(chat_cli, "get_runtime", lambda: runtime)
     monkeypatch.setattr(chat_worker, "get_runtime_registry", lambda: fake_registry)
     monkeypatch.setattr(chat_cli, "RichStreamHandle", _FakeHandle)

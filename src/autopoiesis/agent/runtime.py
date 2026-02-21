@@ -19,7 +19,12 @@ from pydantic_ai.models import Model
 from pydantic_ai.settings import ModelSettings
 from pydantic_ai.tools import ToolsPrepareFunc
 
-from autopoiesis.agent.model_resolution import build_model_settings, resolve_model
+from autopoiesis.agent.model_resolution import (
+    _infer_provider_from_model_name,
+    build_model_settings,
+    resolve_model,
+    resolve_model_from_config,
+)
 from autopoiesis.infra.approval.keys import ApprovalKeyManager
 from autopoiesis.infra.approval.policy import ToolPolicyRegistry
 from autopoiesis.infra.approval.store import ApprovalStore
@@ -296,3 +301,47 @@ def instrument_agent(agent: Agent[AgentDeps, str]) -> bool:
         return False
     Agent.instrument_all()
     return True
+
+
+def build_agent_from_config(
+    agent_config: "AgentConfig",
+    toolsets: list[AbstractToolset[AgentDeps]],
+    system_prompt: str,
+    options: AgentOptions | None = None,
+) -> Agent[AgentDeps, str]:
+    """Build a :class:`~pydantic_ai.Agent` driven entirely by an :class:`AgentConfig`.
+
+    Unlike :func:`build_agent`, this function derives the model and provider from
+    ``agent_config.model`` so that per-agent configuration is the sole source of
+    truth — the ``AI_PROVIDER`` / ``AI_MODEL`` env vars are ignored.
+
+    Args:
+        agent_config: Validated agent configuration (name, model, tools, etc.).
+        toolsets: Pre-built toolsets for this agent.
+        system_prompt: System prompt string (may be pre-composed or read from file).
+        options: Optional runtime options (history processors, model settings, etc.).
+
+    Returns:
+        A fully configured :class:`~pydantic_ai.Agent` instance.
+    """
+    # Deferred import to avoid circular dependency between runtime ↔ config.
+    from autopoiesis.agent.config import AgentConfig  # noqa: F401 (type-only stub)
+
+    model = resolve_model_from_config(agent_config.model)
+    provider = _infer_provider_from_model_name(agent_config.model)
+    prepare_tools = prepare_tools_for_provider(provider)
+    opts = options or AgentOptions()
+    effective_settings = opts.model_settings or build_model_settings()
+
+    return Agent(
+        model,
+        deps_type=AgentDeps,
+        toolsets=toolsets,
+        system_prompt=system_prompt,
+        instructions=opts.instructions,
+        history_processors=list(opts.history_processors),
+        name=agent_config.name,
+        prepare_tools=prepare_tools,
+        model_settings=effective_settings,
+        end_strategy="exhaustive",
+    )

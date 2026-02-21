@@ -64,7 +64,7 @@ def test_run_agent_step_wraps_model_http_errors(
     from autopoiesis.agent.runtime import RuntimeRegistry
 
     fake_registry = RuntimeRegistry()
-    fake_registry.register(runtime)
+    fake_registry.register("default", runtime)
     monkeypatch.setattr(chat_worker, "get_runtime_registry", lambda: fake_registry)
 
     item = WorkItem(

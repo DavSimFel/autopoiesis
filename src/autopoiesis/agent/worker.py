@@ -207,7 +207,7 @@ def _run_sync(
 def run_agent_step(work_item_dict: dict[str, Any]) -> dict[str, Any]:
     """Execute one work item and return a serialized WorkItemOutput."""
     item = WorkItem.model_validate(work_item_dict)
-    rt = get_runtime_registry().get_by_id(item.agent_id)
+    rt = get_runtime_registry().get(item.agent_id)
 
     # Auto-activate topic when topic_ref is set (before agent executes)
     if item.topic_ref:
