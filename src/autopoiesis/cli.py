@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import os
 import sys
 from pathlib import Path
@@ -34,6 +35,8 @@ from autopoiesis.store.history import (
     resolve_history_db_path,
 )
 from autopoiesis.tools.toolset_builder import LocalBackend, build_backend, prepare_toolset_context
+
+_log = logging.getLogger(__name__)
 
 try:
     from dbos import DBOS, DBOSConfig
@@ -263,11 +266,43 @@ def main() -> None:
 
     is_batch = args.command == "run"
     is_serve = args.command == "serve"
+
+    if is_serve:
+        # Lightweight path: server doesn't need full AI runtime.
+        # Initialize only what the API layer requires (DBOS for persistence).
+        _log.info("Starting in serve mode (lightweight init)")
+        system_database_url = os.getenv("DBOS_SYSTEM_DATABASE_URL", "sqlite:///dbostest.sqlite")
+        dbos_config: DBOSConfig = {
+            "name": os.getenv("DBOS_APP_NAME", "pydantic_dbos_agent"),
+            "system_database_url": system_database_url,
+        }
+        try:
+            DBOS(config=dbos_config)
+            DBOS.launch()
+        except Exception:
+            _log.warning("DBOS init failed; server will run without persistence", exc_info=True)
+
+        # Optionally initialize full runtime if AI_PROVIDER is available.
+        try:
+            initialize_runtime(
+                agent_paths,
+                agent_name,
+                require_approval_unlock=False,
+                agent_config=selected_config,
+            )
+        except (SystemExit, Exception) as exc:
+            _log.info("Full runtime not available (serve-only mode): %s", exc)
+
+        from autopoiesis.server.cli import run_server
+
+        run_server(host=args.host, port=args.port)
+        return
+
     try:
         system_database_url = initialize_runtime(
             agent_paths,
             agent_name,
-            require_approval_unlock=not args.no_approval and not is_batch and not is_serve,
+            require_approval_unlock=not args.no_approval and not is_batch,
             agent_config=selected_config,
         )
     except (OSError, RuntimeError, ValueError) as exc:
@@ -279,18 +314,12 @@ def main() -> None:
         run_batch(args.task, output_path=args.output, timeout=args.timeout)
         return
 
-    dbos_config: DBOSConfig = {
+    dbos_config_full: DBOSConfig = {
         "name": os.getenv("DBOS_APP_NAME", "pydantic_dbos_agent"),
         "system_database_url": system_database_url,
     }
-    DBOS(config=dbos_config)
+    DBOS(config=dbos_config_full)
     DBOS.launch()
-
-    if is_serve:
-        from autopoiesis.server.cli import run_server
-
-        run_server(host=args.host, port=args.port)
-        return
 
     from autopoiesis.agent.cli import cli_chat_loop
 
