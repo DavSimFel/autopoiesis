@@ -57,6 +57,8 @@ Uses stdlib `pty.openpty()` — zero external dependencies. Enables interactive 
 
 ## Change Log
 
+- 2026-02-21: Extracted `exec_env.py` from `exec_tool.py` (environment sanitization
+  helpers: `validate_env`, `resolve_env`). Architecture violation fix.
 - 2026-02-21: Raised sandbox default process limit from 64 to 512 and updated
   RLIMIT application to preserve inherited soft limits (never lower on pre-exec).
   (Issue #221)

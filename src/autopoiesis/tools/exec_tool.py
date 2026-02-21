@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import time
 from pathlib import Path
 from typing import Any
@@ -18,48 +17,25 @@ from autopoiesis.io_utils import tail_lines
 from autopoiesis.models import AgentDeps
 from autopoiesis.security.subprocess_sandbox import SubprocessSandboxManager
 from autopoiesis.store.result_store import store_shell_output
+from autopoiesis.tools.exec_env import resolve_env as _resolve_env_impl
+from autopoiesis.tools.exec_env import validate_env as _validate_env_impl
 from autopoiesis.tools.tier_enforcement import enforce_tier
 
 _log = logging.getLogger(__name__)
 _background_tasks: set[asyncio.Task[None]] = set()
-
-_DANGEROUS_ENV_VARS: frozenset[str] = frozenset(
-    {
-        "ANTHROPIC_API_KEY",
-        "AWS_SECRET_ACCESS_KEY",
-        "DATABASE_URL",
-        "DB_PASSWORD",
-        "GITHUB_TOKEN",
-        "LD_PRELOAD",
-        "OPENAI_API_KEY",
-        "OPENROUTER_API_KEY",
-        "PASSWORD",
-        "PRIVATE_KEY",
-        "PYTHONPATH",
-        "SECRET_KEY",
-    }
-)
 
 _DEFAULT_TIMEOUT: float = 30.0
 _MAX_SUMMARY_LINES: int = 5
 
 
 def validate_env(env: dict[str, str] | None) -> dict[str, str] | None:
-    if env is None:
-        return None
-    blocked = _DANGEROUS_ENV_VARS & env.keys()
-    if blocked:
-        msg = f"Blocked env vars: {', '.join(sorted(blocked))}"
-        raise ValueError(msg)
-    return env
+    """Validate explicit env overrides before spawning subprocesses."""
+    return _validate_env_impl(env)
 
 
 def resolve_env(env: dict[str, str] | None) -> dict[str, str]:
     """Return a subprocess env with dangerous inherited variables removed."""
-    safe_env = validate_env(env)
-    if safe_env is not None:
-        return safe_env
-    return {k: v for k, v in os.environ.items() if k not in _DANGEROUS_ENV_VARS}
+    return _resolve_env_impl(env)
 
 
 def sandbox_cwd(cwd: str | None, workspace_root: Path) -> str:

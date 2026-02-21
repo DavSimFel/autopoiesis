@@ -13,6 +13,11 @@ split into focused companion modules.
 
 ## Changelog
 
+### 2026-02-21 — Architecture violations fix
+- Extracted `cli_options.py` from `cli.py` (argument parsing + version helpers).
+- Extracted `worker_checkpoint.py` from `worker.py` (checkpoint scope + history serialization).
+- Source: `src/autopoiesis/cli_options.py`, `src/autopoiesis/agent/worker_checkpoint.py`
+
 ### 2026-02-21 — Issue #221
 - Added FastMCP 3.0 Streamable HTTP endpoint mounted at `/mcp`.
 - Added MCP tools for runtime status, pending approvals, approval decisions, and system info.

@@ -11,18 +11,12 @@ from __future__ import annotations
 import logging
 import os
 import time
-from contextvars import ContextVar, Token
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from pydantic_ai import DeferredToolRequests
 from pydantic_ai.exceptions import AgentRunError
-from pydantic_ai.messages import (
-    ModelMessage,
-    ModelMessagesTypeAdapter,
-    ModelResponse,
-)
+from pydantic_ai.messages import ModelMessage
 from pydantic_ai.tools import DeferredToolResults
 
 from autopoiesis.agent.loop_guards import resolve_loop_guards, warning_threshold
@@ -32,6 +26,14 @@ from autopoiesis.agent.turn_execution import (
     TurnExecutionParams,
     WorkItemLimitExceededError,
     run_turn,
+)
+from autopoiesis.agent.worker_checkpoint import (
+    checkpoint_history_processor as checkpoint_history_processor,
+)
+from autopoiesis.agent.worker_checkpoint import (
+    checkpoint_scope,
+    deserialize_history,
+    serialize_history,
 )
 from autopoiesis.display.streaming import take_stream
 from autopoiesis.infra import otel_tracing
@@ -44,7 +46,7 @@ from autopoiesis.infra.approval.types import ApprovalScope
 from autopoiesis.infra.work_queue import dispatch_workitem
 from autopoiesis.models import AgentDeps, WorkItem, WorkItemOutput
 from autopoiesis.store.conversation_log import append_turn, rotate_logs
-from autopoiesis.store.history import clear_checkpoint, load_checkpoint, save_checkpoint
+from autopoiesis.store.history import clear_checkpoint, load_checkpoint
 from autopoiesis.store.result_store import rotate_results
 
 try:
@@ -64,48 +66,12 @@ class DeferredApprovalLockedError(RuntimeError):
 AgentOutput = str | DeferredToolRequests
 
 
-@dataclass(frozen=True)
-class _CheckpointContext:
-    """Per-run checkpoint metadata used by history processors."""
-
-    db_path: str
-    work_item_id: str
-
-
-_active_checkpoint_context: ContextVar[_CheckpointContext | None] = ContextVar(
-    "active_checkpoint_context",
-    default=None,
-)
-
-
 def _deserialize_history(history_json: str | None) -> list[ModelMessage]:
-    if not history_json:
-        return []
-    return ModelMessagesTypeAdapter.validate_json(history_json)
+    return deserialize_history(history_json)
 
 
 def _serialize_history(messages: list[ModelMessage]) -> str:
-    return ModelMessagesTypeAdapter.dump_json(messages).decode()
-
-
-def _count_history_rounds(messages: list[ModelMessage]) -> int:
-    """Count completed model rounds from serialized message history."""
-    model_responses = sum(1 for message in messages if isinstance(message, ModelResponse))
-    return model_responses if model_responses > 0 else len(messages)
-
-
-def checkpoint_history_processor(messages: list[ModelMessage]) -> list[ModelMessage]:
-    """Persist an in-flight checkpoint whenever the active work item updates history."""
-    checkpoint = _active_checkpoint_context.get()
-    if checkpoint is None:
-        return messages
-    save_checkpoint(
-        db_path=checkpoint.db_path,
-        work_item_id=checkpoint.work_item_id,
-        history_json=_serialize_history(messages),
-        round_count=_count_history_rounds(messages),
-    )
-    return messages
+    return serialize_history(messages)
 
 
 def _build_output(
@@ -181,10 +147,6 @@ def run_agent_step(work_item_dict: dict[str, Any]) -> dict[str, Any]:
         )
 
     stream_handle = take_stream(item.id)
-    checkpoint_token: Token[_CheckpointContext | None] = _active_checkpoint_context.set(
-        _CheckpointContext(db_path=rt.history_db_path, work_item_id=item.id)
-    )
-
     provider_name = os.getenv("AI_PROVIDER", "unknown")
     model_name = os.getenv("ANTHROPIC_MODEL") or os.getenv("OPENROUTER_MODEL") or "unknown"
     span_attrs: dict[str, str | int | float | bool] = {
@@ -193,7 +155,10 @@ def run_agent_step(work_item_dict: dict[str, Any]) -> dict[str, Any]:
         "autopoiesis.workflow_id": item.id,
     }
 
-    with otel_tracing.trace_span("agent.run", attributes=span_attrs) as result_attrs:
+    with (
+        checkpoint_scope(rt.history_db_path, item.id),
+        otel_tracing.trace_span("agent.run", attributes=span_attrs) as result_attrs,
+    ):
         try:
             try:
                 turn_exec = run_turn(
@@ -209,7 +174,6 @@ def run_agent_step(work_item_dict: dict[str, Any]) -> dict[str, Any]:
                 )
                 output = _build_output(turn_exec.output, turn_exec.messages, scope, rt)
             except WorkItemLimitExceededError as exc:
-                # Graceful degradation: return partial result instead of crashing.
                 _log.warning(
                     "Work item %s stopped by loop guard: %s",
                     item.id,
@@ -222,9 +186,7 @@ def run_agent_step(work_item_dict: dict[str, Any]) -> dict[str, Any]:
             except AgentRunError as exc:
                 raise _wrap_agent_run_error(exc) from exc
         finally:
-            _active_checkpoint_context.reset(checkpoint_token)
-
-        result_attrs["autopoiesis.completed"] = True
+            result_attrs["autopoiesis.completed"] = True
 
     clear_checkpoint(rt.history_db_path, item.id)
 
