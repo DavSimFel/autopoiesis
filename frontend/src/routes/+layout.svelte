@@ -7,8 +7,8 @@
 	import { subscribeStream } from '$lib/api-client';
 	import type { SSEStatus } from '$lib/api-client';
 	import { pushEvent } from '$lib/stores/active-state';
-	import { activeCount, activeState } from '$lib/stores/active-state';
-	import { activeTab, activeDrawerOpen, focusedEvent, isFocusModeActive, closeFocus } from '$lib/stores/nav';
+	import { activeCount } from '$lib/stores/active-state';
+	import { activeDrawerOpen, focusedEvent, isFocusModeActive, closeFocus } from '$lib/stores/nav';
 	import { shouldShowIosInstallPrompt } from '$lib/stores/notifications';
 
 	import ConnectionStatus from '$lib/components/ConnectionStatus.svelte';
@@ -20,17 +20,29 @@
 
 	let sseStatus = $state<SSEStatus>('connecting');
 	let showIosBanner = $state(false);
+	let isDesktop = $state(false);
 
 	// Nav items (mobile bottom bar + desktop sidebar)
 	const navItems = [
+		{ id: 'stream', label: 'Home', icon: '🏠', path: '/' },
 		{ id: 'chat', label: 'Chat', icon: '💬', path: '/chat' },
 		{ id: 'active', label: 'Active', icon: '📋', path: '/active' },
-		{ id: 'stream', label: 'Feed', icon: '🏠', path: '/' },
 		{ id: 'alerts', label: 'Alerts', icon: '🔔', path: '/alerts' },
 		{ id: 'more', label: 'More', icon: '⋯', path: '/more' },
 	] as const;
+	type NavItemId = (typeof navItems)[number]['id'];
 
 	onMount(() => {
+		const mediaQuery = window.matchMedia('(min-width: 768px)');
+		const syncViewport = () => {
+			isDesktop = mediaQuery.matches;
+			if (mediaQuery.matches) {
+				activeDrawerOpen.set(false);
+			}
+		};
+		syncViewport();
+		mediaQuery.addEventListener('change', syncViewport);
+
 		// SSE subscription — EventSource handles reconnection natively
 		sseStatus = 'connecting';
 		const es = subscribeStream((event) => {
@@ -52,15 +64,19 @@
 		}
 
 		return () => {
+			mediaQuery.removeEventListener('change', syncViewport);
 			es.close();
 			sseStatus = 'closed';
 		};
 	});
 
-	function handleNavClick(path: string, id: string) {
+	function handleNavClick(path: string, id: NavItemId) {
 		if (id === 'active') {
-			// Toggle drawer on mobile, navigate on desktop
-			activeDrawerOpen.update((v) => !v);
+			if (isDesktop) {
+				goto(path);
+				return;
+			}
+			activeDrawerOpen.update((open) => !open);
 			return;
 		}
 		goto(path);
@@ -127,11 +143,15 @@
 		</main>
 
 		<!-- Desktop: Active State panel (right side) -->
-		<ActiveStateDrawer desktop />
+		{#if $page.url.pathname !== '/active'}
+			<ActiveStateDrawer desktop />
+		{/if}
 	</div>
 
 	<!-- Mobile: Active State drawer (slide-over) -->
-	<ActiveStateDrawer />
+	{#if !isDesktop}
+		<ActiveStateDrawer />
+	{/if}
 
 	<!-- ============================================================
 	     Focus mode overlay

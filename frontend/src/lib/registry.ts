@@ -22,33 +22,40 @@ import FallbackCard from '$lib/components/FallbackCard.svelte';
 // Type alias: all renderable components receive { event: UIEvent }
 // ---------------------------------------------------------------
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type RegistryComponent = Component<{ event: any; onresolve?: (id: string) => void }>;
+export type RegistryComponent = Component<{ event: unknown; onresolve?: (id: string) => void }>;
 
 export const registry: Record<string, RegistryComponent> = {
 	// Agent health / status
 	'agent-status': AgentStatus as unknown as RegistryComponent,
+	agent_status: AgentStatus as unknown as RegistryComponent,
 
 	// Generic action card with buttons
 	'action-card': ActionCard as unknown as RegistryComponent,
+	action_card: ActionCard as unknown as RegistryComponent,
 
 	// Single approval request
 	'approval-item': ApprovalItem as unknown as RegistryComponent,
+	approval_item: ApprovalItem as unknown as RegistryComponent,
 
 	// List of approval requests
 	'approval-queue': ApprovalQueue as unknown as RegistryComponent,
+	approval_queue: ApprovalQueue as unknown as RegistryComponent,
 
 	// T2 (tier-2) agent run summary with raw log toggle
 	't2-summary': T2Summary as unknown as RegistryComponent,
+	t2_summary: T2Summary as unknown as RegistryComponent,
 
 	// Chat message bubble
 	'chat-message': ChatMessage as unknown as RegistryComponent,
+	chat_message: ChatMessage as unknown as RegistryComponent,
 
 	// Inline tool execution display
 	'tool-call': ToolCallCard as unknown as RegistryComponent,
+	tool_call: ToolCallCard as unknown as RegistryComponent,
 
 	// Composed morning status card
 	'morning-briefing': MorningBriefing as unknown as RegistryComponent,
+	morning_briefing: MorningBriefing as unknown as RegistryComponent,
 };
 
 /** Resolve a type string to its component, falling back to FallbackCard */
