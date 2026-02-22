@@ -32,6 +32,10 @@ from typing import Any
 
 from fastmcp.server.providers.filesystem import FileSystemProvider
 
+from autopoiesis.security.path_validator import PathValidator
+from autopoiesis.skills.auth_middleware import ApprovalGateTransform, load_skill_approval_tiers
+from autopoiesis.skills.skill_transforms import PathValidationTransform
+
 logger = logging.getLogger(__name__)
 
 
@@ -65,6 +69,7 @@ def discover_skill_providers(
         skill_name = skill_dir.name
         try:
             provider = FileSystemProvider(root=skill_dir)
+            _apply_security_transforms(provider, skill_dir)
             providers.append((skill_name, provider))
             logger.info(
                 "Loaded skill server provider: %s from %s",
@@ -112,3 +117,10 @@ def register_skill_providers(
             )
 
     return registered
+
+
+def _apply_security_transforms(provider: FileSystemProvider, skill_dir: Path) -> None:
+    """Attach security transforms to a discovered skill provider."""
+    path_validator = PathValidator(workspace_root=skill_dir)
+    provider.add_transform(PathValidationTransform(path_validator=path_validator))
+    provider.add_transform(ApprovalGateTransform(tool_tiers=load_skill_approval_tiers(skill_dir)))

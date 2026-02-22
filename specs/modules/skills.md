@@ -9,7 +9,7 @@ only) and loads full instructions on demand.
 
 ## Status
 
-- **Last updated:** 2026-02-15 (Issue #9)
+- **Last updated:** 2026-02-21 (Issue #221)
 - **Source:** `src/autopoiesis/skills/skills.py`
 
 ## Key Concepts
@@ -177,6 +177,10 @@ New modules added for lazy-loading skills as MCP tool sets:
 
 ## Change Log
 
+- 2026-02-21: Added security-transform composition to discovered skill MCP
+  providers (`PathValidationTransform` + `ApprovalGateTransform`) in
+  `filesystem_skill_provider.py`, and expanded `skill_transforms.py` with
+  runtime path validation wrappers. (Issue #221)
 - 2026-02-21: Added Phase 2 MCP skill provider modules (`filesystem_skill_provider.py`,
   `skill_activator.py`, `skill_transforms.py`) for lazy skill-to-MCP-tool mounting. (Issue #221)
 - 2026-02-17: Documented shipped skill contract, added CI spec-check

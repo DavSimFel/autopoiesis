@@ -64,6 +64,9 @@ only. It enables development and read-only workflows without key material.
 
 ## Change Log
 
+- 2026-02-21: Added FastMCP skill hardening components:
+  `PathValidationTransform`, `ApprovalGateTransform`, and
+  `SandboxedSkillProvider`. (Issue #221)
 - 2026-02-21: Increased default subprocess process cap to 512 and refined
   RLIMIT behavior so only `RLIMIT_NPROC` preserves inherited soft limits.
   `RLIMIT_FSIZE` and `RLIMIT_CPU` continue enforcing strict caps. (Issue #221)
@@ -75,6 +78,50 @@ only. It enables development and read-only workflows without key material.
 - PathValidator: validates file paths against sandbox boundaries
 - TaintTracker: marks external content as tainted for sanitization
 - SubprocessSandboxManager: enforces preexec_fn in PTY/exec calls
+
+## FastMCP Skill Security Hardening (Issue #221, Phase 3)
+
+### PathValidationTransform
+
+`src/autopoiesis/skills/skill_transforms.py` adds `PathValidationTransform`,
+a runtime FastMCP tool transform that targets tools exposing path-like string
+arguments (`path`, `file_path`, `directory`).
+
+Execution behavior:
+
+- Path args are resolved through `PathValidator.resolve_path()`.
+- Valid paths are normalized to absolute resolved paths before tool execution.
+- Escaping paths are blocked and return a blocked `ToolResult`.
+
+### ApprovalGateTransform
+
+`src/autopoiesis/skills/auth_middleware.py` adds `ApprovalGateTransform`, a
+runtime FastMCP tool transform for approval-tier gating.
+
+Tier sources (precedence order):
+
+1. `skill.yaml` per-tool overrides.
+2. Tool metadata (`approval_tier`, including nested `security` and `autopoiesis` blocks).
+3. Tool tags (`tier:<value>` or `approval:<value>`).
+
+Enforcement behavior:
+
+- `approve` tier (or stricter) requires an active approval unlock.
+- If unlocked, tool execution passes through.
+- If not unlocked, tool execution is blocked with an approval-required message.
+
+### SandboxedSkillProvider
+
+`src/autopoiesis/skills/sandboxed_provider.py` introduces
+`SandboxedSkillProvider`, which runs skill tools in a dedicated stdio child
+process and exposes them to the parent server via `ProxyProvider`.
+
+Controls:
+
+- Child process limits are applied through `SandboxLimits` +
+  `SubprocessSandboxManager`.
+- `RLIMIT_NPROC`, `RLIMIT_FSIZE`, and `RLIMIT_CPU` are enforced before serving.
+- Skill module path is validated via `PathValidator`.
 
 ## Subprocess Sandbox Limits
 

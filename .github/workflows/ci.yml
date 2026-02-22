@@ -166,6 +166,8 @@ jobs:
             ["src/autopoiesis/skills/filesystem_skill_provider.py"]="specs/modules/skills.md"
             ["src/autopoiesis/skills/skill_activator.py"]="specs/modules/skills.md"
             ["src/autopoiesis/skills/skill_transforms.py"]="specs/modules/skills.md"
+            ["src/autopoiesis/skills/auth_middleware.py"]="specs/modules/security.md"
+            ["src/autopoiesis/skills/sandboxed_provider.py"]="specs/modules/security.md"
             ["skills/skillmaker/server.py"]="specs/modules/skillmaker-tools.md"
             ["src/autopoiesis/display/stream_formatting.py"]="specs/modules/rich-display.md"
             ["src/autopoiesis/display/streaming.py"]="specs/modules/rich-display.md"
